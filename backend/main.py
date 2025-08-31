@@ -1,6 +1,7 @@
 import os
 import shutil
 import pandas as pd
+import re
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Request
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
@@ -98,7 +99,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     new_user = crud.create_user(db=db, user=user, hashed_password=hashed_password)
     return new_user
 
-@app.post("/auth/login", status_code=status.HTTP_200_OK)
+@app.post("/auth/login")
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -118,7 +119,13 @@ def login_for_access_token(
         data={"sub": user.correo, "rol": user.rol}, expires_delta=access_token_expires
     )
     
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer", 
+        "user_name": user.nombre,
+        "user_role": user.rol,
+        "user_id": user.id
+    }
 
 @app.get("/users/me/", response_model=schemas.User)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
@@ -128,7 +135,7 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 # --- Ruta de Carga de Archivos para Auditores ---
-@app.post("/audits/upload-file", status_code=status.HTTP_201_CREATED)
+@app.post("/audits/upload-file")
 async def upload_audit_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -377,8 +384,233 @@ async def upload_audit_file(
             os.remove(temp_file_path)
         raise HTTPException(status_code=500, detail=f"Error al procesar el archivo: {str(e)}")
 
+# --- NUEVO ENDPOINT PARA MÚLTIPLES ARCHIVOS ---
+@app.post("/audits/upload-multiple-files")
+async def upload_multiple_audit_files(
+    files: List[UploadFile] = File(...),  # ✅ CORRECTO: 'files' en plural
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Carga múltiples archivos de Excel para crear una sola auditoría con todas las OTs.
+    """
+    print(f"📥 Recibiendo {len(files)} archivos para procesar")
+    
+    if current_user.rol != "auditor":
+        raise HTTPException(status_code=403, detail="No tienes permiso para cargar archivos.")
+
+    # Verificar que hay archivos
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="No se recibieron archivos")
+    
+    print(f"✅ Usuario autorizado: {current_user.nombre}")
+    
+    all_productos_data = []
+    ordenes_procesadas = set()
+
+    for file_index, file in enumerate(files):
+        print(f"📄 Procesando archivo {file_index + 1}: {file.filename}")
+        
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            error_msg = f"Solo se permiten archivos Excel (.xlsx, .xls). Archivo {file.filename} no válido."
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        try:
+            # Guardar el archivo temporalmente
+            temp_file_path = f"temp_{file.filename}_{file_index}"
+            with open(temp_file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            # Leer el archivo Excel
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=None)
+            
+            # Buscar la fila que contiene los encabezados
+            header_row = None
+            target_patterns = [
+                ["número", "documento"],
+                ["sku", "articulo"], 
+                ["nombre", "articulo"],
+                ["cantidad"],
+                ["un", "enviada"]
+            ]
+            
+            for i in range(len(df)):
+                row_values = [str(cell).lower().strip() if pd.notna(cell) else "" for cell in df.iloc[i]]
+                
+                # Verificar si esta fila contiene los patrones buscados
+                matches = 0
+                for pattern in target_patterns:
+                    if any(all(keyword in cell for keyword in pattern) for cell in row_values):
+                        matches += 1
+                
+                if matches >= 3:
+                    header_row = i
+                    print(f"✅ Encabezados encontrados en fila {i}")
+                    break
+            
+            if header_row is None:
+                # Buscar alternativa: encabezados en español exacto
+                for i in range(len(df)):
+                    row_values = [str(cell) if pd.notna(cell) else "" for cell in df.iloc[i]]
+                    if "Número de documento" in row_values and "SKU ARTICULO" in row_values:
+                        header_row = i
+                        print(f"✅ Encabezados exactos encontrados en fila {i}")
+                        break
+            
+            if header_row is None:
+                print(f"❌ No se encontraron encabezados en {file.filename}")
+                os.remove(temp_file_path)
+                continue
+            
+            # Leer el archivo con la fila correcta como encabezado
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=header_row)
+            
+            # Mapeo exacto para columnas
+            exact_mapping = {
+                'Número de documento': 'número de documento',
+                'SKU ARTICULO': 'sku articulo',
+                'NOMBRE ARTICULO': 'nombre articulo', 
+                'Cantidad': 'cantidad',
+                'Un Enviada': 'un enviada'
+            }
+            
+            column_mapping = {}
+            for original_col in df.columns:
+                original_col_str = str(original_col).strip()
+                if original_col_str in exact_mapping:
+                    column_mapping[original_col] = exact_mapping[original_col_str]
+                else:
+                    for key in exact_mapping.keys():
+                        if original_col_str.lower() == key.lower():
+                            column_mapping[original_col] = exact_mapping[key]
+                            break
+            
+            df = df.rename(columns=column_mapping)
+            
+            # Verificar columnas necesarias
+            required_columns = ["número de documento", "sku articulo", "nombre articulo", "cantidad", "un enviada"]
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                print(f"❌ Faltan columnas en {file.filename}: {missing_columns}")
+                os.remove(temp_file_path)
+                continue
+            
+            # Extraer el número de documento
+            numero_documento = None
+            doc_column = [col for col in df.columns if "documento" in col.lower()][0]
+            
+            for i in range(len(df)):
+                doc_value = df.iloc[i][doc_column]
+                if pd.notna(doc_value) and str(doc_value).strip() and "total" not in str(doc_value).lower():
+                    numero_documento = str(doc_value).strip()
+                    break
+            
+            if not numero_documento:
+                numero_documento = f"Documento_{file_index}"
+            
+            ordenes_procesadas.add(numero_documento)
+            print(f"✅ Orden de traslado encontrada: {numero_documento}")
+            
+            # Procesar productos de este archivo
+            productos_count = 0
+            for i in range(len(df)):
+                row = df.iloc[i]
+                
+                # Saltar filas vacías, de totales o sin SKU
+                sku_value = row.get("sku articulo", None)
+                if (pd.isna(sku_value) or 
+                    str(sku_value).strip() == "" or
+                    "total" in str(sku_value).lower()):
+                    continue
+                
+                try:
+                    # Extraer los datos
+                    sku = str(sku_value).strip()
+                    if '.' in sku and sku.endswith('.0'):
+                        sku = sku[:-2]
+                        
+                    nombre_articulo = str(row.get("nombre articulo", "")).strip() if pd.notna(row.get("nombre articulo", None)) else "Sin nombre"
+                    
+                    # Manejar valores numéricos
+                    cantidad_documento = 0
+                    cantidad_val = row.get("cantidad", None)
+                    if pd.notna(cantidad_val):
+                        try:
+                            cantidad_documento = int(float(cantidad_val))
+                        except (ValueError, TypeError):
+                            cantidad_documento = 0
+                    
+                    cantidad_enviada = 0
+                    enviada_val = row.get("un enviada", None)
+                    if pd.notna(enviada_val):
+                        try:
+                            cantidad_enviada = int(float(enviada_val))
+                        except (ValueError, TypeError):
+                            cantidad_enviada = 0
+                    
+                    # Extraer orden de traslado
+                    orden_traslado = str(numero_documento).strip()
+                    if "VE" in orden_traslado:
+                        match = re.search(r'VE\d+', orden_traslado)
+                        if match:
+                            orden_traslado = match.group(0)
+                    
+                    producto_data = {
+                        "sku": sku,
+                        "nombre_articulo": nombre_articulo,
+                        "cantidad_documento": cantidad_documento,
+                        "cantidad_enviada": cantidad_enviada,
+                        "cantidad_fisica": None,
+                        "novedad": "sin_novedad",
+                        "observaciones": None,
+                        "orden_traslado_original": orden_traslado
+                    }
+                    
+                    all_productos_data.append(schemas.ProductBase(**producto_data))
+                    productos_count += 1
+                    
+                except (ValueError, TypeError, KeyError) as e:
+                    continue
+
+            print(f"✅ {productos_count} productos procesados de {file.filename}")
+            
+            # Eliminar el archivo temporal
+            os.remove(temp_file_path)
+            
+        except Exception as e:
+            print(f"❌ Error procesando {file.filename}: {str(e)}")
+            if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            continue
+
+    if not all_productos_data:
+        raise HTTPException(status_code=400, detail="No se encontraron productos válidos en los archivos")
+
+    # Crear una sola auditoría con todos los productos
+    ubicacion_destino = f"Auditoría Múltiple - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    audit_data = schemas.AuditCreate(
+        ubicacion_destino=ubicacion_destino,
+        productos=all_productos_data
+    )
+    
+    # Crear la auditoría
+    db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
+
+    print(f"✅ Auditoría creada con {len(all_productos_data)} productos de {len(ordenes_procesadas)} órdenes de traslado")
+
+    return {
+        "message": "Auditoría múltiple creada exitosamente",
+        "audit_id": db_audit.id,
+        "productos_procesados": len(all_productos_data),
+        "ordenes_procesadas": list(ordenes_procesadas),
+        "numero_ordenes": len(ordenes_procesadas)
+    }
+
 # --- Rutas de Auditorías ---
-@app.get("/audits/", response_model=List[schemas.Audit])
+@app.get("/audits/", response_model=List[schemas.AuditResponse])
 def get_audits(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -390,10 +622,32 @@ def get_audits(
         audits = crud.get_audits_by_auditor(db, auditor_id=current_user.id)
     else:
         # Analista o Administrador
-        audits = crud.get_all_audits(db)
-    return audits
+        audits = crud.get_audits(db)
+    
+    # Convertir a formato de respuesta
+    audit_responses = []
+    for audit in audits:
+        # Obtener el nombre del auditor
+        auditor = crud.get_user_by_id(db, audit.auditor_id)
+        auditor_nombre = auditor.nombre if auditor else "Desconocido"
+        
+        # Contar productos
+        productos_count = len(audit.productos) if hasattr(audit, 'productos') else 0
+        
+        audit_responses.append(schemas.AuditResponse(
+            id=audit.id,
+            ubicacion_destino=audit.ubicacion_destino,
+            auditor_id=audit.auditor_id,
+            auditor_nombre=auditor_nombre,
+            creada_en=audit.creada_en,
+            estado=audit.estado,
+            porcentaje_cumplimiento=audit.porcentaje_cumplimiento,
+            productos_count=productos_count
+        ))
+    
+    return audit_responses
 
-@app.get("/audits/auditor/{auditor_id}", response_model=List[schemas.Audit])
+@app.get("/audits/auditor/{auditor_id}", response_model=List[schemas.AuditResponse])
 def get_audits_by_auditor(
     auditor_id: int,
     db: Session = Depends(get_db),
@@ -410,7 +664,29 @@ def get_audits_by_auditor(
         )
     
     audits = crud.get_audits_by_auditor(db, auditor_id)
-    return audits
+    
+    # Convertir a formato de respuesta
+    audit_responses = []
+    for audit in audits:
+        # Obtener el nombre del auditor
+        auditor = crud.get_user_by_id(db, audit.auditor_id)
+        auditor_nombre = auditor.nombre if auditor else "Desconocido"
+        
+        # Contar productos
+        productos_count = len(audit.productos) if hasattr(audit, 'productos') else 0
+        
+        audit_responses.append(schemas.AuditResponse(
+            id=audit.id,
+            ubicacion_destino=audit.ubicacion_destino,
+            auditor_id=audit.auditor_id,
+            auditor_nombre=auditor_nombre,
+            creada_en=audit.creada_en,
+            estado=audit.estado,
+            porcentaje_cumplimiento=audit.porcentaje_cumplimiento,
+            productos_count=productos_count
+        ))
+    
+    return audit_responses
 
 @app.put("/audits/{audit_id}/iniciar", response_model=schemas.Audit)
 def iniciar_auditoria(
@@ -468,11 +744,17 @@ def get_audit_details(
     
     db_products = crud.get_products_by_audit(db, audit_id=audit_id)
     
+    # DEBUG: Verificar que los productos tengan ID
+    print(f"Auditoría ID: {db_audit.id}")
+    print(f"Número de productos: {len(db_products)}")
+    for i, product in enumerate(db_products):
+        print(f"Producto {i}: ID={getattr(product, 'id', 'NO_ID')}, SKU={product.sku}")
+    
     # Asignar los productos al esquema de auditoría
     db_audit.productos = db_products
     return db_audit
 
-@app.put("/audits/{audit_id}/products/{product_id}", response_model=schemas.ProductBase)
+@app.put("/audits/{audit_id}/products/{product_id}")
 def update_product_endpoint(
     audit_id: int,
     product_id: int,
@@ -496,15 +778,21 @@ def update_product_endpoint(
     updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
     if not updated_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return updated_product
+    
+    return {
+        "message": "Producto actualizado exitosamente",
+        "product": updated_product
+    }
 
-# Finalizar una auditoría
 @app.put("/audits/{audit_id}/finish", response_model=schemas.Audit)
 def finish_audit(
     audit_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """
+    Finaliza una auditoría y calcula el porcentaje de cumplimiento.
+    """
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit:
         raise HTTPException(status_code=404, detail="Auditoría no encontrada")
@@ -512,7 +800,7 @@ def finish_audit(
     if current_user.rol == "auditor" and db_audit.auditor_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes acceso a esta auditoría")
 
-    # Actualizar el estado de la auditoría y calcular el cumplimiento
+    # Obtener productos y calcular cumplimiento
     products = crud.get_products_by_audit(db, audit_id=audit_id)
     
     # Calcular cumplimiento
@@ -521,12 +809,17 @@ def finish_audit(
         cumplimiento = 100 
     else:
         correctos = sum(1 for p in products if p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
-        cumplimiento = (correctos / total_productos) * 100 if total_productos > 0 else 0
+        cumplimiento = round((correctos / total_productos) * 100, 2) if total_productos > 0 else 0
     
-    updated_audit = crud.update_audit_status(db, audit_id=audit_id, new_status="finalizada", cumplimiento=cumplimiento)
-    return updated_audit
+    # Actualizar auditoría
+    db_audit.estado = "finalizada"
+    db_audit.porcentaje_cumplimiento = cumplimiento
+    db.commit()
+    db.refresh(db_audit)
+    
+    return db_audit
 
-@app.get("/audits/{audit_id}/products", response_model=List[schemas.ProductBase])
+@app.get("/audits/{audit_id}/products", response_model=List[schemas.Product])
 def get_audit_products(
     audit_id: int,
     db: Session = Depends(get_db),

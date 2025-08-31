@@ -47,7 +47,274 @@ document.addEventListener('DOMContentLoaded', function () {
         const dashboard = document.getElementById(dashboardId);
         if (dashboard) {
             dashboard.classList.remove('d-none');
+            
+            // Configurar event listeners específicos del dashboard
+            if (dashboardId === 'auditor-dashboard') {
+                setTimeout(setupAuditorDashboard, 100);
+            }
         }
+    }
+
+    // --- Mostrar archivos seleccionados ---
+    function updateSelectedFilesDisplay() {
+        const fileInput = document.getElementById('audit-file-input');
+        const selectedFilesDiv = document.getElementById('selected-files');
+        
+        if (!fileInput || !selectedFilesDiv) return;
+        
+        selectedFilesDiv.innerHTML = '';
+        
+        if (fileInput.files.length > 0) {
+            const fileList = document.createElement('div');
+            fileList.className = 'selected-files-list';
+            fileList.innerHTML = '<h6>Archivos seleccionados:</h6>';
+            
+            const fileListUl = document.createElement('ul');
+            fileListUl.className = 'list-group list-group-flush';
+            
+            for (let i = 0; i < fileInput.files.length; i++) {
+                const file = fileInput.files[i];
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item bg-dark text-white';
+                listItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>${file.name}</span>
+                        <small class="text-muted">${(file.size / 1024).toFixed(2)} KB</small>
+                    </div>
+                `;
+                fileListUl.appendChild(listItem);
+            }
+            
+            fileList.appendChild(fileListUl);
+            selectedFilesDiv.appendChild(fileList);
+        }
+    }
+
+    // --- Configurar el input de escaneo ---
+    function setupScanInput() {
+        const scanInput = document.getElementById('scan-input');
+        if (!scanInput) {
+            console.error("No se encontró el input de escaneo");
+            return;
+        }
+        
+        console.log("Configurando input de escaneo...");
+        
+        scanInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const scannedSku = scanInput.value.trim();
+                
+                if (scannedSku) {
+                    // Buscar el producto en la tabla por el atributo data-sku
+                    const skuCell = document.querySelector(`#auditor-products-table-body td[data-sku="${scannedSku}"]`);
+                    
+                    if (skuCell) {
+                        const targetRow = skuCell.closest('tr');
+                        const physicalCountInput = targetRow.querySelector('.physical-count');
+                        
+                        if (physicalCountInput) {
+                            // Poner focus en cantidad física
+                            physicalCountInput.focus();
+                            physicalCountInput.select();
+                            
+                            // Limpiar el campo de escaneo
+                            scanInput.value = '';
+                        }
+                    } else {
+                        alert(`SKU ${scannedSku} no encontrado en la auditoría.`);
+                        scanInput.value = '';
+                        scanInput.focus();
+                    }
+                }
+            }
+        });
+    }
+
+    // --- Configurar botones del auditor ---
+    function setupAuditorButtons() {
+        const saveAllBtn = document.getElementById('save-all-btn');
+        const finishAuditBtn = document.getElementById('finish-audit-btn');
+        
+        if (saveAllBtn) {
+            saveAllBtn.addEventListener('click', async () => {
+                if (!currentAudit) {
+                    alert("Por favor, selecciona una auditoría primero.");
+                    return;
+                }
+                
+                const saved = await saveAllProducts(currentAudit.id);
+                if (saved) {
+                    alert("Todos los productos han sido guardados exitosamente.");
+                } else {
+                    alert("Hubo errores al guardar algunos productos. Por favor, revísalos manualmente.");
+                }
+            });
+        }
+        
+        if (finishAuditBtn) {
+            finishAuditBtn.addEventListener('click', async () => {
+                if (!currentAudit) {
+                    alert("Por favor, selecciona una auditoría primero.");
+                    return;
+                }
+
+                try {
+                    const token = getToken();
+                    
+                    // Primero guardar todos los cambios
+                    const saved = await saveAllProducts(currentAudit.id);
+                    if (!saved) {
+                        alert("Hubo errores al guardar algunos productos. Revise los datos.");
+                        return;
+                    }
+                    
+                    // Luego finalizar la auditoría
+                    const response = await fetch(`${API_URL}/audits/${currentAudit.id}/finish`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (response.ok) {
+                        alert("Auditoría finalizada con éxito.");
+                        
+                        // Limpiar la interfaz
+                        const auditorProductsTableBody = document.getElementById('auditor-products-table-body');
+                        if (auditorProductsTableBody) {
+                            auditorProductsTableBody.innerHTML = '';
+                        }
+                        currentAudit = null;
+                        updateAuditorCompliance(null);
+                        
+                        // Ocultar botones de guardar y finalizar
+                        document.getElementById('save-all-btn').classList.add('d-none');
+                        document.getElementById('finish-audit-btn').classList.add('d-none');
+                        
+                        // Recargar la lista de auditorías
+                        loadDashboardData('auditor', token);
+                    } else {
+                        const error = await response.json();
+                        alert("Error al finalizar la auditoría: " + error.detail);
+                    }
+                } catch (error) {
+                    console.error('Error de red:', error);
+                    alert("Error de red al finalizar la auditoría.");
+                }
+            });
+        }
+    }
+
+    // --- Lógica para el Dashboard del Auditor ---
+    function setupAuditorDashboard() {
+        console.log("Configurando dashboard del auditor...");
+        
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('audit-file-input');
+        const selectedFilesDiv = document.getElementById('selected-files');
+        
+        console.log("Elementos encontrados - Formulario:", !!uploadForm, "Input:", !!fileInput);
+        
+        // Configurar display de archivos seleccionados
+        if (fileInput) {
+            fileInput.addEventListener('change', updateSelectedFilesDisplay);
+        }
+        
+        if (uploadForm && fileInput) {
+            // Remover event listeners anteriores para evitar duplicados
+            uploadForm.replaceWith(uploadForm.cloneNode(true));
+            fileInput.replaceWith(fileInput.cloneNode(true));
+            
+            // Volver a obtener los elementos después del reemplazo
+            const refreshedUploadForm = document.getElementById('uploadForm');
+            const refreshedFileInput = document.getElementById('audit-file-input');
+            
+            // Re-configurar el event listener para el cambio de archivos
+            refreshedFileInput.addEventListener('change', updateSelectedFilesDisplay);
+            
+            refreshedUploadForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                // Verificación robusta
+                if (!refreshedFileInput || !refreshedFileInput.files || refreshedFileInput.files.length === 0) {
+                    alert("Por favor, selecciona al menos un archivo Excel para subir.");
+                    return;
+                }
+                
+                const files = Array.from(refreshedFileInput.files);
+                console.log("Archivos seleccionados para upload:", files.map(f => f.name));
+
+                try {
+                    const token = getToken();
+                    if (!token) {
+                        alert("No estás autenticado. Por favor, inicia sesión nuevamente.");
+                        return;
+                    }
+
+                    
+                    const formData = new FormData();
+
+// Agregar todos los archivos al FormData - ✅ CORRECTO
+files.forEach((file) => {
+    formData.append('files', file); // 'files' en plural
+});
+
+const response = await fetch(`${API_URL}/audits/upload-multiple-files`, {
+    method: 'POST',
+    headers: { 
+        'Authorization': `Bearer ${token}`
+        // NO incluir 'Content-Type' - FormData lo establece automáticamente
+    },
+    body: formData,
+});
+                    // Mostrar indicador de carga
+                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Subiendo...';
+                    submitBtn.disabled = true;
+                    
+                    // Restaurar botón
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(`✅ Auditoría creada con éxito!\nID: ${result.audit_id}\nÓrdenes de traslado procesadas: ${result.ordenes_procesadas}\nProductos procesados: ${result.productos_procesados}`);
+                        
+                        // Limpiar el input de archivo y el display
+                        refreshedFileInput.value = '';
+                        if (selectedFilesDiv) {
+                            selectedFilesDiv.innerHTML = '';
+                        }
+                        
+                        // Recargar las auditorías
+                        loadDashboardData('auditor', token);
+                    } else {
+                        const error = await response.json();
+                        console.error("Error del servidor:", error);
+                        alert("❌ Error al procesar los archivos: " + (error.detail || "Error desconocido del servidor"));
+                    }
+                } catch (error) {
+                    console.error('Error de red:', error);
+                    
+                    // Restaurar botón en caso de error
+                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
+                        submitBtn.disabled = false;
+                    }
+                    
+                    alert("❌ Error de conexión. Verifica tu internet e intenta nuevamente.");
+                }
+            });
+        } else {
+            console.error("No se encontraron los elementos del formulario de upload");
+        }
+        
+        // Configurar el input de escaneo
+        setupScanInput();
+        
+        // Configurar botones de guardar y finalizar
+        setupAuditorButtons();
     }
 
     // --- Funcionalidad Principal ---
@@ -66,7 +333,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 localStorage.setItem('user_role', user.rol);
                 localStorage.setItem('user_name', user.nombre);
                 localStorage.setItem('user_id', user.id);
-                showDashboard(roleMap[user.rol]);
+                
+                // MOSTRAR EL DASHBOARD CORRESPONDIENTE AL ROL
+                const dashboardId = roleMap[user.rol];
+                showDashboard(dashboardId);
                 updateTitleWithUser(user.nombre, user.rol);
                 loadDashboardData(user.rol, token);
             } else {
@@ -108,6 +378,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (auditsResponse.ok) {
                     const audits = await auditsResponse.json();
                     renderAuditorAuditsTable(audits, '#auditor-audits-table-body');
+                    
+                    // CONFIGURAR EL DASHBOARD DEL AUDITOR DESPUÉS DE CARGAR LOS DATOS
+                    setTimeout(setupAuditorDashboard, 200);
                 } else {
                     console.error('No se pudieron cargar las auditorías del auditor.');
                     // Mostrar mensaje de error en la tabla
@@ -350,172 +623,32 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-    
-    // --- Lógica para el modal de autenticación ---
-    authForm.addEventListener('submit', async function (event) {
-    event.preventDefault();
-    const email = document.getElementById('correo_electronico').value;
-    const password = document.getElementById('contrasena').value;
-    const formAction = event.submitter.id;
 
-    try {
-        let response;
-        if (formAction === 'login-btn') {
-            const formBody = new URLSearchParams();
-            formBody.append('username', email); // FastAPI espera 'username'
-            formBody.append('password', password);
-            
-            response = await fetch(`${API_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formBody
+    // Función para guardar un producto individualmente
+    async function saveProduct(productId, auditId, updateData) {
+        try {
+            const token = getToken();
+            const response = await fetch(`${API_URL}/audits/${auditId}/products/${productId}`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updateData)
             });
-        } else if (formAction === 'register-btn') {
-            const name = document.getElementById('nombre').value;
-            const role = document.getElementById('rol').value;
-            response = await fetch(`${API_URL}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre: name, correo: email, contrasena: password, rol: role })
-            });
-        } else {
-            return;
-        }
-
-        if (response.ok) {
-            const result = await response.json();
             
-            if (result.access_token && result.user) {
-                // Almacenar el token y los datos del usuario
-                localStorage.setItem('access_token', result.access_token);
-                localStorage.setItem('user_role', result.user.rol);
-                localStorage.setItem('user_name', result.user.nombre);
-                localStorage.setItem('user_id', result.user.id);
+            if (response.ok) {
+                return true;
+            } else {
+                const error = await response.json();
+                console.error("Error al actualizar producto:", error.detail);
+                return false;
             }
-            
-            authModal.hide();
-            // Llama a la función para verificar el estado de autenticación y cargar el dashboard
-            checkAuth();
-        } else {
-            const error = await response.json();
-            alert('Error: ' + error.detail);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al conectar con la API.');
-    }
-});
-          
-    // --- Lógica para cerrar sesión y navegación del sidebar ---
-    document.querySelector('[data-target="logout"]').addEventListener('click', function (e) {
-        e.preventDefault();
-        clearSession();
-    });
-
-    document.querySelectorAll('.dashboard-link').forEach(link => {
-        link.addEventListener('click', function (e) {
-            e.preventDefault();
-            const targetId = this.getAttribute('data-target');
-            showDashboard(targetId);
-            const role = localStorage.getItem('user_role');
-            if (role) {
-                loadDashboardData(role, getToken());
-                
-                // Configurar event listeners específicos del dashboard
-                if (targetId === 'auditor-dashboard') {
-                    setTimeout(setupAuditorDashboard, 100);
-                }
-            }
-        });
-    });
-
-    // --- Lógica para el Dashboard del Auditor ---
-    function setupAuditorDashboard() {
-        const uploadForm = document.getElementById('uploadForm');
-        const fileInput = document.getElementById('audit-file-input');
-        
-        console.log("Configurando dashboard auditor - Formulario:", !!uploadForm, "Input:", !!fileInput);
-        
-        if (uploadForm && fileInput) {
-            // Remover event listeners anteriores para evitar duplicados
-            const newUploadForm = uploadForm.cloneNode(true);
-            uploadForm.parentNode.replaceChild(newUploadForm, uploadForm);
-            
-            // Volver a obtener los elementos después del reemplazo
-            const refreshedUploadForm = document.getElementById('uploadForm');
-            const refreshedFileInput = document.getElementById('audit-file-input');
-            
-            refreshedUploadForm.addEventListener('submit', async function (e) {
-                e.preventDefault();
-
-                // Verificación robusta
-                if (!refreshedFileInput || !refreshedFileInput.files || refreshedFileInput.files.length === 0) {
-                    alert("Por favor, selecciona un archivo Excel para subir.");
-                    return;
-                }
-                
-                const file = refreshedFileInput.files[0];
-                console.log("Archivo seleccionado para upload:", file.name);
-
-                try {
-                    const token = getToken();
-                    if (!token) {
-                        alert("No estás autenticado. Por favor, inicia sesión nuevamente.");
-                        return;
-                    }
-
-                    const formData = new FormData();
-                    formData.append('file', file);
-                
-                    // Mostrar indicador de carga
-                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Subiendo...';
-                    submitBtn.disabled = true;
-                
-                    const response = await fetch(`${API_URL}/audits/upload-file`, {
-                        method: 'POST',
-                        headers: { 
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: formData,
-                    });
-                    
-                    // Restaurar botón
-                    submitBtn.innerHTML = originalText;
-                    submitBtn.disabled = false;
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        alert(`✅ Auditoría creada con éxito!\nID: ${result.audit_id}\nProductos procesados: ${result.productos_procesados}\nDocumento: ${result.numero_documento}`);
-                        
-                        // Limpiar el input de archivo
-                        refreshedFileInput.value = '';
-                        
-                        // Recargar las auditorías
-                        loadDashboardData('auditor', token);
-                    } else {
-                        const error = await response.json();
-                        console.error("Error del servidor:", error);
-                        alert("❌ Error al procesar el archivo: " + (error.detail || "Error desconocido del servidor"));
-                    }
-                } catch (error) {
-                    console.error('Error de red:', error);
-                    
-                    // Restaurar botón en caso de error
-                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
-                    if (submitBtn) {
-                        submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
-                        submitBtn.disabled = false;
-                    }
-                    
-                    alert("❌ Error de conexión. Verifica tu internet e intenta nuevamente.");
-                }
-            });
+        } catch (error) {
+            console.error('Error de red:', error);
+            return false;
         }
     }
-
-    const auditorProductsTableBody = document.getElementById('auditor-products-table-body');
 
     // Función para iniciar una auditoría
     window.iniciarAuditoria = async function(auditId) {
@@ -545,43 +678,147 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     async function fetchProductsByAuditId(auditId) {
-        const token = getToken();
-        if (!token) {
-            alert("No autenticado. Por favor, inicia sesión.");
-            return;
-        }
-
-        try {
-            const response = await fetch(`${API_URL}/audits/${auditId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                currentAudit = await response.json();
-                renderProductsTable(currentAudit.productos);
-                updateAuditorCompliance(currentAudit.porcentaje_cumplimiento);
-                
-                // Mostrar botones de guardar y finalizar
-                document.getElementById('save-all-btn').classList.remove('d-none');
-                document.getElementById('finish-audit-btn').classList.remove('d-none');
-            } else {
-                const error = await response.json();
-                alert('Error al cargar productos: ' + error.detail);
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Error de red al cargar productos.');
-        }
+    const token = getToken();
+    if (!token) {
+        alert("No autenticado. Por favor, inicia sesión.");
+        return;
     }
 
+    try {
+        const response = await fetch(`${API_URL}/audits/${auditId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            currentAudit = await response.json();
+            renderProductsTable(currentAudit.productos);
+            
+            // ✅ ACTUALIZAR CUMPLIMIENTO AL CARGAR LA AUDITORÍA
+            await updateCompliancePercentage(auditId);
+            
+            // Configurar el auto-guardado al presionar Enter
+            setupAutoSaveOnEnter();
+            
+            // Configurar el escaneo de SKUs
+            setupScanInput();
+            
+            // Mostrar botones de guardar y finalizar
+            document.getElementById('save-all-btn').classList.remove('d-none');
+            document.getElementById('finish-audit-btn').classList.remove('d-none');
+            
+            // Poner focus en el campo de escaneo
+            const scanInput = document.getElementById('scan-input');
+            if (scanInput) {
+                scanInput.focus();
+            }
+        } else {
+            const error = await response.json();
+            alert('Error al cargar productos: ' + error.detail);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error de red al cargar productos.');
+    }
+}
+
+    // Configurar el evento de Enter para guardar automáticamente
+    function setupAutoSaveOnEnter() {
+    // Usar event delegation en la tabla de productos
+    const productsTable = document.getElementById('auditor-products-table-body');
+    if (!productsTable) return;
+    
+    productsTable.addEventListener('keydown', async function(e) {
+        // Verificar si el objetivo es un input de cantidad física y si se presionó Enter
+        if (e.target.classList.contains('physical-count') && e.key === 'Enter') {
+            e.preventDefault();
+            
+            const input = e.target;
+            const productId = input.getAttribute('data-product-id');
+            
+            console.log("Product ID:", productId);
+            
+            if (!productId || productId === 'undefined') {
+                alert("Error: No se pudo identificar el producto. Recarga la página.");
+                return;
+            }
+            
+            // Verificar que tenemos una auditoría actual
+            if (!currentAudit || !currentAudit.id) {
+                alert("No hay una auditoría activa. Por favor, selecciona una auditoría primero.");
+                return;
+            }
+            
+            const row = input.closest('tr');
+            const noveltySelect = row.querySelector('.novelty-select');
+            const observationsArea = row.querySelector('.observations-area');
+            
+            const physicalCount = parseInt(input.value) || 0;
+            const novelty = noveltySelect ? noveltySelect.value : 'sin_novedad';
+            const observations = observationsArea ? observationsArea.value : '';
+            
+            const updateData = {
+                cantidad_fisica: physicalCount,
+                novedad: novelty,
+                observaciones: observations
+            };
+            
+            console.log("Guardando producto:", productId, updateData);
+            
+            // Mostrar indicador de carga
+            const originalValue = input.value;
+            input.disabled = true;
+            input.value = 'Guardando...';
+            
+            // Guardar el producto
+            const success = await saveProduct(productId, currentAudit.id, updateData);
+            
+            // Restaurar el input
+            input.disabled = false;
+            input.value = originalValue;
+            
+            if (success) {
+                console.log("Producto guardado exitosamente");
+                // Mostrar feedback visual de guardado exitoso
+                input.classList.add('saved-success');
+                setTimeout(() => {
+                    input.classList.remove('saved-success');
+                }, 1000);
+                
+                // ✅ LLAMAR A LA NUEVA FUNCIÓN PARA ACTUALIZAR PORCENTAJE
+                await updateCompliancePercentage(currentAudit.id);
+                
+                // VOLVER AL CAMPO DE ESCANEO DE SKU
+                const scanInput = document.getElementById('scan-input');
+                if (scanInput) {
+                    scanInput.focus();
+                    scanInput.select();
+                }
+            } else {
+                console.error("Error al guardar producto");
+                alert("Error al guardar el producto. Por favor, intente nuevamente.");
+                input.focus();
+                input.select();
+            }
+        }
+    });
+}
+
     function renderProductsTable(products) {
+        const auditorProductsTableBody = document.getElementById('auditor-products-table-body');
+        if (!auditorProductsTableBody) return;
+        
         auditorProductsTableBody.innerHTML = '';
         products.forEach(product => {
             const row = document.createElement('tr');
+            
+            // Color diferente según la orden de traslado para fácil identificación
+            const ordenTraslado = product.orden_traslado_original || 'SIN_OT';
+            const rowClass = `ot-${ordenTraslado.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            
             row.innerHTML = `
-                <td data-sku="${product.sku}">${product.sku}</td>
-                <td>${product.orden_traslado_original ?? '--'}</td>
-                <td>${product.nombre_articulo ?? '--'}</td>
-                <td>${product.cantidad_documento ?? '--'}</td>
+                <td data-sku="${product.sku}" class="${rowClass}">${product.sku}</td>
+                <td class="${rowClass}"><strong>${ordenTraslado}</strong></td>
+                <td class="${rowClass}">${product.nombre_articulo ?? '--'}</td>
+                <td class="${rowClass}">${product.cantidad_documento ?? '--'}</td>
                 <td><input type="number" class="form-control form-control-sm physical-count" data-product-id="${product.id}" value="${product.cantidad_fisica || ''}"></td>
                 <td><select class="form-select form-select-sm novelty-select" data-product-id="${product.id}">
                     <option value="sin_novedad" ${product.novedad === 'sin_novedad' ? 'selected' : ''}>Sin Novedad</option>
@@ -596,6 +833,34 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
             auditorProductsTableBody.appendChild(row);
         });
+        
+        // Aplicar estilos CSS para diferenciar las órdenes de traslado
+        applyOrderStyles(products);
+    }
+
+    function applyOrderStyles(products) {
+        // Obtener órdenes de traslado únicas
+        const uniqueOrders = [...new Set(products.map(p => p.orden_traslado_original))];
+        
+        // Generar estilos CSS dinámicamente
+        const style = document.createElement('style');
+        uniqueOrders.forEach((order, index) => {
+            if (order) {
+                const className = `ot-${order.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                const hue = (index * 137.5) % 360; // Distribución uniforme en el círculo cromático
+                style.textContent += `
+                    .${className} {
+                        background-color: hsla(${hue}, 70%, 20%, 0.3) !important;
+                        border-left: 3px solid hsl(${hue}, 70%, 50%) !important;
+                    }
+                    .${className}:hover {
+                        background-color: hsla(${hue}, 70%, 25%, 0.4) !important;
+                    }
+                `;
+            }
+        });
+        
+        document.head.appendChild(style);
     }
 
     function updateAuditorCompliance(percentage) {
@@ -607,42 +872,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Listener para el input de escaneo
-    const scanInput = document.getElementById('scan-input');
-    if (scanInput) {
-        scanInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const scannedSku = scanInput.value.trim();
-                if (scannedSku) {
-                    const row = document.querySelector(`#auditor-products-table-body td[data-sku="${scannedSku}"]`);
-                    if (row) {
-                        const targetRow = row.closest('tr');
-                        const physicalCountInput = targetRow.querySelector('.physical-count');
-                        if (physicalCountInput) {
-                            physicalCountInput.focus();
-                            physicalCountInput.select();
-                        }
-                    } else {
-                        alert(`SKU ${scannedSku} no encontrado en la auditoría.`);
-                    }
-                }
-                scanInput.value = '';
-            }
-        });
-    }
-
     // Listener para los botones "Guardar" de cada producto
     document.addEventListener('click', async (e) => {
         if (e.target.closest('.save-product-btn')) {
             e.preventDefault();
             const btn = e.target.closest('.save-product-btn');
             const productId = btn.getAttribute('data-product-id');
+            
+            console.log("Product ID desde botón:", productId); // Para debugging
+            
+            if (!productId || productId === 'undefined') {
+                alert("Error: No se pudo identificar el producto.");
+                return;
+            }
+            
             const row = btn.closest('tr');
+            const physicalCountInput = row.querySelector('.physical-count');
+            const noveltySelect = row.querySelector('.novelty-select');
+            const observationsArea = row.querySelector('.observations-area');
 
-            const physicalCount = row.querySelector('.physical-count').value;
-            const novelty = row.querySelector('.novelty-select').value;
-            const observations = row.querySelector('.observations-area').value;
+            const physicalCount = physicalCountInput ? parseInt(physicalCountInput.value) || 0 : 0;
+            const novelty = noveltySelect ? noveltySelect.value : 'sin_novedad';
+            const observations = observationsArea ? observationsArea.value : '';
 
             const updateData = {
                 cantidad_fisica: physicalCount,
@@ -675,47 +926,186 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Listener para el botón "Finalizar Auditoría"
-    const finishAuditBtn = document.getElementById('finish-audit-btn');
-    if (finishAuditBtn) {
-        finishAuditBtn.addEventListener('click', async () => {
-            if (!currentAudit) {
-                alert("Por favor, selecciona una auditoría primero.");
+    // Función para guardar todos los productos de la auditoría
+    async function saveAllProducts(auditId) {
+        if (!currentAudit || !currentAudit.productos) {
+            alert("No hay productos para guardar.");
+            return false;
+        }
+
+        const token = getToken();
+        let allSaved = true;
+        const savePromises = [];
+
+        // Recorrer todos los productos y guardar los cambios
+        currentAudit.productos.forEach(product => {
+            const row = document.querySelector(`tr:has(td[data-sku="${product.sku}"])`);
+            if (row) {
+                const physicalCountInput = row.querySelector('.physical-count');
+                const noveltySelect = row.querySelector('.novelty-select');
+                const observationsArea = row.querySelector('.observations-area');
+                
+                const physicalCount = physicalCountInput ? parseInt(physicalCountInput.value) || 0 : 0;
+                const novelty = noveltySelect ? noveltySelect.value : 'sin_novedad';
+                const observations = observationsArea ? observationsArea.value : '';
+                
+                const updateData = {
+                    cantidad_fisica: physicalCount,
+                    novedad: novelty,
+                    observaciones: observations
+                };
+                
+                // Agregar la promesa de guardado
+                savePromises.push(
+                    saveProduct(product.id, auditId, updateData)
+                        .then(success => {
+                            if (!success) allSaved = false;
+                        })
+                );
+            }
+        });
+
+        // Esperar a que todas las promesas se completen
+        await Promise.all(savePromises);
+        
+        return allSaved;
+    }
+
+
+// --- Función para calcular y actualizar el porcentaje de cumplimiento ---
+async function updateCompliancePercentage(auditId) {
+    try {
+        const token = getToken();
+        const response = await fetch(`${API_URL}/audits/${auditId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const auditData = await response.json();
+            
+            if (auditData.productos && Array.isArray(auditData.productos)) {
+                // Calcular cumplimiento en tiempo real
+                const totalProductos = auditData.productos.length;
+                let correctos = 0;
+                
+                auditData.productos.forEach(producto => {
+                    if (producto.cantidad_fisica !== null && 
+                        producto.cantidad_fisica === producto.cantidad_enviada && 
+                        producto.novedad === 'sin_novedad') {
+                        correctos++;
+                    }
+                });
+                
+                const cumplimiento = totalProductos > 0 ? 
+                    Math.round((correctos / totalProductos) * 100) : 0;
+                
+                // Actualizar la interfaz
+                updateAuditorCompliance(cumplimiento);
+                
+                console.log(`✅ Cumplimiento actualizado: ${cumplimiento}% (${correctos}/${totalProductos})`);
+            }
+        }
+    } catch (error) {
+        console.error('Error al actualizar porcentaje de cumplimiento:', error);
+    }
+}
+
+// --- Lógica para el modal de autenticación ---
+authForm.addEventListener('submit', async function (event) {
+    // ... [tu código existente] ...
+});
+
+// --- Lógica para cerrar sesión y navegación del sidebar ---
+document.querySelector('[data-target="logout"]').addEventListener('click', function (e) {
+    // ... [tu código existente] ...
+});
+
+    // --- Lógica para el modal de autenticación ---
+    authForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const email = document.getElementById('correo_electronico').value;
+        const password = document.getElementById('contrasena').value;
+        const formAction = event.submitter.id;
+
+        try {
+            let response;
+            if (formAction === 'login-btn') {
+                const formBody = new URLSearchParams();
+                formBody.append('username', email);
+                formBody.append('password', password);
+                
+                response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formBody
+                });
+            } else if (formAction === 'register-btn') {
+                const name = document.getElementById('nombre').value;
+                const role = document.getElementById('rol').value;
+                response = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: name, correo: email, contrasena: password, rol: role })
+                });
+            } else {
                 return;
             }
 
-            try {
-                const token = getToken();
-                const response = await fetch(`${API_URL}/audits/${currentAudit.id}/finish`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    alert("Auditoría finalizada con éxito.");
-                    auditorProductsTableBody.innerHTML = '';
-                    currentAudit = null;
-                    updateAuditorCompliance(null);
-                    loadDashboardData(localStorage.getItem('user_role'), token);
-                } else {
-                    const error = await response.json();
-                    alert("Error al finalizar la auditoría: " + error.detail);
+            if (response.ok) {
+                const result = await response.json();
+                
+                if (result.access_token) {
+                    // Almacenar el token y los datos del usuario
+                    localStorage.setItem('access_token', result.access_token);
+                    localStorage.setItem('user_role', result.user_role || result.user?.rol);
+                    localStorage.setItem('user_name', result.user_name || result.user?.nombre);
+                    localStorage.setItem('user_id', result.user_id || result.user?.id);
                 }
-            } catch (error) {
-                console.error('Error de red:', error);
-                alert("Error de red al finalizar la auditoría.");
+                
+                authModal.hide();
+                // Llama a la función para verificar el estado de autenticación y cargar el dashboard
+                checkAuth();
+            } else {
+                const error = await response.json();
+                alert('Error: ' + error.detail);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al conectar con la API.');
+        }
+    });
+
+    // --- Lógica para cerrar sesión y navegación del sidebar ---
+    document.querySelector('[data-target="logout"]').addEventListener('click', function (e) {
+        e.preventDefault();
+        clearSession();
+    });
+
+    document.querySelectorAll('.dashboard-link').forEach(link => {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('data-target');
+            showDashboard(targetId);
+            const role = localStorage.getItem('user_role');
+            if (role) {
+                loadDashboardData(role, getToken());
             }
         });
-    }
-    
+    });
+
     // Configurar dashboard del auditor si ya está visible al cargar la página
     setTimeout(function() {
-        const auditorDashboard = document.getElementById('auditor-dashboard');
-        if (auditorDashboard && !auditorDashboard.classList.contains('d-none')) {
-            console.log("Dashboard del auditor visible al cargar, configurando...");
-            setupAuditorDashboard();
+        const userRole = localStorage.getItem('user_role');
+        if (userRole === 'auditor') {
+            const auditorDashboard = document.getElementById('auditor-dashboard');
+            if (auditorDashboard && !auditorDashboard.classList.contains('d-none')) {
+                console.log("Dashboard del auditor visible al cargar, configurando...");
+                setupAuditorDashboard();
+            }
         }
     }, 1000);
+
+
     
     // Iniciar la verificación de autenticación
     checkAuth();

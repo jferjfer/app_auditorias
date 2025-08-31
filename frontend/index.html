@@ -118,7 +118,7 @@
                                         </tr>
                                     </thead>
                                     <tbody id="analyst-audits-table-body">
-                                        </tbody>
+                                    </tbody>
                                 </table>
                             </div>
                         </div>
@@ -135,8 +135,8 @@
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-body">
-                            <h5 class="card-title">Porcentaje de Cumplimiento</h5>
-                            <div id="compliance-percentage" class="progress-circle mx-auto"></div>
+                            <h5 class="card-title">Porcentaje de Auditoría</h5>
+                            <div id="compliance-percentage" class="progress-circle mx-auto">N/A</div>
                         </div>
                     </div>
                 </div>
@@ -144,19 +144,22 @@
                     <div class="card h-100">
                         <div class="card-body">
                             <h5 class="card-title">Cargar Archivos de Auditoría</h5>
-                            <form id="uploadForm" class="mb-3">
-                                <div class="input-group">
-                                    <input type="file" class="form-control" id="audit-file-input" multiple>
-                                    <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Subir Archivos</button>
-                                </div>
-                            </form>
+                            
+                        <form id="uploadForm" class="mb-3">
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="audit-file-input" accept=".xlsx,.xls" multiple>
+                                <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Subir Archivos</button>
+                            </div>
+                            <small class="form-text text-muted">Selecciona uno o más archivos Excel (.xlsx, .xls). Cada archivo debe ser una orden de traslado.</small>
+                            <div id="selected-files" class="mt-2"></div>
+                        </form>
                             <hr class="border-secondary">
                             <h5 class="card-title">Escaneo de Productos</h5>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
-                                <input type="text" class="form-control" placeholder="Escanea el SKU del producto..." id="scan-input" autofocus>
+                                <input type="text" class="form-control" placeholder="Escanea el SKU del producto..." id="scan-input">
                             </div>
-                            <p class="text-muted mt-2">Usa el lector de códigos de barras o escribe el SKU.</p>
+                            <p class="text-muted mt-2">Presiona Enter después de escanear o escribir el SKU.</p>
                         </div>
                     </div>
                 </div>
@@ -192,6 +195,7 @@
                     <div class="card">
                         <div class="card-body">
                             <h5 class="card-title">Productos de la Auditoría</h5>
+                            
                             <div class="table-responsive">
                                 <table class="table table-hover table-dark">
                                     <thead>
@@ -207,12 +211,12 @@
                                         </tr>
                                     </thead>
                                     <tbody id="auditor-products-table-body">
-                                        </tbody>
+                                    </tbody>
                                 </table>
                             </div>
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
-                                <button class="btn btn-success" id="save-all-btn"><i class="bi bi-save"></i> Guardar Auditoría</button>
-                                <button class="btn btn-info text-white" id="finish-audit-btn"><i class="bi bi-check-circle"></i> Finalizar Auditoría</button>
+                                <button class="btn btn-success d-none" id="save-all-btn"><i class="bi bi-save"></i> Guardar Auditoría</button>
+                                <button class="btn btn-info text-white d-none" id="finish-audit-btn"><i class="bi bi-check-circle"></i> Finalizar Auditoría</button>
                             </div>
                         </div>
                     </div>
@@ -233,7 +237,7 @@
                                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="bi bi-plus-lg"></i> Agregar Usuario</button>
                             </div>
                             <div class="table-responsive">
-                                <table class="table table-hover table-dark user-table">
+                                <table class="table table-hover table-dark">
                                     <thead>
                                         <tr>
                                             <th>Nombre</th>
@@ -260,11 +264,11 @@
                                     <thead>
                                         <tr>
                                             <th>ID</th>
-                                            <th>Orden de Traslado</th>
+                                            <th>Ubicación</th>
                                             <th>Auditor</th>
                                             <th>Fecha</th>
                                             <th>Estado</th>
-                                            <th>Productos Auditados</th>
+                                            <th>Productos</th>
                                             <th>% Cumplimiento</th>
                                             <th>Acciones</th>
                                         </tr>
@@ -280,12 +284,13 @@
         </div>
     </div>
     
+    <!-- Modal de Autenticación -->
     <div class="modal fade" id="authModal" tabindex="-1" aria-labelledby="authModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="authModalLabel">Iniciar Sesión / Registrarse</h5>
-                    <button type="submit" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="auth-form">
@@ -315,6 +320,46 @@
                             <button type="submit" class="btn btn-primary" id="login-btn">Iniciar Sesión</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar Usuario (Admin) -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Agregar Nuevo Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-user-form">
+                        <div class="mb-3">
+                            <label for="new-user-name" class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="new-user-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-user-email" class="form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="new-user-email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-user-password" class="form-label">Contraseña</label>
+                            <input type="password" class="form-control" id="new-user-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-user-role" class="form-label">Rol</label>
+                            <select class="form-select" id="new-user-role" required>
+                                <option value="auditor">Auditor</option>
+                                <option value="analista">Analista</option>
+                                <option value="administrador">Administrador</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="confirm-add-user">Agregar Usuario</button>
                 </div>
             </div>
         </div>

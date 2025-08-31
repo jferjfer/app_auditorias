@@ -20,7 +20,7 @@ class User(UserBase):
         from_attributes = True
 
 # --- Esquemas para Auditorías ---
-# Esquema para el producto auditado (para usar dentro de AuditCreate)
+# Esquema base para el producto auditado
 class ProductBase(BaseModel):
     sku: str
     nombre_articulo: str
@@ -31,30 +31,40 @@ class ProductBase(BaseModel):
     observaciones: Optional[str] = None
     orden_traslado_original: str
     
-    # Esta es la parte que soluciona el error
     class Config:
         from_attributes = True
+
+# Esquema para el producto auditado CON ID (para respuestas)
+class Product(ProductBase):
+    id: int
     
+    class Config:
+        from_attributes = True
+
 # Esquema para crear una auditoría (con productos anidados)
 class AuditCreate(BaseModel):
     ubicacion_destino: str
     productos: List[ProductBase]
 
-# Esquema para la respuesta de una auditoría
-class Audit(BaseModel):
-    id: int
+# Esquema base para auditoría
+class AuditBase(BaseModel):
     ubicacion_destino: str
+    estado: str
+    porcentaje_cumplimiento: Optional[int] = None
+
+# Esquema para la respuesta de una auditoría
+class Audit(AuditBase):
+    id: int
     auditor_id: int
     creada_en: datetime
-    estado: str
-    porcentaje_cumplimiento: Optional[int]
+    auditor_nombre: Optional[str] = None
     
     class Config:
         from_attributes = True
 
 # Esquema para mostrar los detalles de la auditoría con productos
 class AuditDetails(Audit):
-    productos: List[ProductBase]
+    productos: List[Product]
 
     class Config:
         from_attributes = True
@@ -73,12 +83,16 @@ class File(FileUpload):
     auditoria_id: int
     subido_en: datetime
 
+    class Config:
+        from_attributes = True
+
 # Esquema de token JWT
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user_name: str
     user_role: str
+    user_id: int
 
 # Esquema de datos de token
 class TokenData(BaseModel):
@@ -89,3 +103,71 @@ class ProductUpdate(BaseModel):
     cantidad_fisica: Optional[int] = None
     novedad: Optional[str] = None
     observaciones: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+# Esquema para crear un producto (sin ID)
+class ProductCreate(ProductBase):
+    pass
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de auditorías con información básica
+class AuditResponse(BaseModel):
+    id: int
+    ubicacion_destino: str
+    auditor_id: int
+    auditor_nombre: Optional[str] = None
+    creada_en: datetime
+    estado: str
+    porcentaje_cumplimiento: Optional[int] = None
+    productos_count: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de login exitoso
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: User
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de registro exitoso
+class RegisterResponse(BaseModel):
+    message: str
+    user: User
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de carga de archivos
+class FileUploadResponse(BaseModel):
+    message: str
+    audit_id: int
+    productos_procesados: int
+    numero_documento: str
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de actualización de producto
+class ProductUpdateResponse(BaseModel):
+    message: str
+    product: Product
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de finalización de auditoría
+class AuditFinishResponse(BaseModel):
+    message: str
+    audit: Audit
+    porcentaje_cumplimiento: float
+
+    class Config:
+        from_attributes = True

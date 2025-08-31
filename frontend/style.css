@@ -231,20 +231,20 @@ body::before {
 }
 
 .form-label {
-    color: var(--text-light); /* Asegura que las etiquetas se vean */
+    color: var(--text-light);
 }
 
 /* Estilos específicos para los inputs del modal */
 .modal .form-control, .modal .form-select {
-    background-color: var(--card-bg); /* Fondo de campo más visible */
+    background-color: var(--card-bg);
     border: 1px solid var(--border-color);
-    color: var(--text-light); /* Asegura que el texto escrito sea visible */
+    color: var(--text-light);
 }
 
 /* --- Corrección para el Dropdown de Rol en el Modal --- */
 .form-select option {
-    background-color: var(--bg-color); /* Fondo del menú desplegable */
-    color: var(--text-light); /* Color del texto de las opciones */
+    background-color: var(--bg-color);
+    color: var(--text-light);
 }
 
 /* Estilo para las opciones seleccionadas o en hover */
@@ -252,4 +252,57 @@ body::before {
 .form-select option:hover {
     background-color: var(--primary-color);
     color: white;
+}
+
+.physical-count.saved-success {
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+    color: #155724 !important;
+    transition: all 0.3s ease;
+}
+
+.physical-count:focus {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border-color: #00c6ff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 198, 255, 0.25) !important;
+}
+
+#scan-input:focus {
+    border-color: #00c6ff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 198, 255, 0.25);
+}
+
+/* Estados de auditoría */
+.estado-pendiente {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.estado-progreso {
+    background-color: #17a2b8 !important;
+    color: #fff !important;
+}
+
+.estado-completada {
+    background-color: #28a745 !important;
+    color: #fff !important;
+}
+
+.saved-success {
+    background-color: #d4edda !important;
+    border-color: #c3e6cb !important;
+    transition: all 0.3s ease;
+}
+
+#compliance-percentage {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    transition: all 0.5s ease;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
