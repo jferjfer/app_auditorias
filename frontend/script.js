@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
     let complianceChartInstance = null;
     let noveltiesChartInstance = null;
 
-
     // Estado de la auditoría actual para el auditor
     let currentAudit = null;
 
@@ -25,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user_role');
         localStorage.removeItem('user_name');
+        localStorage.removeItem('user_id');
         window.location.reload();
     };
 
@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const user = await response.json();
                 localStorage.setItem('user_role', user.rol);
                 localStorage.setItem('user_name', user.nombre);
+                localStorage.setItem('user_id', user.id);
                 showDashboard(roleMap[user.rol]);
                 updateTitleWithUser(user.nombre, user.rol);
                 loadDashboardData(user.rol, token);
@@ -96,18 +97,31 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } else if (role === 'auditor') {
             try {
-                const auditsResponse = await fetch(`${API_URL}/audits/`, {
+                // Obtener el ID del auditor actual
+                const auditorId = localStorage.getItem('user_id');
+                
+                // Cargar auditorías del auditor actual
+                const auditsResponse = await fetch(`${API_URL}/audits/auditor/${auditorId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
                 if (auditsResponse.ok) {
                     const audits = await auditsResponse.json();
-                    const userAudits = audits.filter(a => a.auditor_nombre === localStorage.getItem('user_name') || a.auditor_id === localStorage.getItem('user_id'));
-                    renderAuditorAuditsTable(userAudits, '#auditor-audits-table-body');
+                    renderAuditorAuditsTable(audits, '#auditor-audits-table-body');
                 } else {
                     console.error('No se pudieron cargar las auditorías del auditor.');
+                    // Mostrar mensaje de error en la tabla
+                    const tableBody = document.querySelector('#auditor-audits-table-body');
+                    if (tableBody) {
+                        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar las auditorías</td></tr>';
+                    }
                 }
             } catch (error) {
                 console.error('Error al cargar datos del dashboard del auditor:', error);
+                const tableBody = document.querySelector('#auditor-audits-table-body');
+                if (tableBody) {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error de conexión</td></tr>';
+                }
             }
         } else if (role === 'administrador') {
             try {
@@ -164,18 +178,51 @@ document.addEventListener('DOMContentLoaded', function () {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
         tableBody.innerHTML = '';
+        
+        if (audits.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No tienes auditorías asignadas</td></tr>';
+            return;
+        }
+        
         audits.forEach(audit => {
             const row = document.createElement('tr');
             const fecha = new Date(audit.creada_en).toLocaleDateString() || '--';
-            const estadoColor = audit.estado === 'Finalizada' ? '#28a745' : '#ffc107';
+            
+            // Determinar clase según estado
+            let claseEstado = '';
+            let textoEstado = '';
+            switch(audit.estado) {
+                case 'pendiente':
+                    claseEstado = 'estado-pendiente';
+                    textoEstado = 'Pendiente';
+                    break;
+                case 'en_progreso':
+                    claseEstado = 'estado-progreso';
+                    textoEstado = 'En Progreso';
+                    break;
+                case 'finalizada':
+                    claseEstado = 'estado-completada';
+                    textoEstado = 'Completada';
+                    break;
+                default:
+                    claseEstado = 'bg-secondary';
+                    textoEstado = audit.estado;
+            }
 
             row.innerHTML = `
                 <td>${audit.id ?? '--'}</td>
                 <td>${audit.ubicacion_destino ?? '--'}</td>
                 <td>${fecha}</td>
-                <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${audit.estado ?? '--'}</span></td>
+                <td><span class="badge ${claseEstado}">${textoEstado}</span></td>
                 <td>
-                    <button class="btn btn-sm btn-outline-info view-products-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver Productos</button>
+                    ${audit.estado === 'pendiente' ? 
+                        `<button class="btn btn-sm btn-primary" onclick="iniciarAuditoria(${audit.id})">
+                            <i class="bi bi-play-fill"></i> Iniciar
+                        </button>` : 
+                        `<button class="btn btn-sm btn-info" onclick="verAuditoria(${audit.id})">
+                            <i class="bi bi-eye"></i> Ver
+                        </button>`
+                    }
                 </td>
             `;
             tableBody.appendChild(row);
@@ -343,6 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 localStorage.setItem('access_token', result.access_token);
                 localStorage.setItem('user_role', result.user.rol);
                 localStorage.setItem('user_name', result.user.nombre);
+                localStorage.setItem('user_id', result.user.id);
             }
             
             authModal.hide();
@@ -358,7 +406,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
           
-
     // --- Lógica para cerrar sesión y navegación del sidebar ---
     document.querySelector('[data-target="logout"]').addEventListener('click', function (e) {
         e.preventDefault();
@@ -373,59 +420,129 @@ document.addEventListener('DOMContentLoaded', function () {
             const role = localStorage.getItem('user_role');
             if (role) {
                 loadDashboardData(role, getToken());
+                
+                // Configurar event listeners específicos del dashboard
+                if (targetId === 'auditor-dashboard') {
+                    setTimeout(setupAuditorDashboard, 100);
+                }
             }
         });
     });
 
     // --- Lógica para el Dashboard del Auditor ---
-    const uploadForm = document.getElementById('uploadForm');
-    if (uploadForm) {
-        // Listener para el formulario de carga de archivos
-    const uploadForm = document.getElementById('uploadForm');
-    if (uploadForm) {
-        uploadForm.addEventListener('submit', async function (e) {
-            e.preventDefault();
+    function setupAuditorDashboard() {
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('audit-file-input');
+        
+        console.log("Configurando dashboard auditor - Formulario:", !!uploadForm, "Input:", !!fileInput);
+        
+        if (uploadForm && fileInput) {
+            // Remover event listeners anteriores para evitar duplicados
+            const newUploadForm = uploadForm.cloneNode(true);
+            uploadForm.parentNode.replaceChild(newUploadForm, uploadForm);
+            
+            // Volver a obtener los elementos después del reemplazo
+            const refreshedUploadForm = document.getElementById('uploadForm');
+            const refreshedFileInput = document.getElementById('audit-file-input');
+            
+            refreshedUploadForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
 
-            // Obtener el input de archivo.
-            const fileInput = document.getElementById('audit-file-input');
-            
-            // ✅ VERIFICACIÓN CLAVE: Asegurarse de que el elemento existe y que el usuario seleccionó un archivo
-            if (!fileInput || fileInput.files.length === 0) {
-                alert("Por favor, selecciona un archivo para subir.");
-                console.error("Error: Elemento con id 'audit-file-input' es null o no tiene archivos seleccionados.");
-                return;
-            }
-            
-            const file = fileInput.files[0];
-
-            try {
-                const token = getToken();
-                const formData = new FormData();
-                formData.append('file', file);
-            
-                const response = await fetch(`${API_URL}/audits/upload-file`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: formData,
-                });
-            
-                if (response.ok) {
-                    const audit = await response.json();
-                    alert(`Auditoría creada con éxito. ID: ${audit.id}`);
-                    loadDashboardData(localStorage.getItem('user_role'), token);
-                } else {
-                    const error = await response.json();
-                    alert("Error al procesar el archivo: " + error.detail);
+                // Verificación robusta
+                if (!refreshedFileInput || !refreshedFileInput.files || refreshedFileInput.files.length === 0) {
+                    alert("Por favor, selecciona un archivo Excel para subir.");
+                    return;
                 }
-            } catch (error) {
-                console.error('Error al subir el archivo:', error);
-                alert("Error de red o del servidor al intentar subir el archivo.");
-            }
-        });
-    }
+                
+                const file = refreshedFileInput.files[0];
+                console.log("Archivo seleccionado para upload:", file.name);
+
+                try {
+                    const token = getToken();
+                    if (!token) {
+                        alert("No estás autenticado. Por favor, inicia sesión nuevamente.");
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                
+                    // Mostrar indicador de carga
+                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Subiendo...';
+                    submitBtn.disabled = true;
+                
+                    const response = await fetch(`${API_URL}/audits/upload-file`, {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData,
+                    });
+                    
+                    // Restaurar botón
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(`✅ Auditoría creada con éxito!\nID: ${result.audit_id}\nProductos procesados: ${result.productos_procesados}\nDocumento: ${result.numero_documento}`);
+                        
+                        // Limpiar el input de archivo
+                        refreshedFileInput.value = '';
+                        
+                        // Recargar las auditorías
+                        loadDashboardData('auditor', token);
+                    } else {
+                        const error = await response.json();
+                        console.error("Error del servidor:", error);
+                        alert("❌ Error al procesar el archivo: " + (error.detail || "Error desconocido del servidor"));
+                    }
+                } catch (error) {
+                    console.error('Error de red:', error);
+                    
+                    // Restaurar botón en caso de error
+                    const submitBtn = refreshedUploadForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
+                        submitBtn.disabled = false;
+                    }
+                    
+                    alert("❌ Error de conexión. Verifica tu internet e intenta nuevamente.");
+                }
+            });
+        }
     }
 
     const auditorProductsTableBody = document.getElementById('auditor-products-table-body');
+
+    // Función para iniciar una auditoría
+    window.iniciarAuditoria = async function(auditId) {
+        try {
+            const token = getToken();
+            const response = await fetch(`${API_URL}/audits/${auditId}/iniciar`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                alert("Auditoría iniciada con éxito.");
+                loadDashboardData('auditor', token);
+            } else {
+                const error = await response.json();
+                alert("Error al iniciar auditoría: " + error.detail);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert("Error de red al iniciar la auditoría.");
+        }
+    };
+
+    // Función para ver una auditoría
+    window.verAuditoria = function(auditId) {
+        fetchProductsByAuditId(auditId);
+    };
 
     async function fetchProductsByAuditId(auditId) {
         const token = getToken();
@@ -442,6 +559,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentAudit = await response.json();
                 renderProductsTable(currentAudit.productos);
                 updateAuditorCompliance(currentAudit.porcentaje_cumplimiento);
+                
+                // Mostrar botones de guardar y finalizar
+                document.getElementById('save-all-btn').classList.remove('d-none');
+                document.getElementById('finish-audit-btn').classList.remove('d-none');
             } else {
                 const error = await response.json();
                 alert('Error al cargar productos: ' + error.detail);
@@ -485,15 +606,6 @@ document.addEventListener('DOMContentLoaded', function () {
             complianceDiv.style.background = gradient;
         }
     }
-
-    // Listener para los botones "Ver Productos" del dashboard del auditor
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.view-products-btn')) {
-            e.preventDefault();
-            const auditId = e.target.closest('.view-products-btn').getAttribute('data-audit-id');
-            fetchProductsByAuditId(auditId);
-        }
-    });
 
     // Listener para el input de escaneo
     const scanInput = document.getElementById('scan-input');
@@ -595,6 +707,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    
+    // Configurar dashboard del auditor si ya está visible al cargar la página
+    setTimeout(function() {
+        const auditorDashboard = document.getElementById('auditor-dashboard');
+        if (auditorDashboard && !auditorDashboard.classList.contains('d-none')) {
+            console.log("Dashboard del auditor visible al cargar, configurando...");
+            setupAuditorDashboard();
+        }
+    }, 1000);
     
     // Iniciar la verificación de autenticación
     checkAuth();

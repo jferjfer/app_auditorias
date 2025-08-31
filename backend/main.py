@@ -1,9 +1,10 @@
 import os
 import shutil
 import pandas as pd
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Request
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from jose import JWTError, jwt
@@ -11,30 +12,40 @@ from typing import Optional, List
 from backend import models, schemas, crud
 from backend.database import get_db
 from backend.services.auth_service import get_password_hash, verify_password
-from backend.routers.auth import router as auth_router
-
-
 
 # --- Configuración de la Aplicación ---
 app = FastAPI(title="API de Auditorías")
-app.include_router(auth_router)
-# Configuración de CORS
-origins = [
-    "http://localhost",
-    "http://localhost:8000",
-    "http://localhost:3000",
-    "http://127.0.0.1:8000",
-    "http://localhost:8001",
-    "http://127.0.0.1:8001"
-]
 
+# Configuración de CORS COMPLETA
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Para desarrollo
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware para agregar headers CORS a todas las responses
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept"
+    return response
+
+# Manejar requests OPTIONS para todos los endpoints
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return JSONResponse(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 # --- Autenticación y Seguridad (JWT) ---
 SECRET_KEY = os.getenv("SECRET_KEY", "tu-clave-secreta-debe-ser-fuerte-y-unica")
@@ -71,8 +82,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     return user
 
 # --- Rutas de Autenticación ---
-
-@app.post("/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
+@app.post("/auth/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     Registra un nuevo usuario en el sistema.
@@ -88,7 +98,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     new_user = crud.create_user(db=db, user=user, hashed_password=hashed_password)
     return new_user
 
-@app.post("/login", status_code=status.HTTP_200_OK)
+@app.post("/auth/login", status_code=status.HTTP_200_OK)
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -118,7 +128,6 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 # --- Ruta de Carga de Archivos para Auditores ---
-
 @app.post("/audits/upload-file", status_code=status.HTTP_201_CREATED)
 async def upload_audit_file(
     file: UploadFile = File(...),
@@ -140,62 +149,235 @@ async def upload_audit_file(
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Leer el archivo Excel, especificando el motor 'openpyxl'
-        df = pd.read_excel(temp_file_path, engine='openpyxl')
+        # Leer el archivo Excel
+        df = pd.read_excel(temp_file_path, engine='openpyxl', header=None)
+        
+        # Buscar la fila que contiene los encabezados
+        header_row = None
+        target_patterns = [
+            ["número", "documento"],
+            ["sku", "articulo"], 
+            ["nombre", "articulo"],
+            ["cantidad"],
+            ["un", "enviada"]
+        ]
+        
+        for i in range(len(df)):
+            row_values = [str(cell).lower().strip() if pd.notna(cell) else "" for cell in df.iloc[i]]
+            
+            # Verificar si esta fila contiene todos los patrones buscados
+            matches = 0
+            for pattern in target_patterns:
+                if any(all(keyword in cell for keyword in pattern) for cell in row_values):
+                    matches += 1
+            
+            if matches >= 3:  # Si al menos 3 de los 5 patrones coinciden
+                header_row = i
+                print(f"Encabezados encontrados en fila {i}: {row_values}")
+                break
+        
+        if header_row is None:
+            # Buscar alternativa: maybe los encabezados están en español exacto
+            for i in range(len(df)):
+                row_values = [str(cell) if pd.notna(cell) else "" for cell in df.iloc[i]]
+                if "Número de documento" in row_values and "SKU ARTICULO" in row_values:
+                    header_row = i
+                    print(f"Encabezados exactos encontrados en fila {i}")
+                    break
+        
+        if header_row is None:
+            raise HTTPException(status_code=400, detail="No se encontraron los encabezados requeridos en el archivo")
+        
+        # Leer el archivo con la fila correcta como encabezado
+        df = pd.read_excel(temp_file_path, engine='openpyxl', header=header_row)
+        
+        # Debug: mostrar columnas originales
+        print("=" * 50)
+        print("COLUMNAS ORIGINALES EN EL ARCHIVO:")
+        for i, col in enumerate(df.columns):
+            print(f"{i}: '{col}' (tipo: {type(col)})")
+        print("=" * 50)
+        
+        # Mapeo exacto para tus columnas específicas
+        exact_mapping = {
+            'Número de documento': 'número de documento',
+            'SKU ARTICULO': 'sku articulo',
+            'NOMBRE ARTICULO': 'nombre articulo', 
+            'Cantidad': 'cantidad',
+            'Un Enviada': 'un enviada'
+        }
+        
+        # Crear el mapeo
+        column_mapping = {}
+        for original_col in df.columns:
+            original_col_str = str(original_col).strip()
+            if original_col_str in exact_mapping:
+                column_mapping[original_col] = exact_mapping[original_col_str]
+                print(f"Mapeada '{original_col}' -> '{exact_mapping[original_col_str]}'")
+            else:
+                # Buscar coincidencia insensible a mayúsculas
+                for key in exact_mapping.keys():
+                    if original_col_str.lower() == key.lower():
+                        column_mapping[original_col] = exact_mapping[key]
+                        print(f"Mapeada (case-insensitive) '{original_col}' -> '{exact_mapping[key]}'")
+                        break
+        
+        # Renombrar columnas
+        df = df.rename(columns=column_mapping)
+        print(f"Columnas después del mapeo: {list(df.columns)}")  
 
-        # Lógica para el auditor (crea una auditoría con productos)
-        ubicacion_destino = str(df.iloc[0].get('Ubicación', ''))
+        
+        # Verificar que tenemos las columnas necesarias
+        required_columns = ["número de documento", "sku articulo", "nombre articulo", "cantidad", "un enviada"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            print(f"Columnas en el DataFrame: {list(df.columns)}")
+            print(f"Columnas faltantes: {missing_columns}")
+            
+            # Intentar encontrar la columna de nombre manualmente
+            for df_col in df.columns:
+                df_col_lower = str(df_col).lower()
+                if "nombre" in df_col_lower or "articulo" in df_col_lower or "artículo" in df_col_lower:
+                    df = df.rename(columns={df_col: "nombre articulo"})
+                    print(f"Renombrada manualmente '{df_col}' -> 'nombre articulo'")
+                    break
+            
+            # Revisar nuevamente después del renombrado manual
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Faltan columnas requeridas: {', '.join(missing_columns)}. Columnas encontradas: {', '.join(list(df.columns))}"
+                )
+        
+        # Extraer el número de documento
+        numero_documento = None
+        doc_column = [col for col in df.columns if "documento" in col.lower()][0]
+        
+        for i in range(len(df)):
+            doc_value = df.iloc[i][doc_column]
+            if pd.notna(doc_value) and str(doc_value).strip() and "total" not in str(doc_value).lower():
+                numero_documento = str(doc_value).strip()
+                print(f"Número de documento encontrado: '{numero_documento}'")
+                break
+        
+        if not numero_documento:
+            numero_documento = "Documento no especificado"
+        
+        ubicacion_destino = f"Auditoría {numero_documento} - {datetime.now().strftime('%Y-%m-%d')}"
+        
         productos_data = []
 
-        # Mapeo para limpiar los valores de la columna 'Novedad'
-        novedad_map = {
-            '01 faltante': 'faltante',
-            '02 sobrante': 'sobrante',
-            '03 averia': 'averia',
-            'sin novedad': 'sin_novedad'
-        }
-        #obtene 
-        for _, row in df.iterrows():
-            novedad_excel = str(row.get("Novedad", "")).lower()
-            novedad_clean = novedad_map.get(novedad_excel, 'sin_novedad')
+        # Procesar cada fila de productos
+        for i in range(len(df)):
+            row = df.iloc[i]
             
-            # Asigna 0 si los valores son nulos antes de convertirlos a int
-            cantidad_documento = int(row.get("Cantidad_Documento", 0))
-            cantidad_enviada = int(row.get("Cantidad_Enviada", 0))
+            # Saltar filas vacías, de totales o sin SKU
+            sku_value = row["sku articulo"]
+            if (pd.isna(sku_value) or 
+                str(sku_value).strip() == "" or
+                "total" in str(sku_value).lower()):
+                continue
+            
+            try:
+                # Extraer los datos - eliminar .0 decimal del SKU
+                sku = str(sku_value).strip()
+                if '.' in sku and sku.endswith('.0'):
+                    sku = sku[:-2]  # Eliminar .0 al final
+                    
+                nombre_articulo = str(row["nombre articulo"]).strip() if pd.notna(row["nombre articulo"]) else "Sin nombre"
+                
+                # Manejar valores numéricos
+                cantidad_documento = 0
+                if pd.notna(row["cantidad"]):
+                    try:
+                        cantidad_documento = int(float(row["cantidad"]))
+                    except (ValueError, TypeError):
+                        cantidad_documento = 0
+                
+                cantidad_enviada = 0
+                if pd.notna(row["un enviada"]):
+                    try:
+                        cantidad_enviada = int(float(row["un enviada"]))
+                    except (ValueError, TypeError):
+                        cantidad_enviada = 0
+                
+                # Extraer solo la parte VE23673 de la orden de traslado
+                orden_traslado = str(numero_documento).strip()
+                
+                # Buscar específicamente "VE" seguido de números
+                if "VE" in orden_traslado:
+                    import re
+                    # Buscar VE seguido de cualquier cantidad de dígitos
+                    match = re.search(r'VE\d+', orden_traslado)
+                    if match:
+                        orden_traslado = match.group(0)
+                        print(f"Orden de traslado extraída: {orden_traslado}")
+                    else:
+                        # Si no encuentra el patrón VE, tomar los primeros 8 caracteres
+                        orden_traslado = orden_traslado[:8]
+                        print(f"Orden de traslado truncada: {orden_traslado}")
+                else:
+                    # Si no contiene "VE", tomar los primeros caracteres alfanuméricos
+                    import re
+                    match = re.search(r'[A-Za-z0-9]+', orden_traslado)
+                    if match:
+                        orden_traslado = match.group(0)
+                        print(f"Orden de traslado extraída (alfanumérica): {orden_traslado}")
+                    else:
+                        orden_traslado = orden_traslado[:10]
+                        print(f"Orden de traslado truncada: {orden_traslado}")
+                
+                producto_data = {
+                    "sku": sku,
+                    "nombre_articulo": nombre_articulo,
+                    "cantidad_documento": cantidad_documento,
+                    "cantidad_enviada": cantidad_enviada,
+                    "cantidad_fisica": None,
+                    "novedad": "sin_novedad",
+                    "observaciones": None,
+                    "orden_traslado_original": orden_traslado
+                }
+                
+                productos_data.append(schemas.ProductBase(**producto_data))
+                print(f"Producto procesado: {sku} - {nombre_articulo} - Orden: {orden_traslado}")
+                
+            except (ValueError, TypeError, KeyError) as e:
+                print(f"Error procesando fila {i}: {e}")
+                continue
 
-            producto_data = {
-                "sku": str(row.get("SKU")),
-                "nombre_articulo": str(row.get("Nombre_Articulo")),
-                "cantidad_documento": cantidad_documento,
-                "cantidad_enviada": cantidad_enviada,
-                "cantidad_fisica": int(row.get("Cantidad_Fisica")) if pd.notna(row.get("Cantidad_Fisica")) else None,
-                "novedad": novedad_clean,
-                "observaciones": str(row.get("Observaciones", None)) if pd.notna(row.get("Observaciones")) else None,
-                "orden_traslado_original": str(row.get("Orden_Traslado_Original"))
-            }
-            productos_data.append(schemas.ProductBase(**producto_data))
+        if not productos_data:
+            raise HTTPException(status_code=400, detail="No se encontraron productos válidos en el archivo")
 
         audit_data = schemas.AuditCreate(
             ubicacion_destino=ubicacion_destino,
             productos=productos_data
         )
         
-        # Crear la auditoría y sus productos en la base de datos
+        # Crear la auditoría
         db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
         
         # Eliminar el archivo temporal
         os.remove(temp_file_path)
 
-        return db_audit
+        return {
+            "message": "Auditoría creada exitosamente",
+            "audit_id": db_audit.id,
+            "productos_procesados": len(productos_data),
+            "numero_documento": numero_documento
+        }
     
     except Exception as e:
-        print(f"Error al procesar el archivo: {e}")
+        print(f"Error detallado al procesar el archivo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor al procesar el archivo: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al procesar el archivo: {str(e)}")
 
 # --- Rutas de Auditorías ---
-
 @app.get("/audits/", response_model=List[schemas.Audit])
 def get_audits(
     db: Session = Depends(get_db),
@@ -210,6 +392,63 @@ def get_audits(
         # Analista o Administrador
         audits = crud.get_all_audits(db)
     return audits
+
+@app.get("/audits/auditor/{auditor_id}", response_model=List[schemas.Audit])
+def get_audits_by_auditor(
+    auditor_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene todas las auditorías asignadas a un auditor específico.
+    """
+    # Verificar permisos (solo el propio auditor o un admin puede ver estas auditorías)
+    if current_user.rol != "administrador" and current_user.id != auditor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para ver estas auditorías"
+        )
+    
+    audits = crud.get_audits_by_auditor(db, auditor_id)
+    return audits
+
+@app.put("/audits/{audit_id}/iniciar", response_model=schemas.Audit)
+def iniciar_auditoria(
+    audit_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Cambia el estado de una auditoría a "en_progreso".
+    """
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    
+    if not db_audit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Auditoría no encontrada"
+        )
+    
+    # Verificar permisos (solo el auditor asignado puede iniciar la auditoría)
+    if current_user.id != db_audit.auditor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para iniciar esta auditoría"
+        )
+    
+    # Verificar que la auditoría esté en estado pendiente
+    if db_audit.estado != "pendiente":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede iniciar una auditoría en estado '{db_audit.estado}'"
+        )
+    
+    # Actualizar el estado
+    db_audit.estado = "en_progreso"
+    db.commit()
+    db.refresh(db_audit)
+    
+    return db_audit
 
 @app.get("/audits/{audit_id}", response_model=schemas.AuditDetails)
 def get_audit_details(
@@ -231,7 +470,6 @@ def get_audit_details(
     
     # Asignar los productos al esquema de auditoría
     db_audit.productos = db_products
-    
     return db_audit
 
 @app.put("/audits/{audit_id}/products/{product_id}", response_model=schemas.ProductBase)
@@ -258,7 +496,6 @@ def update_product_endpoint(
     updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
     if not updated_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    
     return updated_product
 
 # Finalizar una auditoría
@@ -306,5 +543,23 @@ def get_audit_products(
         raise HTTPException(status_code=403, detail="No tienes acceso a esta auditoría")
         
     products = crud.get_products_by_audit(db, audit_id=audit_id)
-    
     return products
+
+# --- Rutas de Usuarios ---
+@app.get("/users/", response_model=List[schemas.User])
+def get_users(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene todos los usuarios (solo para administradores).
+    """
+    if current_user.rol != "administrador":
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver usuarios")
+    
+    users = db.query(models.User).all()
+    return users
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
