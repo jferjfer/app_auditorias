@@ -6,16 +6,21 @@ from dotenv import load_dotenv
 # Carga las variables de entorno desde el archivo .env
 load_dotenv()
 
-# Define las variables de conexión a la base de datos
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
+# Render y otros proveedores de la nube proporcionan una única URL de base de datos.
+# El código ahora priorizará la variable DATABASE_URL si existe.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# URL de conexión para PostgreSQL
-# Nota: Necesitas el driver psycopg2 para esto
-SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if DATABASE_URL:
+    # Usar la URL proporcionada por el entorno de producción
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
+else:
+    # Fallback para desarrollo local usando el archivo .env
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT")
+    DB_NAME = os.getenv("DB_NAME")
+    SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Crea el motor de la base de datos
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

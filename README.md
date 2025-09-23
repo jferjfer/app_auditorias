@@ -1,16 +1,26 @@
 # 🏢 Sistema de Auditorías - Aplicación Web
 
-Sistema completo para la gestión de auditorías de inventario con carga de archivos Excel, escaneo de productos y cálculo de cumplimiento.
+Sistema completo para la gestión de auditorías de inventario con carga de archivos Excel, escaneo de productos en tiempo real, dashboards analíticos y despliegue en la nube.
 
-## 🚀 Inicio Rápido
+## 🚀 Inicio Rápido (Desarrollo Local)
 
-### Comandos Directos
+### 1. Prerrequisitos
+- Python 3.11+
+- Un editor de código como VS Code
+- Git
 
-#### 1. Backend (API)
+### 2. Instalación
 ```bash
-# Ejecutar backend con uvicorn
-# (Asegúrate de que tu entorno virtual esté activado)
-uvicorn backend.main:app --reload --host 0.0.0.0 # Para desarrollo
+# 1. Clona el repositorio (si aún no lo has hecho)
+# git clone <url-del-repositorio>
+# cd app_auditorias
+
+# 2. Crea y activa un entorno virtual
+python -m venv venv
+.\venv\Scripts\activate.bat
+
+# 3. Instala las dependencias
+pip install -r requirements.txt
 ```
 
 #### 2. Frontend (Web)
@@ -132,9 +142,10 @@ pip install -r requirements.txt
 ## 🚨 Solución de Problemas
 
 ### Error de Puerto Ocupado
+Si el puerto 3000 está ocupado, puedes iniciar el servidor en otro puerto cambiando el comando:
 ```bash
-# Cambiar puerto en server.py (línea 8)
-PORT = 3001  # En lugar de 3000
+# Ejemplo para usar el puerto 3001
+python -m http.server 3001
 ```
 
 ### Error de PowerShell
