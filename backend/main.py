@@ -23,7 +23,12 @@ def run_migrations():
         subprocess.run(["alembic", "upgrade", "head"], check=True)
         print("Migraciones completadas con éxito.")
     except subprocess.CalledProcessError as e:
-        print(f"Error durante la migración: {e}")
+        print("---!! ERROR DURANTE LA MIGRACIÓN DE ALEMBIC !! ---")
+        print(f"---!! STDOUT: !! ---
+{e.stdout}")
+        print(f"---!! STDERR: !! ---
+{e.stderr}")
+        print("---!! FIN DEL ERROR DE MIGRACIÓN !! ---")
         # Opcional: decidir si la app debe fallar si las migraciones no se aplican
         # raise e 
     except FileNotFoundError:
