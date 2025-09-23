@@ -2,6 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# --- INICIO: Lógica de Migración Automática ---
+import subprocess
+# --- FIN: Lógica de Migración Automática ---
+
 from backend.routers import auth, audits, users, websockets
 from backend.database import engine
 from backend import models
@@ -9,6 +13,24 @@ from backend import models
 
 # --- Configuración de la Aplicación ---
 app = FastAPI(title="API de Auditorías")
+
+# --- INICIO: Lógica de Migración Automática ---
+@app.on_event("startup")
+def run_migrations():
+    try:
+        print("Ejecutando migraciones de base de datos...")
+        # Se usa subprocess para evitar problemas de concurrencia con el ORM
+        subprocess.run(["alembic", "upgrade", "head"], check=True)
+        print("Migraciones completadas con éxito.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error durante la migración: {e}")
+        # Opcional: decidir si la app debe fallar si las migraciones no se aplican
+        # raise e 
+    except FileNotFoundError:
+        print("Comando 'alembic' no encontrado. Asegúrate de que esté en el PATH.")
+        # raise
+# --- FIN: Lógica de Migración Automática ---
+
 
 # Configuración de CORS (solo frontend permitido)
 app.add_middleware(
