@@ -1,20 +1,29 @@
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# La aplicación en producción SIEMPRE usará esta variable de entorno.
-# Para desarrollo local, deberás configurar esta variable en tu terminal
-# o usar las herramientas de tu editor de código (como el launch.json de VSCode).
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+# --- Configuración de la Base de Datos para Producción y Desarrollo ---
 
-if SQLALCHEMY_DATABASE_URL is None:
-    raise ValueError("La variable de entorno DATABASE_URL no está configurada. Por favor, configúrala en tu entorno de producción (Render).")
+# Render y otros proveedores de nube establecen la variable de entorno DATABASE_URL.
+# Si no existe, usamos la base de datos local SQLite para desarrollo.
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./auditorias.db")
 
-# Crea el motor de la base de datos
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Render usa 'postgres://' pero SQLAlchemy prefiere 'postgresql://'
+if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Configura la sesión de la base de datos
+# El motor de SQLAlchemy
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    # connect_args es solo para SQLite
+    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
+)
+
+# Creación de la sesión de la base de datos
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base para los modelos declarativos
+Base = declarative_base()
 
 def get_db():
     db = SessionLocal()

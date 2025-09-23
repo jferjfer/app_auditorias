@@ -1,10 +1,9 @@
 import uuid
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Table
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
-# Se importan los modelos de la base
-Base = declarative_base()
+from .database import Base
 
 # --- Tabla de Asociación para Auditorías Colaborativas ---
 audit_collaborators = Table(
