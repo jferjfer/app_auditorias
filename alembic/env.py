@@ -19,12 +19,16 @@ if config.config_file_name is not None:
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Get the database URL from the environment variable, with a fallback for local development
-# This is the crucial part for Render deployment
+# Get the database URL from the environment variable.
+# For local development, it will load from a .env file.
+from dotenv import load_dotenv
+load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
+
 if not DATABASE_URL:
-    from backend.database import SQLALCHEMY_DATABASE_URL
-    DATABASE_URL = SQLALCHEMY_DATABASE_URL
+    # If DATABASE_URL is still not set, we can't proceed.
+    raise ValueError("DATABASE_URL no está configurada. Créa un archivo .env o configúrala en tu entorno.")
+
 
 # Set the sqlalchemy.url in the config for Alembic
 config.set_main_option('sqlalchemy.url', DATABASE_URL)

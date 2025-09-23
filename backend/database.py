@@ -7,6 +7,9 @@ from sqlalchemy.orm import sessionmaker
 # o usar las herramientas de tu editor de código (como el launch.json de VSCode).
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
+if SQLALCHEMY_DATABASE_URL is None:
+    raise ValueError("La variable de entorno DATABASE_URL no está configurada. Por favor, configúrala en tu entorno de producción (Render).")
+
 # Crea el motor de la base de datos
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
