@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sqlalchemy
+pandas
+python-jose[cryptography]
+passlib[bcrypt]
+openpyxl
+python-multipart
+gunicorn
+psycopg2-binary
+alembic

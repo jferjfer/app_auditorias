@@ -1,0 +1,170 @@
+# 🏢 Sistema de Auditorías - Aplicación Web
+
+Sistema completo para la gestión de auditorías de inventario con carga de archivos Excel, escaneo de productos y cálculo de cumplimiento.
+
+## 🚀 Inicio Rápido
+
+### Comandos Directos
+
+#### 1. Backend (API)
+```bash
+# Ejecutar backend con uvicorn
+# (Asegúrate de que tu entorno virtual esté activado)
+uvicorn backend.main:app --reload --host 0.0.0.0 # Para desarrollo
+```
+
+#### 2. Frontend (Web)
+```bash
+# Ejecutar servidor frontend
+cd frontend
+python -m http.server 3000
+```
+
+### 🔄 Para Ejecutar Ambos Servidores
+
+**Terminal 1 - Backend:**
+```bash
+.\venv\Scripts\activate.bat
+uvicorn backend.main:app --reload
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+python -m http.server 3000
+```
+
+## 🌐 URLs de Acceso
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://127.0.0.1:8000
+- **Documentación API**: http://127.0.0.1:8000/docs
+
+## 👥 Roles de Usuario
+
+### 🔍 Auditor
+- Cargar archivos Excel de órdenes de traslado
+- Iniciar y gestionar auditorías
+- Escanear productos con SKU
+- Registrar cantidades físicas y novedades
+- Finalizar auditorías con cálculo de cumplimiento
+
+### 📊 Analista
+- Ver todas las auditorías
+- Generar reportes y gráficos
+- Analizar porcentajes de cumplimiento
+- Filtrar por auditor, fecha, estado
+
+### ⚙️ Administrador
+- Gestionar usuarios del sistema
+- Ver todas las auditorías
+- Supervisar el rendimiento del sistema
+
+## 📋 Flujo de Trabajo del Auditor
+
+1. **Iniciar Sesión** como usuario con rol "auditor"
+2. **Cargar Archivos Excel** de órdenes de traslado
+3. **Iniciar Auditoría** desde "Mis Auditorías"
+4. **Auditar Productos**:
+   - Escanear SKU con Enter
+   - Registrar cantidad física
+   - Seleccionar novedad (Sin Novedad, Faltante, Sobrante, Avería)
+   - Agregar observaciones
+5. **Guardar Cambios** individualmente o en lote
+6. **Finalizar Auditoría** y ver porcentaje de cumplimiento
+
+## 🛠️ Tecnologías
+
+### Backend
+- **FastAPI**: Framework web moderno y rápido
+- **SQLAlchemy**: ORM para base de datos
+- **Pandas**: Procesamiento de archivos Excel
+- **JWT**: Autenticación segura
+- **Pydantic**: Validación de datos
+
+### Frontend
+- **HTML5/CSS3**: Estructura y estilos
+- **JavaScript ES6**: Lógica de la aplicación
+- **Bootstrap 5**: Framework CSS
+- **Chart.js**: Gráficos y visualizaciones
+
+### Base de Datos
+- **PostgreSQL**: Base de datos principal
+- **Alembic**: Migraciones de base de datos
+
+## 📁 Estructura del Proyecto
+
+```
+app_auditorias/
+├── backend/                 # API Backend
+│   ├── main.py             # Aplicación principal
+│   ├── models.py           # Modelos de base de datos
+│   ├── schemas.py          # Esquemas Pydantic
+│   ├── crud.py             # Operaciones de base de datos
+│   ├── database.py         # Configuración de BD
+│   └── services/           # Servicios de negocio
+├── frontend/               # Aplicación Web
+│   ├── index.html          # Página principal
+│   ├── script.js           # Lógica JavaScript
+│   └── style.css           # Estilos CSS
+├── venv/                   # Entorno virtual Python
+├── uploads/                 # Archivos subidos
+├── requirements.txt        # Dependencias Python
+└── README.md              # Este archivo
+```
+
+## 🔧 Configuración
+
+### Requisitos del Sistema
+- Python 3.11+
+- PostgreSQL (opcional, puede usar SQLite)
+- Navegador web moderno
+
+### Instalación de Dependencias
+```bash
+# Activar entorno virtual
+.\venv\Scripts\activate.bat
+
+# Instalar dependencias (si es necesario)
+pip install -r requirements.txt
+```
+
+## 🚨 Solución de Problemas
+
+### Error de Puerto Ocupado
+```bash
+# Cambiar puerto en server.py (línea 8)
+PORT = 3001  # En lugar de 3000
+```
+
+### Error de PowerShell
+```bash
+# Usar archivos .bat en lugar de .ps1
+.\venv\Scripts\activate.bat
+```
+
+### Error de CORS
+- Asegúrate de usar el servidor HTTP: `python -m http.server 3000`
+- No abrir index.html directamente en el navegador
+
+## 📞 Soporte
+
+Si tienes problemas:
+1. Verifica que ambos servidores estén ejecutándose
+2. Revisa la consola del navegador para errores
+3. Verifica que el backend esté en http://127.0.0.1:8000
+4. Asegúrate de usar el frontend en http://localhost:3000
+
+## 🎯 Características Principales
+
+- ✅ **Carga de Archivos Excel**: Procesamiento automático de órdenes de traslado
+- ✅ **Escaneo de Productos**: Funcionalidad para escanear SKUs
+- ✅ **Auditoría en Tiempo Real**: Cálculo de cumplimiento automático
+- ✅ **Múltiples Roles**: Auditor, Analista, Administrador
+- ✅ **Interfaz Moderna**: Diseño responsive y intuitivo
+- ✅ **Base de Datos**: Persistencia de datos segura
+- ✅ **API RESTful**: Endpoints bien documentados
+
+---
+
+**¡Sistema listo para usar!** 🎉

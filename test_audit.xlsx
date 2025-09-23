@@ -1,0 +1,16 @@
+import pandas as pd
+import openpyxl
+
+# Crear un archivo Excel de prueba para auditoría
+data = {
+    'Número de documento': ['VE23673-001', 'VE23673-001', 'VE23673-001', 'VE23673-001'],
+    'SKU ARTICULO': ['SKU001', 'SKU002', 'SKU003', 'SKU004'],
+    'NOMBRE ARTICULO': ['Producto A', 'Producto B', 'Producto C', 'Producto D'],
+    'Cantidad': [10, 15, 20, 5],
+    'Un Enviada': [10, 15, 20, 5]
+}
+
+df = pd.DataFrame(data)
+df.to_excel('test_audit.xlsx', index=False, engine='openpyxl')
+print("Archivo Excel de prueba creado: test_audit.xlsx")
+
