@@ -21,7 +21,7 @@ def run_migrations():
     try:
         print("Ejecutando migraciones de base de datos...")
         # Se usa subprocess para evitar problemas de concurrencia con el ORM
-        subprocess.run(["alembic", "upgrade", "head"], check=True)
+        subprocess.run(["alembic", "upgrade", "head"], check=True, capture_output=True, text=True)
         print("Migraciones completadas con éxito.")
     except subprocess.CalledProcessError as e:
         print("---!! ERROR DURANTE LA MIGRACIÓN DE ALEMBIC !! ---")
