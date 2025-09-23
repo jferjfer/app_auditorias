@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # --- INICIO: Lógica de Migración Automática ---
 import subprocess
@@ -54,6 +55,8 @@ app.include_router(auth.router)
 app.include_router(audits.router)
 app.include_router(users.router)
 app.include_router(websockets.router)
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

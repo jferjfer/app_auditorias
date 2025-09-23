@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- Configuración de Entorno ---
     // Cambia la URL de DEPLOYMENT_URL por la URL pública de tu backend en Render
-    const DEPLOYMENT_URL = 'https://tu-backend.onrender.com'; 
+    const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com'; 
     const IS_LOCAL = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
     const API_URL = IS_LOCAL ? 'http://127.0.0.1:8000' : DEPLOYMENT_URL;
     const authForm = document.getElementById('auth-form');
