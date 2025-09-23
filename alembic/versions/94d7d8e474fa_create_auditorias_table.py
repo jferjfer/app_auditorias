@@ -28,7 +28,6 @@ def upgrade() -> None:
     sa.Column('creada_en', sa.TIMESTAMP(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
-    op.execute(sa.schema.CreateSequence(sa.Sequence('auditorias_id_seq')))
     op.alter_column('auditorias', 'id', server_default=sa.text("nextval('auditorias_id_seq')"))
 
 
