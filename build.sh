@@ -2,4 +2,5 @@
 # exit on error
 set -o errexit
 
-pip install -r requirements.txt
+# Usar el pip del entorno virtual para asegurar la instalación en el lugar correcto
+/opt/render/project/src/.venv/bin/pip install -r requirements.txt
