@@ -60,7 +60,21 @@ def run_migrations_offline() -> None:
     """
     # --- INICIO DE MODIFICACIONES ---
     # url = config.get_main_option("sqlalchemy.url")
-    url = SQLALCHEMY_DATABASE_URL
+    # --- INICIO DE MODIFICACIONES ---
+# Añadir la raíz del proyecto al path para que Python encuentre los módulos del backend
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Importar la URL de la base de datos y los modelos desde el backend
+from backend.database import SQLALCHEMY_DATABASE_URL
+from backend.models import Base
+# --- FIN DE MODIFICACIONES ---
+
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
+
+# Asignar la URL de la base de datos a la configuración de Alembic
+config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
     # --- FIN DE MODIFICACIONES ---
     context.configure(
         url=url,
