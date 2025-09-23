@@ -11,8 +11,14 @@ from alembic import context
 # Añadir la raíz del proyecto al path para que Python encuentre los módulos del backend
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Obtener la URL de la base de datos directamente del entorno para compatibilidad con Render
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    # Fallback para desarrollo local si la variable no está seteada
+    from backend.database import SQLALCHEMY_DATABASE_URL
+    DATABASE_URL = SQLALCHEMY_DATABASE_URL
+
 from backend.models import Base
-from backend.database import SQLALCHEMY_DATABASE_URL
 # --- FIN DE MODIFICACIONES ---
 
 # this is the Alembic Config object, which provides
