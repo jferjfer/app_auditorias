@@ -24,10 +24,10 @@ def run_migrations():
         print("Migraciones completadas con éxito.")
     except subprocess.CalledProcessError as e:
         print("---!! ERROR DURANTE LA MIGRACIÓN DE ALEMBIC !! ---")
-        print(f"---!! STDOUT: !! ---
-{e.stdout}")
-        print(f"---!! STDERR: !! ---
-{e.stderr}")
+        print("---!! STDOUT: !! ---")
+        print(e.stdout)
+        print("---!! STDERR: !! ---")
+        print(e.stderr)
         print("---!! FIN DEL ERROR DE MIGRACIÓN !! ---")
         # Opcional: decidir si la app debe fallar si las migraciones no se aplican
         # raise e 
