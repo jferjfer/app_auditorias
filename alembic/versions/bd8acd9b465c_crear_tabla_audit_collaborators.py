@@ -33,6 +33,7 @@ def upgrade() -> None:
         "fk_audit_collaborators_user_id", "audit_collaborators",
         "usuarios", ["user_id"], ["id"]
     )
+    op.execute("UPDATE archivos_auditoria SET nombre_archivo = '' WHERE nombre_archivo IS NULL")
     op.alter_column('archivos_auditoria', 'nombre_archivo',
                existing_type=sa.VARCHAR(length=255),
                nullable=False)
