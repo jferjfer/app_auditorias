@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import auth, audits, users, websockets
@@ -27,6 +28,11 @@ app.include_router(auth.router)
 app.include_router(audits.router)
 app.include_router(users.router)
 app.include_router(websockets.router)
+
+
+# Servir el frontend
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+
 
 if __name__ == "__main__":
     import uvicorn
