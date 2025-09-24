@@ -33,14 +33,6 @@ def upgrade() -> None:
         "fk_audit_collaborators_user_id", "audit_collaborators",
         "usuarios", ["user_id"], ["id"]
     )
-    op.execute("UPDATE archivos_auditoria SET nombre_archivo = '' WHERE nombre_archivo IS NULL")
-    op.alter_column('archivos_auditoria', 'nombre_archivo',
-               existing_type=sa.VARCHAR(length=255),
-               nullable=False)
-    op.alter_column('archivos_auditoria', 'ruta_archivo',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               nullable=False)
     op.alter_column('auditorias', 'porcentaje_cumplimiento',
                existing_type=sa.NUMERIC(precision=5, scale=2),
                type_=sa.Integer(),
@@ -101,11 +93,4 @@ def downgrade() -> None:
                existing_type=sa.Integer(),
                type_=sa.NUMERIC(precision=5, scale=2),
                existing_nullable=True)
-    op.alter_column('archivos_auditoria', 'ruta_archivo',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               nullable=True)
-    op.alter_column('archivos_auditoria', 'nombre_archivo',
-               existing_type=sa.VARCHAR(length=255),
-               nullable=True)
     # ### end Alembic commands ###
