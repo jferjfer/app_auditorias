@@ -178,4 +178,4 @@ Si tienes problemas:
 
 ---
 
-**¡Sistema listo para usar!** 🎉
+**<!-- Trigger Render deploy -->
