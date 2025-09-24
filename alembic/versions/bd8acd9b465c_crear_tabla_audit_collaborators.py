@@ -33,32 +33,6 @@ def upgrade() -> None:
         "fk_audit_collaborators_user_id", "audit_collaborators",
         "usuarios", ["user_id"], ["id"]
     )
-    op.alter_column('auditorias', 'porcentaje_cumplimiento',
-               existing_type=sa.NUMERIC(precision=5, scale=2),
-               type_=sa.Integer(),
-               existing_nullable=True)
-    op.alter_column('informes_generados', 'filtros_aplicados',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               existing_nullable=True)
-    op.alter_column('informes_generados', 'ruta_archivo',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               nullable=False)
-    op.alter_column('productos_auditados', 'nombre_articulo',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               existing_nullable=False)
-    op.alter_column('productos_auditados', 'observaciones',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               existing_nullable=True)
-    op.alter_column('usuarios', 'contrasena_hash',
-               existing_type=sa.TEXT(),
-               type_=sa.String(),
-               existing_nullable=False)
-    op.drop_constraint('usuarios_correo_key', 'usuarios', type_='unique')
-    op.create_index(op.f('ix_usuarios_correo'), 'usuarios', ['correo'], unique=True)
     # ### end Alembic commands ###
 
 
@@ -67,30 +41,4 @@ def downgrade() -> None:
     op.drop_constraint("fk_audit_collaborators_audit_id", "audit_collaborators", type_="foreignkey")
     op.drop_constraint("fk_audit_collaborators_user_id", "audit_collaborators", type_="foreignkey")
     op.drop_table('audit_collaborators')
-    op.drop_index(op.f('ix_usuarios_correo'), table_name='usuarios')
-    op.create_unique_constraint('usuarios_correo_key', 'usuarios', ['correo'])
-    op.alter_column('usuarios', 'contrasena_hash',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               existing_nullable=False)
-    op.alter_column('productos_auditados', 'observaciones',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               existing_nullable=True)
-    op.alter_column('productos_auditados', 'nombre_articulo',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               existing_nullable=False)
-    op.alter_column('informes_generados', 'ruta_archivo',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               nullable=True)
-    op.alter_column('informes_generados', 'filtros_aplicados',
-               existing_type=sa.String(),
-               type_=sa.TEXT(),
-               existing_nullable=True)
-    op.alter_column('auditorias', 'porcentaje_cumplimiento',
-               existing_type=sa.Integer(),
-               type_=sa.NUMERIC(precision=5, scale=2),
-               existing_nullable=True)
     # ### end Alembic commands ###
