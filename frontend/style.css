@@ -311,3 +311,44 @@ body::before {
     width: 90%;
     max-width: 500px;
 }
+
+/* --- Responsive Design --- */
+.sidebar-toggle-btn {
+    display: none; /* Oculto en escritorio */
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1001; /* Encima del contenido pero debajo del sidebar abierto */
+    background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
+    border: 1px solid var(--border-color);
+    color: var(--text-light);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 992px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 20px;
+    }
+    
+    .sidebar-toggle-btn {
+        display: block; /* Visible en móvil */
+    }
+
+    body.sidebar-active .main-content {
+        /* Opcional: oscurecer el contenido principal cuando el sidebar está abierto */
+        filter: brightness(0.5);
+    }
+}

@@ -1,4 +1,26 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // --- Lógica para Sidebar Responsivo ---
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarToggleBtn = document.querySelector('.sidebar-toggle-btn');
+    const mainContent = document.querySelector('.main-content');
+
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+            document.body.classList.toggle('sidebar-active');
+        });
+    }
+
+    // Opcional: cerrar el sidebar si se hace clic en el contenido principal
+    if (mainContent) {
+        mainContent.addEventListener('click', () => {
+            if (sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+                document.body.classList.remove('sidebar-active');
+            }
+        });
+    }
+    
     // --- Configuración de Entorno ---
     // Cambia la URL de DEPLOYMENT_URL por la URL pública de tu backend en Render
     const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com'; 
