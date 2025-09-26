@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from backend import models, schemas
 from passlib.context import CryptContext
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 
 # Configuración de password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -14,8 +16,9 @@ def get_user_by_id(db: Session, user_id: int):
     """Obtiene un usuario por su ID."""
     return db.query(models.User).filter(models.User.id == user_id).first()
 
-def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
+def create_user(db: Session, user: schemas.UserCreate):
     """Crea un nuevo usuario en la base de datos."""
+    hashed_password = pwd_context.hash(user.contrasena)
     db_user = models.User(
         nombre=user.nombre,
         correo=user.correo,
@@ -132,3 +135,24 @@ def add_collaborators_to_audit(db: Session, audit_id: int, collaborator_ids: Lis
     db.commit()
     db.refresh(db_audit)
     return db_audit
+
+def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, date: Optional[str] = None) -> List[models.Audit]:
+    """
+    Obtiene todas las auditorías con filtros opcionales.
+    """
+    query = db.query(models.Audit).options(joinedload(models.Audit.auditor), joinedload(models.Audit.productos))
+
+    if status and status != "Todos":
+        query = query.filter(models.Audit.estado == status)
+    
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+
+    if date:
+        try:
+            filter_date = datetime.strptime(date, "%Y-%m-%d").date()
+            query = query.filter(func.date(models.Audit.creada_en) == filter_date)
+        except ValueError:
+            pass # Ignore invalid date format
+
+    return query.all()

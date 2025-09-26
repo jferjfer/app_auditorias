@@ -2,14 +2,18 @@ import os
 import shutil
 import pandas as pd
 import re
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from fastapi.responses import StreamingResponse
+import io
 
 from backend import models, schemas, crud
 from backend.database import get_db
 from backend.services.auth_service import get_current_user
+from .websockets import manager
 
 router = APIRouter(
     prefix="/audits",
@@ -73,8 +77,6 @@ async def upload_multiple_audit_files(
             if any(col not in df.columns for col in required_columns):
                 continue
 
-            # Limpiar y convertir columnas numéricas antes de iterar
-            # Esto previene el error "cannot convert float NaN to integer"
             df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0).astype(int)
             df["un enviada"] = pd.to_numeric(df["un enviada"], errors='coerce').fillna(0).astype(int)
 
@@ -117,6 +119,11 @@ async def upload_multiple_audit_files(
 
     audit_data = schemas.AuditCreate(ubicacion_destino=ubicacion_destino, productos=all_productos_data)
     db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
+    
+    db.refresh(db_audit)
+    audit_response = schemas.AuditResponse.from_orm(db_audit)
+    payload = {"type": "new_audit", "data": audit_response.dict()}
+    await manager.broadcast_to_all(json.dumps(payload, default=str))
 
     return {
         "message": f"Auditoría creada con {num_orders} orden(es) de traslado.",
@@ -142,7 +149,7 @@ def get_audits_by_auditor(auditor_id: int, db: Session = Depends(get_db), curren
     return [schemas.AuditResponse.from_orm(audit) for audit in audits]
 
 @router.put("/{audit_id}/iniciar", response_model=schemas.Audit)
-def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
@@ -151,6 +158,9 @@ def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), current_user
     db_audit.estado = "en_progreso"
     db.commit()
     db.refresh(db_audit)
+    audit_response = schemas.AuditResponse.from_orm(db_audit)
+    payload = {"type": "audit_updated", "data": audit_response.dict()}
+    await manager.broadcast_to_all(json.dumps(payload, default=str))
     return db_audit
 
 @router.get("/{audit_id}", response_model=schemas.AuditDetails)
@@ -173,7 +183,7 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
     return {"message": "Producto actualizado", "product": updated_product}
 
 @router.put("/{audit_id}/finish", response_model=schemas.Audit)
-def finish_audit(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user.rol != "administrador"):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
@@ -190,6 +200,9 @@ def finish_audit(audit_id: int, db: Session = Depends(get_db), current_user: mod
     db_audit.porcentaje_cumplimiento = cumplimiento
     db.commit()
     db.refresh(db_audit)
+    audit_response = schemas.AuditResponse.from_orm(db_audit)
+    payload = {"type": "audit_updated", "data": audit_response.dict()}
+    await manager.broadcast_to_all(json.dumps(payload, default=str))
     return db_audit
 
 @router.post("/{audit_id}/collaborators", status_code=status.HTTP_200_OK)
@@ -200,3 +213,41 @@ def add_collaborators(audit_id: int, collaborators: schemas.CollaboratorUpdate, 
 
     crud.add_collaborators_to_audit(db, audit_id=audit_id, collaborator_ids=collaborators.collaborator_ids)
     return {"message": "Colaboradores añadidos exitosamente"}
+
+@router.get("/report", response_class=StreamingResponse)
+async def download_audit_report(
+    status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Genera y descarga un informe de auditorías en formato Excel.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para descargar informes")
+
+    audits = crud.get_audits_with_filters(db, status=status, auditor_id=auditor_id, date=date)
+
+    data = []
+    for audit in audits:
+        data.append({
+            "ID": audit.id,
+            "Ubicación": audit.ubicacion_destino,
+            "Auditor": audit.auditor.nombre if audit.auditor else "",
+            "Fecha": audit.creada_en.strftime("%Y-%m-%d %H:%M:%S"),
+            "Estado": audit.estado,
+            "Productos": len(audit.productos),
+            "% Cumplimiento": audit.porcentaje_cumplimiento
+        })
+    df = pd.DataFrame(data)
+
+    stream = io.BytesIO()
+    df.to_excel(stream, index=False, sheet_name='Auditorias')
+    stream.seek(0)
+    
+    response = StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response.headers["Content-Disposition"] = "attachment; filename=reporte_auditorias.xlsx"
+    
+    return response

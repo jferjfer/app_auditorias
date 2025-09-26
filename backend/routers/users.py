@@ -32,3 +32,17 @@ def get_auditors(db: Session = Depends(get_db), current_user: models.User = Depe
     Devuelve todos los usuarios con rol 'auditor'. Accesible a cualquier usuario autenticado.
     """
     return crud.get_auditors(db)
+
+@router.post("/users/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """
+    Crea un nuevo usuario (solo para administradores).
+    """
+    if current_user.rol != "administrador":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para crear usuarios")
+    
+    db_user = crud.get_user_by_email(db, email=user.correo)
+    if db_user:
+        raise HTTPException(status_code=400, detail="El correo electrónico ya está registrado")
+    
+    return crud.create_user(db=db, user=user)
