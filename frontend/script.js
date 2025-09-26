@@ -1,4 +1,30 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // --- Lógica para la Pantalla de Carga (Splash Screen) ---
+    const splashScreen = document.getElementById('splash-screen');
+    const appContainer = document.getElementById('app-container');
+    const splashVideo = document.getElementById('splash-video');
+
+    if (splashScreen && appContainer && splashVideo) {
+        // Asegurarse de que el video comience a reproducirse
+        splashVideo.play().catch(error => {
+            console.error("El video no pudo reproducirse automáticamente:", error);
+            // Si la reproducción automática falla, pasar directamente a la app
+            showApp();
+        });
+
+        // Función para mostrar la aplicación y ocultar el splash
+        const showApp = () => {
+            splashScreen.style.opacity = '0';
+            splashScreen.addEventListener('transitionend', () => {
+                splashScreen.classList.add('d-none');
+                appContainer.classList.remove('d-none');
+            }, { once: true });
+        };
+
+        // Esperar 8 segundos antes de mostrar la aplicación
+        setTimeout(showApp, 8000);
+    }
+
     // --- Lógica para Sidebar Responsivo ---
     const sidebar = document.querySelector('.sidebar');
     const sidebarToggleBtn = document.querySelector('.sidebar-toggle-btn');
