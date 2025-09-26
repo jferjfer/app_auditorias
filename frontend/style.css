@@ -41,14 +41,15 @@ body::before {
 }
 
 .sidebar {
+    background-color: var(--bg-color); /* Añadido para asegurar visibilidad */
     backdrop-filter: blur(20px);
     border-right: 1px solid var(--border-color);
     height: 100vh;
     position: fixed;
     width: 250px;
     padding-top: 20px;
-    z-index: 1000;
-    transition: background-color 0.3s, border-color 0.3s;
+    z-index: 1050; /* Aumentado para asegurar que esté por encima de otros elementos */
+    transition: transform 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
 }
 
 .sidebar .h3 {
@@ -341,6 +342,11 @@ body::before {
     .main-content {
         margin-left: 0;
         padding: 20px;
+        transition: transform 0.3s ease-in-out; /* Añadido para una transición suave */
+    }
+
+    body.sidebar-active .main-content {
+        transform: translateX(250px); /* Mueve el contenido principal para dejar espacio al sidebar */
     }
     
     .sidebar-toggle-btn {
