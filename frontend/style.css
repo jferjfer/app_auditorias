@@ -365,17 +365,21 @@ body::before {
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
-    background-color: var(--bg-color); /* Usa el color de fondo de tu tema */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999; /* Asegura que esté por encima de todo */
-    transition: opacity 0.5s ease-out; /* Agregado para el fade-out */
+    height: 100vh; /* Usar vh para la altura de la pantalla */
+    background-color: var(--bg-color);
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+    overflow: hidden; /* Para asegurar que el video no se desborde */
 }
 
 #splash-video {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain; /* O 'cover' si quieres que cubra todo el espacio */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: cover;
 }

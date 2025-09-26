@@ -4,25 +4,34 @@ document.addEventListener('DOMContentLoaded', function() {
     const appContainer = document.getElementById('app-container');
     const splashVideo = document.getElementById('splash-video');
 
+    // Función para mostrar la aplicación y ocultar el splash
+    const showApp = () => {
+        if (splashScreen.style.opacity === '0') return; // Evitar ejecuciones múltiples
+
+        splashScreen.style.opacity = '0';
+        splashScreen.addEventListener('transitionend', () => {
+            splashScreen.classList.add('d-none');
+            appContainer.classList.remove('d-none');
+            
+            // Iniciar la lógica de la aplicación DESPUÉS de que la animación termina
+            initTheme();
+            checkAuth();
+
+        }, { once: true });
+    };
+
     if (splashScreen && appContainer && splashVideo) {
-        // Asegurarse de que el video comience a reproducirse
         splashVideo.play().catch(error => {
             console.error("El video no pudo reproducirse automáticamente:", error);
-            // Si la reproducción automática falla, pasar directamente a la app
-            showApp();
+            showApp(); // Si falla la reproducción, muestra la app inmediatamente
         });
 
-        // Función para mostrar la aplicación y ocultar el splash
-        const showApp = () => {
-            splashScreen.style.opacity = '0';
-            splashScreen.addEventListener('transitionend', () => {
-                splashScreen.classList.add('d-none');
-                appContainer.classList.remove('d-none');
-            }, { once: true });
-        };
-
-        // Esperar 8 segundos antes de mostrar la aplicación
+        // Establecer un timeout para mostrar la aplicación después de 8 segundos
         setTimeout(showApp, 8000);
+    } else {
+        // Si no hay splash screen, iniciar la app directamente
+        initTheme();
+        checkAuth();
     }
 
     // --- Lógica para Sidebar Responsivo ---
@@ -1508,9 +1517,5 @@ document.querySelector('[data-target="logout"]').addEventListener('click', funct
 
 
     
-    // Iniciar la lógica de temas
-    initTheme();
-
-    // Iniciar la verificación de autenticación
-    checkAuth();
+    
 });
