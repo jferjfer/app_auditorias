@@ -368,7 +368,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function setupAuditorDashboard(audits) {
-        // Logic for filtering finished audits
         const btnShow = document.getElementById('show-finished-audits-btn');
         const btnHide = document.getElementById('hide-finished-audits-btn');
         if (btnShow && !btnShow.dataset.listenerAdded) {
@@ -381,7 +380,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         renderAuditorAuditsTable(audits, '#auditor-audits-table-body', false);
 
-        // File Upload Logic
         const uploadForm = document.getElementById('uploadForm');
         const fileInput = document.getElementById('audit-file-input');
         if (uploadForm && !uploadForm.dataset.listenerAdded) {
@@ -414,6 +412,51 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             uploadForm.dataset.listenerAdded = 'true';
         }
+    }
+
+    async function saveProduct(productId, auditId, updateData) {
+        try {
+            const token = getToken();
+            const response = await fetch(`${API_URL}/audits/${auditId}/products/${productId}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(updateData)
+            });
+            return response.ok ? await response.json() : null;
+        } catch (error) {
+            console.error('Error de red al guardar producto:', error);
+            return null;
+        }
+    }
+
+    function setupAutoSaveOnEnter() {
+        const productsTableBody = document.getElementById('auditor-products-table-body');
+        if (!productsTableBody) return;
+        productsTableBody.addEventListener('keydown', async function(e) {
+            if (e.target.classList.contains('physical-count') && e.key === 'Enter') {
+                e.preventDefault();
+                const input = e.target;
+                const row = input.closest('tr');
+                const productId = row.getAttribute('data-product-id');
+                if (!productId || !currentAudit) return;
+                input.disabled = true;
+                const updateData = {
+                    cantidad_fisica: parseInt(input.value) || 0,
+                    novedad: row.querySelector('.novelty-select')?.value || 'sin_novedad',
+                    observaciones: row.querySelector('.observations-area')?.value || ''
+                };
+                const result = await saveProduct(productId, currentAudit.id, updateData);
+                input.disabled = false;
+                if (result) {
+                    input.classList.add('saved-success');
+                    setTimeout(() => input.classList.remove('saved-success'), 1000);
+                    document.getElementById('scan-input')?.focus();
+                } else {
+                    alert("Error al guardar el producto.");
+                    input.focus();
+                }
+            }
+        });
     }
 
     // --- Charts ---
@@ -458,6 +501,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('save-all-btn').classList.remove('d-none');
                 document.getElementById('finish-audit-btn').classList.remove('d-none');
                 document.getElementById('collaborative-audit-btn').classList.remove('d-none');
+                setupAutoSaveOnEnter(); // <-- Llamada a la nueva función
                 document.getElementById('scan-input')?.focus();
             } else {
                 alert('Error al cargar productos: ' + (await response.json()).detail);
