@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 const user = await response.json();
                 console.log('checkAuth - Usuario obtenido:', user);
+                console.log('checkAuth - Mostrando dashboard para rol:', user.rol);
                 localStorage.setItem('user_role', user.rol);
                 localStorage.setItem('user_name', user.nombre);
                 localStorage.setItem('user_id', user.id);
@@ -94,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearSession();
             }
         } catch (error) {
-            console.error('Error de autenticación:', error);
+            console.log('checkAuth - Error:', error);
             clearSession();
         }
     }
