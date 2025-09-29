@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.log('checkAuth - Error:', error);
+            console.log('checkAuth - Error message:', error.message);
             alert('Error en checkAuth: ' + error.message);
             clearSession();
         }
