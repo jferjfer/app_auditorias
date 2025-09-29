@@ -357,16 +357,78 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderAuditorAuditsTable(audits, tableSelector, mostrarFinalizadas = null) {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
+
         let filtradas = audits;
-        if (mostrarFinalizadas === false) filtradas = audits.filter(a => a.estado !== 'finalizada');
-        else if (mostrarFinalizadas === true) filtradas = audits.filter(a => a.estado === 'finalizada');
-        
-        tableBody.innerHTML = filtradas.length === 0 ? '<tr><td colspan="5" class="text-center">No hay auditorías para mostrar</td></tr>' : '';
-        
+        if (mostrarFinalizadas === false) {
+            filtradas = audits.filter(a => a.estado !== 'finalizada');
+        } else if (mostrarFinalizadas === true) {
+            filtradas = audits.filter(a => a.estado === 'finalizada');
+        }
+
+        if (!filtradas || filtradas.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No tienes auditorías para mostrar</td></tr>';
+            return;
+        }
+
+        tableBody.innerHTML = ''; // Clear previous content
+
         filtradas.forEach(audit => {
             const row = document.createElement('tr');
             row.setAttribute('data-audit-id', audit.id);
+            const fecha = new Date(audit.creada_en).toLocaleDateString() || '--';
+            
+            let claseEstado = '';
+            let textoEstado = '';
+            switch(audit.estado) {
+                case 'pendiente':
+                    claseEstado = 'estado-pendiente';
+                    textoEstado = 'Pendiente';
+                    break;
+                case 'en_progreso':
+                    claseEstado = 'estado-progreso';
+                    textoEstado = 'En Progreso';
+                    break;
+                case 'finalizada':
+                    claseEstado = 'estado-completada';
+                    textoEstado = 'Finalizada';
+                    break;
+                default:
+                    claseEstado = 'bg-secondary';
+                    textoEstado = audit.estado;
+            }
+
+            row.innerHTML = `
+                <td>${audit.id ?? '--'}</td>
+                <td>${audit.ubicacion_destino ?? '--'}</td>
+                <td>${fecha}</td>
+                <td><span class="badge ${claseEstado}">${textoEstado}</span></td>
+                <td>
+                    ${audit.estado === 'pendiente' ? 
+                        `<button class="btn btn-sm btn-primary iniciar-auditoria-btn" data-audit-id="${audit.id}">
+                            <i class="bi bi-play-fill"></i> Iniciar
+                        </button>` : 
+                        `<button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}">
+                            <i class="bi bi-eye"></i> Ver
+                        </button>`
+                    }
+                </td>
+            `;
             tableBody.appendChild(row);
+        });
+
+        // Add event listeners for the new buttons
+        tableBody.querySelectorAll('.iniciar-auditoria-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const auditId = e.currentTarget.getAttribute('data-audit-id');
+                iniciarAuditoria(auditId);
+            });
+        });
+
+        tableBody.querySelectorAll('.ver-auditoria-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const auditId = e.currentTarget.getAttribute('data-audit-id');
+                verAuditoria(auditId);
+            });
         });
     }
 
@@ -374,9 +436,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
         tableBody.innerHTML = '';
+        const roleColors = {
+            auditor: '#00c6ff',
+            analista: '#28a745',
+            administrador: '#ff0077'
+        };
         users.forEach(user => {
             const row = document.createElement('tr');
             row.setAttribute('data-user-id', user.id);
+            const rolColor = roleColors[user.rol] || '#6c757d';
+            row.innerHTML = `
+                <td>${user.nombre}</td>
+                <td>${user.correo}</td>
+                <td><span class="badge rounded-pill" style="background-color: ${rolColor};">${user.rol}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-info text-white"><i class="bi bi-pencil-square"></i></button>
+                    <button class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button>
+                </td>
+            `;
             tableBody.appendChild(row);
         });
     }
@@ -393,6 +470,97 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function setupAuditorDashboard(audits) {
+        function setupFinalizadasDashboard(audits) {
+            const btnShow = document.getElementById('show-finished-audits-btn');
+            const btnHide = document.getElementById('hide-finished-audits-btn');
+            
+            function render(filtrarFinalizadas = false) {
+                if (btnShow) btnShow.classList.toggle('d-none', filtrarFinalizadas);
+                if (btnHide) btnHide.classList.toggle('d-none', !filtrarFinalizadas);
+                renderAuditorAuditsTable(audits, '#auditor-audits-table-body', filtrarFinalizadas);
+            }
+
+            if (btnShow && !btnShow.dataset.listenerAdded) {
+                btnShow.addEventListener('click', () => render(true));
+                btnShow.dataset.listenerAdded = '1';
+            }
+            if (btnHide && !btnHide.dataset.listenerAdded) {
+                btnHide.addEventListener('click', () => render(false));
+                btnHide.dataset.listenerAdded = '1';
+            }
+            render(false); // Initial render
+        }
+
+        if (audits) {
+            setupFinalizadasDashboard(audits);
+        }
+
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('audit-file-input');
+        const selectedFilesDiv = document.getElementById('selected-files');
+
+        if (fileInput) {
+            fileInput.addEventListener('change', () => {
+                if (!selectedFilesDiv) return;
+                selectedFilesDiv.innerHTML = '';
+                if (fileInput.files.length > 0) {
+                    let fileListHtml = '<h6>Archivos seleccionados:</h6><ul class="list-group list-group-flush">';
+                    for (const file of fileInput.files) {
+                        fileListHtml += `<li class="list-group-item bg-dark text-white">${file.name}</li>`;
+                    }
+                    fileListHtml += '</ul>';
+                    selectedFilesDiv.innerHTML = fileListHtml;
+                }
+            });
+        }
+
+        if (uploadForm && !uploadForm.dataset.listenerAdded) {
+            uploadForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const submitBtn = uploadForm.querySelector('button[type="submit"]');
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    alert("Por favor, selecciona al menos un archivo Excel para subir.");
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Subiendo...';
+                
+                const formData = new FormData();
+                for (const file of fileInput.files) {
+                    formData.append('files', file);
+                }
+                
+                try {
+                    const token = getToken();
+                    const response = await fetch(`${API_URL}/audits/upload-multiple-files`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(`✅ ¡Auditoría creada con éxito!\nID: ${result.audit_id}`);
+                        fileInput.value = '';
+                        selectedFilesDiv.innerHTML = '';
+                        loadDashboardData('auditor', token);
+                    } else {
+                        const error = await response.json();
+                        alert("❌ Error al procesar los archivos: " + (error.detail || "Error desconocido"));
+                    }
+                } catch (error) {
+                    alert("❌ Error de conexión. Verifica tu internet e intenta nuevamente.");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
+                }
+            });
+            uploadForm.dataset.listenerAdded = 'true';
+        }
+    }
+
     // --- Charts ---
     function renderComplianceChart(audits) {
         if (complianceChartInstance) complianceChartInstance.destroy();
@@ -406,7 +574,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!ctx) return;
     }
 
-    // --- Event Listeners ---
+    // --- Event Listeners & Global Functions ---
+    window.iniciarAuditoria = async function(auditId) {
+        // ... (logic to start an audit)
+    };
+
+    window.verAuditoria = function(auditId) {
+        // ... (logic to view an audit)
+    };
+
     authForm.addEventListener('submit', async function (event) {
         event.preventDefault();
         const email = document.getElementById('correo_electronico').value;
@@ -490,9 +666,5 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Error de red al crear usuario.');
             }
         });
-    }
-    
-    function setupAuditorDashboard(audits) {
-        // Placeholder for complex auditor-specific setup logic
     }
 });
