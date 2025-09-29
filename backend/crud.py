@@ -156,3 +156,11 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
             pass # Ignore invalid date format
 
     return query.all()
+
+def get_audits_for_today(db: Session) -> List[models.Audit]:
+    """
+    Obtiene todas las auditorías creadas en el día actual para el dashboard del admin.
+    No se carga la lista de productos para mayor eficiencia.
+    """
+    today = datetime.now().date()
+    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(func.date(models.Audit.creada_en) == today).all()

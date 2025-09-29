@@ -137,7 +137,9 @@ async def upload_multiple_audit_files(
 def get_audits(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.rol == "auditor":
         audits = crud.get_audits_by_auditor(db, auditor_id=current_user.id)
-    else:
+    elif current_user.rol == "administrador":
+        audits = crud.get_audits_for_today(db)
+    else: # For analyst and any other roles
         audits = crud.get_audits(db)
     return [schemas.AuditResponse.from_orm(audit) for audit in audits]
 

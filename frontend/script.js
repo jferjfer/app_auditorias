@@ -120,15 +120,21 @@ document.addEventListener('DOMContentLoaded', function() {
         websocket = new WebSocket(wsUrl);
 
         websocket.onmessage = function(event) {
-            try {
-                const message = JSON.parse(event.data);
-                if (message.type === 'new_audit') {
-                    addOrUpdateAuditRow(message.data, true); // Prepend
-                } else if (message.type === 'audit_updated') {
-                    addOrUpdateAuditRow(message.data, false); // Update
+            const role = localStorage.getItem('user_role');
+
+            if (role === 'administrador') {
+                loadDashboardData('administrador', getToken());
+            } else if (role === 'analista') {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'new_audit') {
+                        addOrUpdateAuditRow(message.data, true);
+                    } else if (message.type === 'audit_updated') {
+                        addOrUpdateAuditRow(message.data, false);
+                    }
+                } catch (e) {
+                    console.error("Error parsing WebSocket message:", e, "Original data:", event.data);
                 }
-            } catch (e) {
-                console.error("Error parsing WebSocket message:", e, "Original data:", event.data);
             }
         };
     }
@@ -159,24 +165,17 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         };
 
-        ['#analyst-audits-table-body', '#admin-audits-table-body'].forEach(selector => {
-            const tableBody = document.querySelector(selector);
-            if (!tableBody) return;
+        const tableBody = document.querySelector('#analyst-audits-table-body');
+        if (!tableBody) return;
 
-            let existingRow = tableBody.querySelector(`tr[data-audit-id='${audit.id}']`);
-            if (existingRow) {
-                existingRow.innerHTML = createRowHtml(audit);
-            } else if (prepend) {
-                const newRow = document.createElement('tr');
-                newRow.setAttribute('data-audit-id', audit.id);
-                newRow.innerHTML = createRowHtml(audit);
-                tableBody.prepend(newRow);
-            }
-        });
-
-        // Refresh auditor's specific view if they are the current user
-        if (localStorage.getItem('user_role') === 'auditor') {
-            loadDashboardData('auditor', getToken());
+        let existingRow = tableBody.querySelector(`tr[data-audit-id='${audit.id}']`);
+        if (existingRow) {
+            existingRow.innerHTML = createRowHtml(audit);
+        } else if (prepend) {
+            const newRow = document.createElement('tr');
+            newRow.setAttribute('data-audit-id', audit.id);
+            newRow.innerHTML = createRowHtml(audit);
+            tableBody.prepend(newRow);
         }
     }
 
@@ -187,7 +186,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (physicalCountInput && physicalCountInput.value != (product.cantidad_fisica || '')) {
                 physicalCountInput.value = product.cantidad_fisica || '';
             }
-            // ... more updates if needed
         }
     }
 
@@ -275,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     fetch(`${API_URL}/audits/`, { headers }),
                     fetch(`${API_URL}/users/`, { headers })
                 ]);
-                if (auditsRes.ok) renderAuditsTable(await auditsRes.json(), '#admin-audits-table-body');
+                if (auditsRes.ok) renderAdminAuditsTable(await auditsRes.json(), '#admin-audits-table-body');
                 if (usersRes.ok) renderUsersTable(await usersRes.json(), '#admin-users-table-body');
             }
         } catch (error) {
@@ -290,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tableBody.innerHTML = '';
         audits.forEach(audit => {
             const row = document.createElement('tr');
-            row.setAttribute('data-audit-id', audit.id); // Important for real-time updates
+            row.setAttribute('data-audit-id', audit.id);
             const fecha = new Date(audit.creada_en).toLocaleDateString() || '--';
             const productosCount = audit.productos_count ?? (Array.isArray(audit.productos) ? audit.productos.length : '--');
             const cumplimiento = audit.porcentaje_cumplimiento !== null ? `${audit.porcentaje_cumplimiento}%` : '--';
@@ -317,6 +315,45 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function renderAdminAuditsTable(audits, tableSelector) {
+        const tableBody = document.querySelector(tableSelector);
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+        audits.forEach(audit => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-audit-id', audit.id);
+            const fecha = new Date(audit.creada_en).toLocaleDateString() || '--';
+            const productosCount = audit.productos_count ?? (Array.isArray(audit.productos) ? audit.productos.length : '--');
+            const cumplimiento = audit.porcentaje_cumplimiento !== null ? audit.porcentaje_cumplimiento : 0;
+
+            let estadoTexto, estadoColor;
+            switch(audit.estado) {
+                case 'pendiente': estadoTexto = 'Pendiente'; estadoColor = '#ffc107'; break;
+                case 'en_progreso': estadoTexto = 'En Progreso'; estadoColor = '#0dcaf0'; break;
+                case 'finalizada': estadoTexto = 'Finalizada'; estadoColor = '#198754'; break;
+                default: estadoTexto = audit.estado; estadoColor = '#6c757d';
+            }
+
+            row.innerHTML = `
+                <td>${audit.id ?? '--'}</td>
+                <td>${audit.ubicacion_destino ?? '--'}</td>
+                <td>${audit.auditor?.nombre ?? 'N/A'}</td>
+                <td>${fecha}</td>
+                <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${estadoTexto}</span></td>
+                <td>${productosCount}</td>
+                <td>
+                    <div class="progress" style="height: 20px; background-color: #343a40;">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: ${cumplimiento}%;" aria-valuenow="${cumplimiento}" aria-valuemin="0" aria-valuemax="100">
+                            ${cumplimiento}%
+                        </div>
+                    </div>
+                </td>
+                <td>N/A</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
     function renderAuditorAuditsTable(audits, tableSelector, mostrarFinalizadas = null) {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
@@ -329,7 +366,6 @@ document.addEventListener('DOMContentLoaded', function() {
         filtradas.forEach(audit => {
             const row = document.createElement('tr');
             row.setAttribute('data-audit-id', audit.id);
-            // ... (render logic for auditor-specific table)
             tableBody.appendChild(row);
         });
     }
@@ -341,7 +377,6 @@ document.addEventListener('DOMContentLoaded', function() {
         users.forEach(user => {
             const row = document.createElement('tr');
             row.setAttribute('data-user-id', user.id);
-            // ... (render logic for user table)
             tableBody.appendChild(row);
         });
     }
@@ -363,14 +398,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (complianceChartInstance) complianceChartInstance.destroy();
         const ctx = document.getElementById('complianceChart')?.getContext('2d');
         if (!ctx) return;
-        // ... (chart rendering logic)
     }
 
     function renderNoveltiesChart(audits) {
         if (noveltiesChartInstance) noveltiesChartInstance.destroy();
         const ctx = document.getElementById('noveltiesChart')?.getContext('2d');
         if (!ctx) return;
-        // ... (chart rendering logic)
     }
 
     // --- Event Listeners ---
