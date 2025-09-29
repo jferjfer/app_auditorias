@@ -61,29 +61,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Lógica de Autenticación y Carga de Datos ---
     async function checkAuth() {
         const token = getToken();
+        console.log('checkAuth - Token presente:', !!token);
         if (!token) {
+            console.log('checkAuth - No hay token, mostrando modal');
             authModal.show();
             return;
         }
         try {
+            console.log('checkAuth - Enviando request a /users/me/');
             const response = await fetch(`${API_URL}/users/me/`, { headers: { 'Authorization': `Bearer ${token}` } });
+            console.log('checkAuth - Response status:', response.status);
             if (response.ok) {
                 const user = await response.json();
+                console.log('checkAuth - Usuario obtenido:', user);
                 localStorage.setItem('user_role', user.rol);
                 localStorage.setItem('user_name', user.nombre);
                 localStorage.setItem('user_id', user.id);
-                
+
                 const dashboardId = roleMap[user.rol];
                 showDashboard(dashboardId);
                 document.getElementById(`${user.rol}-title`).textContent = user.nombre;
-                
+
                 loadDashboardData(user.rol, token);
 
                 if (user.rol === 'analista' || user.rol === 'administrador') {
                     initGeneralWebSocket();
                 }
-                setupUserSession(await response.json(), token);
+                setupUserSession(user, token);
             } else {
+                console.log('checkAuth - Response no ok, text:', await response.text());
                 clearSession();
             }
         } catch (error) {
@@ -477,6 +483,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const email = document.getElementById('correo_electronico').value;
             const password = document.getElementById('contrasena').value;
             const action = event.submitter.id;
+            console.log('authForm submit - action:', action, 'email:', email);
             let url, body, headers = { 'Content-Type': 'application/json' };
             if (action === 'login-btn') {
                 url = `${API_URL}/auth/login`;
@@ -487,19 +494,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 body = JSON.stringify({ nombre: document.getElementById('nombre').value, correo: email, contrasena: password, rol: document.getElementById('rol').value });
             }
             try {
+                console.log('authForm - Enviando request a:', url);
                 const response = await fetch(url, { method: 'POST', headers, body });
+                console.log('authForm - Response status:', response.status);
                 const result = await response.json();
+                console.log('authForm - Result:', result);
                 if (response.ok) {
-                    if (result.access_token) localStorage.setItem('access_token', result.access_token);
+                    if (result.access_token) {
+                        localStorage.setItem('access_token', result.access_token);
+                        console.log('authForm - Token guardado');
+                    }
                     // Si el login devuelve datos del usuario, los usamos directamente
                     const user = result.user || { rol: document.getElementById('rol').value, nombre: document.getElementById('nombre').value };
+                    console.log('authForm - Usuario:', user);
                     authModal.hide();
+                    console.log('authForm - Llamando checkAuth');
                     checkAuth();
                     setupUserSession(user, result.access_token);
                 } else {
+                    console.log('authForm - Error:', result.detail);
                     alert(`Error: ${result.detail}`);
                 }
             } catch (error) {
+                console.error('authForm - Error de conexión:', error);
                 alert('Error de conexión.');
             }
         });
