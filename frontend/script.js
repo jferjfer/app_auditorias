@@ -459,6 +459,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function setupScanInput() {
+        const scanInput = document.getElementById('scan-input');
+        if (!scanInput) return;
+
+        const newScanInput = scanInput.cloneNode(true);
+        scanInput.parentNode.replaceChild(newScanInput, scanInput);
+
+        newScanInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const scannedSku = newScanInput.value.trim();
+                if (!scannedSku) return;
+
+                const skuCell = document.querySelector(`#auditor-products-table-body td[data-sku="${scannedSku}"]`);
+                
+                if (skuCell) {
+                    const targetRow = skuCell.closest('tr');
+                    const physicalCountInput = targetRow.querySelector('.physical-count');
+                    if (physicalCountInput) {
+                        physicalCountInput.focus();
+                        physicalCountInput.select();
+                        newScanInput.value = '';
+                    }
+                } else {
+                    alert(`SKU ${scannedSku} no encontrado en la auditoría.`);
+                    newScanInput.value = '';
+                    newScanInput.focus();
+                }
+            }
+        });
+    }
+
     // --- Charts ---
     function renderComplianceChart(audits) {
         if (complianceChartInstance) complianceChartInstance.destroy();
@@ -501,7 +533,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('save-all-btn').classList.remove('d-none');
                 document.getElementById('finish-audit-btn').classList.remove('d-none');
                 document.getElementById('collaborative-audit-btn').classList.remove('d-none');
-                setupAutoSaveOnEnter(); // <-- Llamada a la nueva función
+                setupAutoSaveOnEnter();
+                setupScanInput();
                 document.getElementById('scan-input')?.focus();
             } else {
                 alert('Error al cargar productos: ' + (await response.json()).detail);
