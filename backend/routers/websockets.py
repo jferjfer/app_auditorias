@@ -1,6 +1,8 @@
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
 from typing import List, Dict
+from websockets.exceptions import ConnectionClosed
 
 from backend.database import get_db
 from backend.services.auth_service import get_current_user_from_query
@@ -11,9 +13,7 @@ router = APIRouter(
 
 class ConnectionManager:
     def __init__(self):
-        # Almacena las conexiones activas: {audit_id: [websocket, ...]}
         self.active_connections: Dict[int, List[WebSocket]] = {}
-        # Almacena todas las conexiones activas
         self.all_connections: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket, audit_id: int = None):
@@ -41,29 +41,36 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+async def send_pings(websocket: WebSocket):
+    """Sends a ping message every 20 seconds to keep the connection alive."""
+    while True:
+        await asyncio.sleep(20)
+        try:
+            await websocket.send_json({"type": "ping"})
+        except (WebSocketDisconnect, ConnectionClosed):
+            break
+
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
-    # Aquí se podría añadir una validación más robusta del usuario/token si fuera necesario
     await manager.connect(websocket)
+    ping_task = asyncio.create_task(send_pings(websocket))
     try:
         while True:
-            # Mantenemos la conexión abierta para recibir y enviar mensajes
-            data = await websocket.receive_text()
-            # This part needs to be re-evaluated. For now, we just keep the connection open.
-            # For a general websocket, we might not need to broadcast back the received message.
-            # await manager.broadcast_to_all(data)
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+    finally:
+        ping_task.cancel()
 
 @router.websocket("/ws/{audit_id}/{user_id}")
 async def websocket_audit_endpoint(websocket: WebSocket, audit_id: int, user_id: int):
-    # Aquí se podría añadir una validación más robusta del usuario/token si fuera necesario
     await manager.connect(websocket, audit_id)
+    ping_task = asyncio.create_task(send_pings(websocket))
     try:
         while True:
-            # Mantenemos la conexión abierta para recibir y enviar mensajes
             data = await websocket.receive_text()
-            # Por ahora, solo retransmitimos los mensajes a los demás en la misma auditoría
             await manager.broadcast(data, audit_id)
     except WebSocketDisconnect:
         manager.disconnect(websocket, audit_id)
+    finally:
+        ping_task.cancel()
