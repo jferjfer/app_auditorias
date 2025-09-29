@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (user.rol === 'analista' || user.rol === 'administrador') {
                     initGeneralWebSocket();
                 }
+                setupUserSession(await response.json(), token);
             } else {
                 clearSession();
             }
@@ -89,6 +90,23 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error de autenticación:', error);
             clearSession();
         }
+    }
+
+    function setupUserSession(user, token) {
+        // Guardar datos del usuario en localStorage
+        localStorage.setItem('user_role', user.rol);
+        localStorage.setItem('user_name', user.nombre);
+        localStorage.setItem('user_id', user.id);
+
+        // Configurar la UI
+        const dashboardId = roleMap[user.rol];
+        showDashboard(dashboardId);
+        const titleElement = document.getElementById(`${user.rol}-title`);
+        if (titleElement) titleElement.textContent = user.nombre;
+
+        // Cargar datos y conectar websockets
+        loadDashboardData(user.rol, token);
+        if (user.rol === 'analista' || user.rol === 'administrador') initGeneralWebSocket();
     }
 
     async function loadDashboardData(role, token) {
@@ -473,8 +491,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await response.json();
                 if (response.ok) {
                     if (result.access_token) localStorage.setItem('access_token', result.access_token);
+                    // Si el login devuelve datos del usuario, los usamos directamente
+                    const user = result.user || { rol: document.getElementById('rol').value, nombre: document.getElementById('nombre').value };
                     authModal.hide();
                     checkAuth();
+                    setupUserSession(user, result.access_token);
                 } else {
                     alert(`Error: ${result.detail}`);
                 }
