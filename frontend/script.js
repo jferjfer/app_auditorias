@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const API_URL = IS_LOCAL ? 'http://127.0.0.1:8000' : DEPLOYMENT_URL;
     
     const authModal = new bootstrap.Modal(document.getElementById('authModal'));
+    const authForm = document.getElementById('auth-form');
     const roleMap = {
         analista: 'analyst-dashboard',
         auditor: 'auditor-dashboard',
