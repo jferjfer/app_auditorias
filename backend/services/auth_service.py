@@ -55,6 +55,17 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         raise credentials_exception
     return user
 
-# Dependencia para obtener usuario desde query param (para WebSockets)
-def get_current_user_from_query(token: str, db: Session = Depends(get_db)):
-    return get_current_user(db, token)
+def get_user_from_token(db: Session, token: str) -> Optional[models.User]:
+    """
+    Decodifica el token y retorna el usuario si es válido.
+    No es una dependencia de FastAPI, puede ser llamada desde cualquier parte (ej. WebSockets).
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        correo: str = payload.get("sub")
+        if correo is None:
+            return None
+    except JWTError:
+        return None
+    user = crud.get_user_by_email(db, email=correo)
+    return user

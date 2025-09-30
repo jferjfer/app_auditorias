@@ -1,11 +1,10 @@
 import asyncio
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import List, Dict
 from websockets.exceptions import ConnectionClosed
 
-from backend.database import get_db
-from backend.services.auth_service import get_current_user_from_token
+from backend.database import SessionLocal
+from backend.services.auth_service import get_user_from_token
 from backend import models
 
 router = APIRouter(
@@ -45,48 +44,47 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-async def send_pings(websocket: WebSocket):
-    """Sends a ping message every 20 seconds to keep the connection alive."""
-    while True:
-        await asyncio.sleep(20)
-        try:
-            await websocket.send_json({"type": "ping"})
-        except (WebSocketDisconnect, ConnectionClosed):
-            break
-
 @router.websocket("/ws")
 async def websocket_general_endpoint(websocket: WebSocket, token: str = Query(...)):
-    user = await get_current_user_from_token(token, get_db()) # You might need to adjust get_db dependency
-    if not user:
-        await websocket.close(code=1008)
-        return
-    
-    await manager.connect(websocket)
-    ping_task = asyncio.create_task(send_pings(websocket))
+    db = SessionLocal()
     try:
-        while True:
-            # Keep connection alive, can be used for duplex communication if needed
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        user = get_user_from_token(db, token)
+        if not user:
+            await websocket.close(code=1008)
+            return
+        
+        await manager.connect(websocket)
+        ping_task = asyncio.create_task(send_pings(websocket))
+        try:
+            while True:
+                # Keep connection alive, can be used for duplex communication if needed
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            manager.disconnect(websocket)
+        finally:
+            ping_task.cancel()
     finally:
-        ping_task.cancel()
+        db.close()
 
 @router.websocket("/ws/{audit_id}")
 async def websocket_audit_endpoint(websocket: WebSocket, audit_id: int, token: str = Query(...)):
-    user = await get_current_user_from_token(token, get_db())
-    if not user:
-        await websocket.close(code=1008)
-        return
-
-    await manager.connect(websocket, audit_id)
-    ping_task = asyncio.create_task(send_pings(websocket))
+    db = SessionLocal()
     try:
-        while True:
-            data = await websocket.receive_text()
-            # For now, only broadcast. A more advanced implementation would check permissions.
-            await manager.broadcast(data, audit_id)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, audit_id)
+        user = get_user_from_token(db, token)
+        if not user:
+            await websocket.close(code=1008)
+            return
+
+        await manager.connect(websocket, audit_id)
+        ping_task = asyncio.create_task(send_pings(websocket))
+        try:
+            while True:
+                data = await websocket.receive_text()
+                # For now, only broadcast. A more advanced implementation would check permissions.
+                await manager.broadcast(data, audit_id)
+        except WebSocketDisconnect:
+            manager.disconnect(websocket, audit_id)
+        finally:
+            ping_task.cancel()
     finally:
-        ping_task.cancel()
+        db.close()

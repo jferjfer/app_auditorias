@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- Variables Globales y de Entorno ---
-    const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com'; 
+    const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com';
     const IS_LOCAL = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
     const API_URL = IS_LOCAL ? 'http://127.0.0.1:8000' : DEPLOYMENT_URL;
-    
+
     const authModal = new bootstrap.Modal(document.getElementById('authModal'));
     const addUserModal = new bootstrap.Modal(document.getElementById('addUserModal'));
     const authForm = document.getElementById('auth-form');
@@ -109,13 +109,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadDashboardData(role, token, filters = {}) {
         const headers = { 'Authorization': `Bearer ${token}` };
-        const params = new URLSearchParams(filters);
-        const queryString = params.toString();
-
+        
         try {
             if (role === 'analista') {
+                const params = new URLSearchParams(filters);
+                const queryString = params.toString();
                 const [auditsRes, usersRes] = await Promise.all([
-                    fetch(`${API_URL}/api/audits/?${queryString}`, { headers }), 
+                    fetch(`${API_URL}/api/audits/?${queryString}`, { headers }),
                     fetch(`${API_URL}/api/users/`, { headers })
                 ]);
                 if (auditsRes.ok) {
@@ -138,8 +138,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     setupAuditorDashboard(audits);
                 }
             } else if (role === 'administrador') {
-                const [auditsRes, usersRes] = await Promise.all([fetch(`${API_URL}/api/audits/`, { headers }), fetch(`${API_URL}/api/users/`, { headers })]);
-                if (auditsRes.ok) renderAdminAuditsTable(await auditsRes.json(), '#admin-audits-table-body');
+                const today = new Date().toISOString().split('T')[0];
+                filters.date = today;
+                const params = new URLSearchParams(filters);
+                const queryString = params.toString();
+
+                const [auditsRes, usersRes] = await Promise.all([fetch(`${API_URL}/api/audits/?${queryString}`, { headers }), fetch(`${API_URL}/api/users/`, { headers })]);
+                if (auditsRes.ok) renderSimpleAdminAuditsTable(await auditsRes.json(), '#admin-audits-table-body');
                 if (usersRes.ok) renderUsersTable(await usersRes.json(), '#admin-users-table-body');
             }
         } catch (error) {
@@ -155,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fecha = new Date(audit.creada_en).toLocaleDateString();
             const cumplimiento = audit.porcentaje_cumplimiento !== null ? `${audit.porcentaje_cumplimiento}%` : '--';
             let estadoTexto, estadoColor;
-            switch(audit.estado) {
+            switch (audit.estado) {
                 case 'pendiente': estadoTexto = 'Pendiente'; estadoColor = '#ffc107'; break;
                 case 'en_progreso': estadoTexto = 'En Progreso'; estadoColor = '#0dcaf0'; break;
                 case 'finalizada': estadoTexto = 'Finalizada'; estadoColor = '#198754'; break;
@@ -174,28 +179,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
     }
 
-    function renderAdminAuditsTable(audits, tableSelector) {
+    function renderSimpleAdminAuditsTable(audits, tableSelector) {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
+        if (!audits || audits.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="3" class="text-center">No hay auditorías para el día de hoy.</td></tr>`;
+            return;
+        }
         tableBody.innerHTML = audits.map(audit => {
-            const fecha = new Date(audit.creada_en).toLocaleDateString();
-            const cumplimiento = audit.porcentaje_cumplimiento !== null ? audit.porcentaje_cumplimiento : 0;
-            let estadoTexto, estadoColor;
-            switch(audit.estado) {
-                case 'pendiente': estadoTexto = 'Pendiente'; estadoColor = '#ffc107'; break;
-                case 'en_progreso': estadoTexto = 'En Progreso'; estadoColor = '#0dcaf0'; break;
-                case 'finalizada': estadoTexto = 'Finalizada'; estadoColor = '#198754'; break;
-                default: estadoTexto = audit.estado; estadoColor = '#6c757d';
-            }
+            const cumplimiento = audit.porcentaje_cumplimiento !== null ? Math.round(audit.porcentaje_cumplimiento) : 0;
             return `<tr data-audit-id="${audit.id}">
-                <td>${audit.id}</td>
                 <td>${audit.ubicacion_destino}</td>
                 <td>${audit.auditor?.nombre ?? 'N/A'}</td>
-                <td>${fecha}</td>
-                <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${estadoTexto}</span></td>
-                <td>${audit.productos_count ?? (audit.productos ? audit.productos.length : 0)}</td>
-                <td><div class="progress" style="height: 20px; background-color: #343a40;"><div class="progress-bar bg-info" role="progressbar" style="width: ${cumplimiento}%;" aria-valuenow="${cumplimiento}">${cumplimiento}%</div></div></td>
-                <td><a href="#" class="btn btn-sm btn-outline-info view-audit-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</a></td>
+                <td>
+                    <div class="progress" style="height: 20px; background-color: #343a40;">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: ${cumplimiento}%;" aria-valuenow="${cumplimiento}">${cumplimiento}%</div>
+                    </div>
+                </td>
             </tr>`;
         }).join('');
     }
@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
         const filtradas = audits.filter(a => mostrarFinalizadas ? a.estado === 'finalizada' : a.estado !== 'finalizada');
-        
+
         if (!filtradas || filtradas.length === 0) {
             tableBody.innerHTML = `<tr><td colspan="5" class="text-center">No tienes auditorías ${mostrarFinalizadas ? 'finalizadas' : 'activas'}.</td></tr>`;
             return;
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tableBody.innerHTML = filtradas.map(audit => {
             const fecha = new Date(audit.creada_en).toLocaleDateString();
             let claseEstado = '', textoEstado = '';
-            switch(audit.estado) {
+            switch (audit.estado) {
                 case 'pendiente': claseEstado = 'estado-pendiente'; textoEstado = 'Pendiente'; break;
                 case 'en_progreso': claseEstado = 'estado-progreso'; textoEstado = 'En Progreso'; break;
                 case 'finalizada': claseEstado = 'estado-completada'; textoEstado = 'Finalizada'; break;
@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const noveltyData = { faltante: 0, sobrante: 0, averia: 0 };
         for (const audit of audits) {
-            if(audit.productos) { 
+            if (audit.productos) {
                 for (const product of audit.productos) {
                     if (noveltyData.hasOwnProperty(product.novedad)) {
                         noveltyData[product.novedad]++;
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderProductsTable(currentAudit.productos);
                 initWebSocket(auditId);
                 ['save-all-btn', 'finish-audit-btn', 'collaborative-audit-btn'].forEach(id => document.getElementById(id).classList.remove('d-none'));
-                
+
                 setupScanInput();
                 setupAutoSaveOnEnter();
                 updateCompliancePercentage(auditId);
@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupScanInput() {
         const scanInput = document.getElementById('scan-input');
         if (!scanInput) return;
-        
+
         const newScanInput = scanInput.cloneNode(true);
         scanInput.parentNode.replaceChild(newScanInput, scanInput);
 
@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (scannedSku && lastFocusedQuantityInput && lastFocusedQuantityInput.closest('tr').dataset.sku === scannedSku) {
                 const row = lastFocusedQuantityInput.closest('tr');
                 const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10) || 0;
-                
+
                 lastFocusedQuantityInput.value = docQuantity;
 
                 const productId = row.getAttribute('data-product-id');
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
 
                 const saved = await saveProduct(productId, currentAudit.id, updateData);
-                
+
                 if (saved) {
                     lastFocusedQuantityInput.classList.add('saved-success');
                     setTimeout(() => lastFocusedQuantityInput.classList.remove('saved-success'), 1000);
@@ -507,10 +507,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const docQuantity = parseInt(prevRow.querySelector('.doc-quantity').textContent, 10) || 0;
                     lastFocusedQuantityInput.value = docQuantity;
 
-                    const updateData = { 
-                        cantidad_fisica: docQuantity, 
-                        novedad: 'sin_novedad', 
-                        observaciones: '' 
+                    const updateData = {
+                        cantidad_fisica: docQuantity,
+                        novedad: 'sin_novedad',
+                        observaciones: ''
                     };
 
                     const saved = await saveProduct(productId, currentAudit.id, updateData);
@@ -522,11 +522,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         lastFocusedQuantityInput.classList.add('saved-error');
                         speak("Error al guardar el producto anterior");
-                        return; 
+                        return;
                     }
                 }
             }
-            
+
             // Case 3: Normal scan for a new product.
             if (!scannedSku) {
                 lastFocusedQuantityInput = null;
@@ -538,12 +538,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const targetRow = skuCell.closest('tr');
                 const physicalCountInput = targetRow.querySelector('.physical-count');
                 const docQuantity = targetRow.querySelector('.doc-quantity').textContent.trim();
-                
+
                 speak(`Cantidad esperada: ${docQuantity}`);
-                
+
                 physicalCountInput.focus();
                 physicalCountInput.select();
-                
+
                 lastFocusedQuantityInput = physicalCountInput;
             } else {
                 speak("SKU no encontrado");
@@ -564,7 +564,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const row = input.closest('tr');
                 const productId = row.getAttribute('data-product-id');
                 if (!productId || !currentAudit) return;
-                
+
                 input.disabled = true;
                 const updateData = {
                     cantidad_fisica: parseInt(input.value) || 0,
@@ -602,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return null;
         }
     }
-    
+
     async function updateCompliancePercentage(auditId) {
         const complianceDiv = document.getElementById('compliance-percentage');
         if (!complianceDiv) return;
@@ -621,12 +621,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- WebSockets ---
-    function initWebSocket(auditId) { 
+    function initWebSocket(auditId) {
         const token = getToken();
         if (!token) return;
         const wsUrl = API_URL.replace(/^http/, 'ws');
         websocket = new WebSocket(`${wsUrl}/api/ws/${auditId}?token=${token}`);
-        websocket.onmessage = function(event) {
+        websocket.onmessage = function (event) {
             const data = JSON.parse(event.data);
             console.log('WebSocket message received:', data);
             // Example: Update a product row in real-time
@@ -649,15 +649,26 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!token) return;
         const wsUrl = API_URL.replace(/^http/, 'ws');
         const general_ws = new WebSocket(`${wsUrl}/api/ws?token=${token}`);
-        general_ws.onmessage = function(event) {
+        general_ws.onmessage = function (event) {
             const data = JSON.parse(event.data);
             console.log('General WebSocket message received:', data);
-            if (data.type === 'new_audit' || data.type === 'audit_updated') {
-                console.log('New or updated audit detected, reloading dashboard data.');
-                const userRole = localStorage.getItem('user_role');
-                if (userRole === 'analista' || userRole === 'administrador') {
-                    loadDashboardData(userRole, getToken());
+            const userRole = localStorage.getItem('user_role');
+
+            if (data.type === 'audit_updated' && userRole === 'administrador' && data.audit) {
+                const audit = data.audit;
+                const row = document.querySelector(`#admin-audits-table-body tr[data-audit-id="${audit.id}"]`);
+                if (row) {
+                    const cumplimiento = audit.porcentaje_cumplimiento !== null ? Math.round(audit.porcentaje_cumplimiento) : 0;
+                    const progressBar = row.querySelector('.progress-bar');
+                    if (progressBar) {
+                        progressBar.style.width = `${cumplimiento}%`;
+                        progressBar.setAttribute('aria-valuenow', cumplimiento);
+                        progressBar.textContent = `${cumplimiento}%`;
+                    }
                 }
+            } else if (data.type === 'new_audit' && (userRole === 'analista' || userRole === 'administrador')) {
+                console.log('New audit detected, reloading dashboard data.');
+                loadDashboardData(userRole, getToken());
             }
         };
     }
@@ -670,7 +681,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const email = document.getElementById('correo_electronico').value;
             const password = document.getElementById('contrasena').value;
             const action = event.submitter.id;
-            
+
             let url, body, headers = { 'Content-Type': 'application/json' };
 
             if (action === 'login-btn') {
@@ -733,26 +744,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Delegated listeners for dynamic content
-        document.body.addEventListener('click', async function(e) {
-            const target = e.target;
-            // Auditor: Iniciar Auditoria
-            if (target.matches('.iniciar-auditoria-btn')) {
-                iniciarAuditoria(target.getAttribute('data-audit-id'));
+        document.body.addEventListener('click', async function (e) {
+            const iniciarBtn = e.target.closest('.iniciar-auditoria-btn');
+            if (iniciarBtn) {
+                iniciarAuditoria(iniciarBtn.getAttribute('data-audit-id'));
+                return;
             }
 
-            // Auditor: Ver Auditoria
-            if (target.matches('.ver-auditoria-btn')) {
-                verAuditoria(target.getAttribute('data-audit-id'));
+            const verBtn = e.target.closest('.ver-auditoria-btn');
+            if (verBtn) {
+                verAuditoria(verBtn.getAttribute('data-audit-id'));
+                return;
             }
 
-            // Analyst/Admin: View Audit Details
-            if (target.matches('.view-audit-btn')) {
-                verAuditoria(target.getAttribute('data-audit-id')); // Reuse auditor's function
+            const viewAuditBtn = e.target.closest('.view-audit-btn');
+            if (viewAuditBtn) {
+                verAuditoria(viewAuditBtn.getAttribute('data-audit-id'));
+                return;
             }
 
-            // Admin: Edit User
-            if (target.matches('.edit-user-btn')) {
-                editingUserId = target.getAttribute('data-user-id');
+            const editUserBtn = e.target.closest('.edit-user-btn');
+            if (editUserBtn) {
+                editingUserId = editUserBtn.getAttribute('data-user-id');
                 const response = await fetch(`${API_URL}/api/users/${editingUserId}`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
                 if (response.ok) {
                     const user = await response.json();
@@ -764,13 +777,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('confirm-add-user').textContent = 'Actualizar Usuario';
                     addUserModal.show();
                 }
+                return;
             }
-            // Admin: Delete User
-            if (target.matches('.delete-user-btn')) {
-                const userId = target.getAttribute('data-user-id');
+
+            const deleteUserBtn = e.target.closest('.delete-user-btn');
+            if (deleteUserBtn) {
+                const userId = deleteUserBtn.getAttribute('data-user-id');
                 if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
-                    const response = await fetch(`${API_URL}/api/users/${userId}`, { 
-                        method: 'DELETE', 
+                    const response = await fetch(`${API_URL}/api/users/${userId}`, {
+                        method: 'DELETE',
                         headers: { 'Authorization': `Bearer ${getToken()}` }
                     });
                     if (response.ok) {
@@ -780,6 +795,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         alert(`Error al eliminar usuario: ${(await response.json()).detail}`);
                     }
                 }
+                return;
             }
         });
 
@@ -791,9 +807,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 date: document.getElementById('filterDate').value
             });
             const cleanParams = new URLSearchParams(Object.fromEntries(Object.entries(Object.fromEntries(params)).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')));
-            
+
             try {
-                const response = await fetch(`${API_URL}/api/audits/report?${cleanParams.toString()}`, { 
+                const response = await fetch(`${API_URL}/api/audits/report?${cleanParams.toString()}`, {
                     headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
                 if (response.ok) {
@@ -825,16 +841,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = editingUserId ? `${API_URL}/api/users/${editingUserId}` : `${API_URL}/api/users/`;
             const method = editingUserId ? 'PUT' : 'POST';
             const body = {
-                nombre: name, 
-                correo: email, 
+                nombre: name,
+                correo: email,
                 rol: role
             };
             if (password) body.contrasena = password; // Only include password if changed
 
             try {
-                const response = await fetch(url, { 
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }, 
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                     body: JSON.stringify(body)
                 });
                 if (response.ok) {
@@ -861,8 +877,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('finish-audit-btn')?.addEventListener('click', async () => {
             if (!currentAudit || !confirm('¿Estás seguro de que quieres finalizar esta auditoría?')) return;
             try {
-                const response = await fetch(`${API_URL}/api/audits/${currentAudit.id}/finish`, { 
-                    method: 'PUT', 
+                const response = await fetch(`${API_URL}/api/audits/${currentAudit.id}/finish`, {
+                    method: 'PUT',
                     headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
                 if (response.ok) {
@@ -936,7 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
             scannerContainer.classList.remove('d-none');
             html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start(
-                { facingMode: "environment" }, 
+                { facingMode: "environment" },
                 {
                     fps: 10,
                     qrbox: { width: 250, height: 250 }
@@ -960,7 +976,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('close-scanner-btn')?.addEventListener('click', () => {
             if (html5QrCode) {
-                try { html5QrCode.stop(); } catch(e) { console.error(e); }
+                try { html5QrCode.stop(); } catch (e) { console.error(e); }
             }
             document.getElementById('scanner-container').classList.add('d-none');
         });
