@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', function() {
     // --- Variables Globales y de Entorno ---
     const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com'; 
@@ -81,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         try {
-            const response = await fetch(`${API_URL}/users/me/`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`${API_URL}/api/users/me/`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
                 const user = await response.json();
                 setupUserSession(user, token);
@@ -116,8 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             if (role === 'analista') {
                 const [auditsRes, usersRes] = await Promise.all([
-                    fetch(`${API_URL}/audits/?${queryString}`, { headers }), 
-                    fetch(`${API_URL}/users/`, { headers })
+                    fetch(`${API_URL}/api/audits/?${queryString}`, { headers }), 
+                    fetch(`${API_URL}/api/users/`, { headers })
                 ]);
                 if (auditsRes.ok) {
                     const audits = await auditsRes.json();
@@ -131,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else if (role === 'auditor') {
                 const auditorId = localStorage.getItem('user_id');
-                const auditsRes = await fetch(`${API_URL}/audits/auditor/${auditorId}`, { headers });
+                const auditsRes = await fetch(`${API_URL}/api/audits/auditor/${auditorId}`, { headers });
                 if (auditsRes.ok) {
                     const audits = await auditsRes.json();
                     window._auditorAuditsList = audits;
@@ -139,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     setupAuditorDashboard(audits);
                 }
             } else if (role === 'administrador') {
-                const [auditsRes, usersRes] = await Promise.all([fetch(`${API_URL}/audits/`, { headers }), fetch(`${API_URL}/users/`, { headers })]);
+                const [auditsRes, usersRes] = await Promise.all([fetch(`${API_URL}/api/audits/`, { headers }), fetch(`${API_URL}/api/users/`, { headers })]);
                 if (auditsRes.ok) renderAdminAuditsTable(await auditsRes.json(), '#admin-audits-table-body');
                 if (usersRes.ok) renderUsersTable(await usersRes.json(), '#admin-users-table-body');
             }
@@ -386,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (const file of fileInput.files) formData.append('files', file);
                 try {
                     const token = getToken();
-                    const response = await fetch(`${API_URL}/audits/upload-multiple-files`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+                    const response = await fetch(`${API_URL}/api/audits/upload-multiple-files`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
                     if (response.ok) {
                         const result = await response.json();
                         alert(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`);
@@ -409,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!confirm("¿Iniciar esta auditoría?")) return;
         try {
             const token = getToken();
-            const response = await fetch(`${API_URL}/audits/${auditId}/iniciar`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`${API_URL}/api/audits/${auditId}/iniciar`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
                 alert("Auditoría iniciada.");
                 loadDashboardData('auditor', token);
@@ -425,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const token = getToken();
         if (!token) return alert("No autenticado.");
         try {
-            const response = await fetch(`${API_URL}/audits/${auditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`${API_URL}/api/audits/${auditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
                 currentAudit = await response.json();
                 renderProductsTable(currentAudit.productos);
@@ -537,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function saveProduct(productId, auditId, updateData) {
         try {
             const token = getToken();
-            const response = await fetch(`${API_URL}/audits/${auditId}/products/${productId}`, {
+            const response = await fetch(`${API_URL}/api/audits/${auditId}/products/${productId}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updateData)
@@ -554,7 +553,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!complianceDiv) return;
         try {
             const token = getToken();
-            const response = await fetch(`${API_URL}/audits/${auditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const response = await fetch(`${API_URL}/api/audits/${auditId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
                 const auditData = await response.json();
                 const percentage = auditData.porcentaje_cumplimiento ?? 0;
@@ -568,8 +567,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- WebSockets ---
     function initWebSocket(auditId) { 
+        const token = getToken();
+        if (!token) return;
         const wsUrl = API_URL.replace(/^http/, 'ws');
-        websocket = new WebSocket(`${wsUrl}/ws/${auditId}`);
+        websocket = new WebSocket(`${wsUrl}/api/ws/${auditId}?token=${token}`);
         websocket.onmessage = function(event) {
             const data = JSON.parse(event.data);
             console.log('WebSocket message received:', data);
@@ -589,8 +590,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initGeneralWebSocket() {
+        const token = getToken();
+        if (!token) return;
         const wsUrl = API_URL.replace(/^http/, 'ws');
-        const general_ws = new WebSocket(`${wsUrl}/ws`);
+        const general_ws = new WebSocket(`${wsUrl}/api/ws?token=${token}`);
         general_ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             console.log('General WebSocket message received:', data);
@@ -616,11 +619,11 @@ document.addEventListener('DOMContentLoaded', function() {
             let url, body, headers = { 'Content-Type': 'application/json' };
 
             if (action === 'login-btn') {
-                url = `${API_URL}/auth/login`;
+                url = `${API_URL}/api/auth/login`;
                 body = new URLSearchParams({ username: email, password });
                 headers['Content-Type'] = 'application/x-www-form-urlencoded';
             } else {
-                url = `${API_URL}/auth/register`;
+                url = `${API_URL}/api/auth/register`;
                 body = JSON.stringify({ nombre: document.getElementById('nombre').value, correo: email, contrasena: password, rol: document.getElementById('rol').value });
             }
 
@@ -695,7 +698,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Admin: Edit User
             if (target.matches('.edit-user-btn')) {
                 editingUserId = target.getAttribute('data-user-id');
-                const response = await fetch(`${API_URL}/users/${editingUserId}`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                const response = await fetch(`${API_URL}/api/users/${editingUserId}`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
                 if (response.ok) {
                     const user = await response.json();
                     document.getElementById('new-user-name').value = user.nombre;
@@ -711,7 +714,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (target.matches('.delete-user-btn')) {
                 const userId = target.getAttribute('data-user-id');
                 if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
-                    const response = await fetch(`${API_URL}/users/${userId}`, { 
+                    const response = await fetch(`${API_URL}/api/users/${userId}`, { 
                         method: 'DELETE', 
                         headers: { 'Authorization': `Bearer ${getToken()}` }
                     });
@@ -735,7 +738,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const cleanParams = new URLSearchParams(Object.fromEntries(Object.entries(Object.fromEntries(params)).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')));
             
             try {
-                const response = await fetch(`${API_URL}/audits/report?${cleanParams.toString()}`, { 
+                const response = await fetch(`${API_URL}/api/audits/report?${cleanParams.toString()}`, { 
                     headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
                 if (response.ok) {
@@ -764,7 +767,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const role = document.getElementById('new-user-role').value;
             if (!name || !email || !role) return alert('Por favor, completa nombre, correo y rol.');
 
-            const url = editingUserId ? `${API_URL}/users/${editingUserId}` : `${API_URL}/users/`;
+            const url = editingUserId ? `${API_URL}/api/users/${editingUserId}` : `${API_URL}/api/users/`;
             const method = editingUserId ? 'PUT' : 'POST';
             const body = {
                 nombre: name, 
@@ -803,7 +806,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('finish-audit-btn')?.addEventListener('click', async () => {
             if (!currentAudit || !confirm('¿Estás seguro de que quieres finalizar esta auditoría?')) return;
             try {
-                const response = await fetch(`${API_URL}/audits/${currentAudit.id}/finish`, { 
+                const response = await fetch(`${API_URL}/api/audits/${currentAudit.id}/finish`, { 
                     method: 'PUT', 
                     headers: { 'Authorization': `Bearer ${getToken()}` }
                 });
@@ -827,7 +830,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (panel.classList.contains('d-none')) return;
 
             try {
-                const response = await fetch(`${API_URL}/users/`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                const response = await fetch(`${API_URL}/api/users/`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
                 if (response.ok) {
                     const users = await response.json();
                     const auditorSelect = document.getElementById('collaborative-auditors-select');
@@ -856,7 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectedIds.length === 0) return alert('Selecciona al menos un colaborador.');
 
             try {
-                const response = await fetch(`${API_URL}/audits/${currentAudit.id}/collaborators`, {
+                const response = await fetch(`${API_URL}/api/audits/${currentAudit.id}/collaborators`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                     body: JSON.stringify({ collaborator_ids: selectedIds })

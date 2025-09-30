@@ -24,10 +24,10 @@ app.add_middleware(
 )
 
 # Incluir los routers en la aplicación principal
-app.include_router(auth.router)
-app.include_router(audits.router)
-app.include_router(users.router)
-app.include_router(websockets.router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(audits.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(websockets.router, prefix="/api")
 
 
 # Servir el frontend
