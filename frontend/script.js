@@ -506,15 +506,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.ok) {
                     if (result.access_token) {
                         localStorage.setItem('access_token', result.access_token);
-                        console.log('authForm - Token guardado');
                     }
-                    // Si el login devuelve datos del usuario, los usamos directamente
-                    const user = result.user || { rol: document.getElementById('rol').value, nombre: document.getElementById('nombre').value };
-                    console.log('authForm - Usuario:', user);
                     authModal.hide();
-                    console.log('authForm - Llamando checkAuth');
                     checkAuth();
-                    setupUserSession(user, result.access_token);
                 } else {
                     console.log('authForm - Error:', result.detail);
                     alert(`Error: ${result.detail}`);
