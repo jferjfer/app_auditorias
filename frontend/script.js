@@ -675,6 +675,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Listeners Globales ---
     function setupGlobalListeners() {
+        // Sidebar toggle for mobile
+        const sidebarToggleBtn = document.querySelector('.sidebar-toggle-btn');
+        if (sidebarToggleBtn) {
+            sidebarToggleBtn.addEventListener('click', () => {
+                document.querySelector('.sidebar').classList.toggle('active');
+                document.body.classList.toggle('sidebar-active');
+            });
+        }
+
         // Auth form
         authForm.addEventListener('submit', async (event) => {
             event.preventDefault();
