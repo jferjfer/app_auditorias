@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const API_URL = IS_LOCAL ? 'http://127.0.0.1:8000' : DEPLOYMENT_URL;
     
     const authModal = new bootstrap.Modal(document.getElementById('authModal'));
+    const addUserModal = new bootstrap.Modal(document.getElementById('addUserModal'));
     const authForm = document.getElementById('auth-form');
     const roleMap = {
         analista: 'analyst-dashboard',
@@ -17,6 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentAudit = null;
     let lastFocusedQuantityInput = null; // Para el flujo de escaneo rápido
     let chartInstances = {};
+    let html5QrCode = null;
+    let editingUserId = null; // For admin edit user functionality
 
     // --- Lógica de Inicialización ---
     const splashScreen = document.getElementById('splash-screen');
@@ -28,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('app-container').classList.remove('d-none');
                 initApp();
             }, { once: true });
-        }, 8000);
+        }, 1000); // Reduced splash screen time
     } else {
         initApp();
     }
@@ -59,78 +62,73 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.reload();
     }
 
+    // --- Lógica de Navegación y UI ---
+    function showDashboard(dashboardId) {
+        document.querySelectorAll('.dashboard-section').forEach(section => {
+            section.classList.add('d-none');
+        });
+        const activeDashboard = document.getElementById(dashboardId);
+        if (activeDashboard) {
+            activeDashboard.classList.remove('d-none');
+        }
+    }
+
     // --- Lógica de Autenticación y Carga de Datos ---
     async function checkAuth() {
         const token = getToken();
-        console.log('checkAuth - Token presente:', !!token);
         if (!token) {
-            console.log('checkAuth - No hay token, mostrando modal');
             authModal.show();
             return;
         }
         try {
-            console.log('checkAuth - Enviando request a /users/me/');
             const response = await fetch(`${API_URL}/users/me/`, { headers: { 'Authorization': `Bearer ${token}` } });
-            console.log('checkAuth - Response status:', response.status);
             if (response.ok) {
                 const user = await response.json();
-                console.log('checkAuth - Usuario obtenido:', user);
-                console.log('checkAuth - Mostrando dashboard para rol:', user.rol);
-                localStorage.setItem('user_role', user.rol);
-                localStorage.setItem('user_name', user.nombre);
-                localStorage.setItem('user_id', user.id);
-
-                const dashboardId = roleMap[user.rol];
-                showDashboard(dashboardId);
-                document.getElementById(`${user.rol}-title`).textContent = user.nombre;
-
-                loadDashboardData(user.rol, token);
-
-                if (user.rol === 'analista' || user.rol === 'administrador') {
-                    initGeneralWebSocket();
-                }
                 setupUserSession(user, token);
             } else {
-                console.log('checkAuth - Response no ok, text:', await response.text());
                 clearSession();
             }
         } catch (error) {
-            console.log('checkAuth - Error:', error);
-            console.log('checkAuth - Error message:', error.message);
-            alert('Error en checkAuth: ' + error.message);
+            console.error('Error en checkAuth:', error);
             clearSession();
         }
     }
 
     function setupUserSession(user, token) {
-        // Guardar datos del usuario en localStorage
         localStorage.setItem('user_role', user.rol);
         localStorage.setItem('user_name', user.nombre);
         localStorage.setItem('user_id', user.id);
 
-        // Configurar la UI
         const dashboardId = roleMap[user.rol];
         showDashboard(dashboardId);
         const titleElement = document.getElementById(`${user.rol}-title`);
-        if (titleElement) titleElement.textContent = user.nombre;
+        if (titleElement) titleElement.textContent = `Bienvenido, ${user.nombre}`;
 
-        // Cargar datos y conectar websockets
         loadDashboardData(user.rol, token);
-        if (user.rol === 'analista' || user.rol === 'administrador') initGeneralWebSocket();
+        initGeneralWebSocket();
     }
 
-    async function loadDashboardData(role, token) {
+    async function loadDashboardData(role, token, filters = {}) {
         const headers = { 'Authorization': `Bearer ${token}` };
+        const params = new URLSearchParams(filters);
+        const queryString = params.toString();
+
         try {
             if (role === 'analista') {
-                const [auditsRes, usersRes] = await Promise.all([fetch(`${API_URL}/audits/`, { headers }), fetch(`${API_URL}/users/`, { headers })]);
+                const [auditsRes, usersRes] = await Promise.all([
+                    fetch(`${API_URL}/audits/?${queryString}`, { headers }), 
+                    fetch(`${API_URL}/users/`, { headers })
+                ]);
                 if (auditsRes.ok) {
                     const audits = await auditsRes.json();
                     renderAuditsTable(audits, '#analyst-audits-table-body');
                     renderComplianceChart(audits);
                     renderNoveltiesChart(audits);
                 }
-                if (usersRes.ok) populateAuditorFilter(await usersRes.json());
+                if (usersRes.ok) {
+                    const users = await usersRes.json();
+                    populateAuditorFilter(users);
+                }
             } else if (role === 'auditor') {
                 const auditorId = localStorage.getItem('user_id');
                 const auditsRes = await fetch(`${API_URL}/audits/auditor/${auditorId}`, { headers });
@@ -150,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- Lógica de Renderizado de Tablas ---
+    // --- Lógica de Renderizado de Tablas y Gráficos ---
     function renderAuditsTable(audits, tableSelector) {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
@@ -170,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${audit.auditor?.nombre ?? 'N/A'}</td>
                 <td>${fecha}</td>
                 <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${estadoTexto}</span></td>
-                <td>${audit.productos_count ?? audit.productos.length}</td>
+                <td>${audit.productos_count ?? (audit.productos ? audit.productos.length : 0)}</td>
                 <td>${cumplimiento}</td>
                 <td><a href="#" class="btn btn-sm btn-outline-info view-audit-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</a></td>
             </tr>`;
@@ -196,22 +194,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${audit.auditor?.nombre ?? 'N/A'}</td>
                 <td>${fecha}</td>
                 <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${estadoTexto}</span></td>
-                <td>${audit.productos_count ?? audit.productos.length}</td>
+                <td>${audit.productos_count ?? (audit.productos ? audit.productos.length : 0)}</td>
                 <td><div class="progress" style="height: 20px; background-color: #343a40;"><div class="progress-bar bg-info" role="progressbar" style="width: ${cumplimiento}%;" aria-valuenow="${cumplimiento}">${cumplimiento}%</div></div></td>
-                <td>N/A</td>
+                <td><a href="#" class="btn btn-sm btn-outline-info view-audit-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</a></td>
             </tr>`;
         }).join('');
     }
 
-    function renderAuditorAuditsTable(audits, tableSelector, mostrarFinalizadas = null) {
+    function renderAuditorAuditsTable(audits, tableSelector, mostrarFinalizadas = false) {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
-        let filtradas = audits;
-        if (mostrarFinalizadas === false) filtradas = audits.filter(a => a.estado !== 'finalizada');
-        else if (mostrarFinalizadas === true) filtradas = audits.filter(a => a.estado === 'finalizada');
+        const filtradas = audits.filter(a => mostrarFinalizadas ? a.estado === 'finalizada' : a.estado !== 'finalizada');
         
         if (!filtradas || filtradas.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" class="text-center">No tienes auditorías para mostrar</td></tr>';
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center">No tienes auditorías ${mostrarFinalizadas ? 'finalizadas' : 'activas'}.</td></tr>`;
             return;
         }
         tableBody.innerHTML = filtradas.map(audit => {
@@ -228,7 +224,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${audit.ubicacion_destino}</td>
                 <td>${fecha}</td>
                 <td><span class="badge ${claseEstado}">${textoEstado}</span></td>
-                <td>${audit.estado === 'pendiente' ? `<button class="btn btn-sm btn-primary iniciar-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-play-fill"></i> Iniciar</button>` : `<button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</button>`}</td>
+                <td>
+                    ${audit.estado === 'finalizada' ? '' : '<button class="btn btn-sm btn-primary iniciar-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-play-fill"></i> Iniciar</button>'}
+                    <button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</button>
+                </td>
             </tr>`;
         }).join('');
     }
@@ -268,22 +267,109 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${user.nombre}</td>
                 <td>${user.correo}</td>
                 <td><span class="badge rounded-pill" style="background-color: ${rolColor};">${user.rol}</span></td>
-                <td><button class="btn btn-sm btn-info text-white"><i class="bi bi-pencil-square"></i></button> <button class="btn btn-sm btn-danger"><i class="bi bi-trash"></i></button></td>
+                <td>
+                    <button class="btn btn-sm btn-info text-white edit-user-btn" data-user-id="${user.id}"><i class="bi bi-pencil-square"></i></button> 
+                    <button class="btn btn-sm btn-danger delete-user-btn" data-user-id="${user.id}"><i class="bi bi-trash"></i></button>
+                </td>
             </tr>`;
         }).join('');
+    }
+
+    function populateAuditorFilter(users) {
+        const filter = document.getElementById('filterAuditor');
+        if (!filter) return;
+        const auditors = users.filter(u => u.rol === 'auditor');
+        filter.innerHTML = '<option value="">Todos</option>'; // Reset
+        auditors.forEach(auditor => {
+            const option = document.createElement('option');
+            option.value = auditor.id;
+            option.textContent = auditor.nombre;
+            filter.appendChild(option);
+        });
+    }
+
+    function renderComplianceChart(audits) {
+        const ctx = document.getElementById('complianceChart')?.getContext('2d');
+        if (!ctx) return;
+
+        if (chartInstances.complianceChart) {
+            chartInstances.complianceChart.destroy();
+        }
+
+        const labels = audits.map(a => `Audit #${a.id}`);
+        const data = audits.map(a => a.porcentaje_cumplimiento || 0);
+
+        chartInstances.complianceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '% Cumplimiento',
+                    data: data,
+                    backgroundColor: 'rgba(0, 198, 255, 0.6)',
+                    borderColor: 'rgba(0, 198, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    async function renderNoveltiesChart(audits) {
+        const ctx = document.getElementById('noveltiesChart')?.getContext('2d');
+        if (!ctx) return;
+
+        if (chartInstances.noveltiesChart) {
+            chartInstances.noveltiesChart.destroy();
+        }
+        const noveltyData = { faltante: 0, sobrante: 0, averia: 0 };
+        for (const audit of audits) {
+            if(audit.productos) { 
+                for (const product of audit.productos) {
+                    if (noveltyData.hasOwnProperty(product.novedad)) {
+                        noveltyData[product.novedad]++;
+                    }
+                }
+            }
+        }
+
+        chartInstances.noveltiesChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Faltante', 'Sobrante', 'Avería'],
+                datasets: [{
+                    label: 'Novedades',
+                    data: [noveltyData.faltante, noveltyData.sobrante, noveltyData.averia],
+                    backgroundColor: ['#ffc107', '#fd7e14', '#dc3545'],
+                }]
+            }
+        });
     }
 
     // --- Lógica del Dashboard del Auditor ---
     function setupAuditorDashboard(audits) {
         const btnShow = document.getElementById('show-finished-audits-btn');
         const btnHide = document.getElementById('hide-finished-audits-btn');
-        if (btnShow && !btnShow.dataset.listenerAdded) {
-            btnShow.addEventListener('click', () => renderAuditorAuditsTable(audits, '#auditor-audits-table-body', true));
-            btnShow.dataset.listenerAdded = '1';
+        if (btnShow) {
+            btnShow.addEventListener('click', () => {
+                renderAuditorAuditsTable(window._auditorAuditsList, '#auditor-audits-table-body', true)
+                btnShow.classList.add('d-none');
+                btnHide.classList.remove('d-none');
+            });
         }
-        if (btnHide && !btnHide.dataset.listenerAdded) {
-            btnHide.addEventListener('click', () => renderAuditorAuditsTable(audits, '#auditor-audits-table-body', false));
-            btnHide.dataset.listenerAdded = '1';
+        if (btnHide) {
+            btnHide.addEventListener('click', () => {
+                renderAuditorAuditsTable(window._auditorAuditsList, '#auditor-audits-table-body', false)
+                btnHide.classList.add('d-none');
+                btnShow.classList.remove('d-none');
+            });
         }
         renderAuditorAuditsTable(audits, '#auditor-audits-table-body', false);
 
@@ -480,15 +566,55 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // --- WebSockets ---
+    function initWebSocket(auditId) { 
+        const wsUrl = API_URL.replace(/^http/, 'ws');
+        websocket = new WebSocket(`${wsUrl}/ws/${auditId}`);
+        websocket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log('WebSocket message received:', data);
+            // Example: Update a product row in real-time
+            if (data.type === 'product_updated') {
+                const product = data.product;
+                const row = document.querySelector(`tr[data-product-id="${product.id}"]`);
+                if (row) {
+                    row.querySelector('.physical-count').value = product.cantidad_fisica;
+                    row.querySelector('.novelty-select').value = product.novedad;
+                    row.querySelector('.observations-area').value = product.observaciones;
+                    row.classList.add('table-info');
+                    setTimeout(() => row.classList.remove('table-info'), 2000);
+                }
+            }
+        };
+    }
+
+    function initGeneralWebSocket() {
+        const wsUrl = API_URL.replace(/^http/, 'ws');
+        const general_ws = new WebSocket(`${wsUrl}/ws`);
+        general_ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log('General WebSocket message received:', data);
+            if (data.type === 'new_audit' || data.type === 'audit_updated') {
+                console.log('New or updated audit detected, reloading dashboard data.');
+                const userRole = localStorage.getItem('user_role');
+                if (userRole === 'analista' || userRole === 'administrador') {
+                    loadDashboardData(userRole, getToken());
+                }
+            }
+        };
+    }
+
     // --- Listeners Globales ---
     function setupGlobalListeners() {
+        // Auth form
         authForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             const email = document.getElementById('correo_electronico').value;
             const password = document.getElementById('contrasena').value;
             const action = event.submitter.id;
-            console.log('authForm submit - action:', action, 'email:', email);
+            
             let url, body, headers = { 'Content-Type': 'application/json' };
+
             if (action === 'login-btn') {
                 url = `${API_URL}/auth/login`;
                 body = new URLSearchParams({ username: email, password });
@@ -497,12 +623,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 url = `${API_URL}/auth/register`;
                 body = JSON.stringify({ nombre: document.getElementById('nombre').value, correo: email, contrasena: password, rol: document.getElementById('rol').value });
             }
+
             try {
-                console.log('authForm - Enviando request a:', url);
                 const response = await fetch(url, { method: 'POST', headers, body });
-                console.log('authForm - Response status:', response.status);
                 const result = await response.json();
-                console.log('authForm - Result:', result);
                 if (response.ok) {
                     if (result.access_token && result.user) {
                         localStorage.setItem('access_token', result.access_token);
@@ -514,40 +638,150 @@ document.addEventListener('DOMContentLoaded', function() {
                         checkAuth();
                     }
                 } else {
-                    console.log('authForm - Error:', result.detail);
                     alert(`Error: ${result.detail}`);
                 }
             } catch (error) {
-                console.error('authForm - Error de conexión:', error);
+                console.error('Error de conexión en Auth:', error);
                 alert('Error de conexión.');
             }
         });
 
+        // Logout
         document.querySelector('[data-target="logout"]').addEventListener('click', (e) => {
             e.preventDefault();
             clearSession();
         });
 
-        document.getElementById('download-report-btn')?.addEventListener('click', () => {
+        // Sidebar navigation
+        document.querySelector('.sidebar').addEventListener('click', (e) => {
+            const link = e.target.closest('.dashboard-link');
+            if (link) {
+                e.preventDefault();
+                const targetDashboard = link.getAttribute('data-target');
+                showDashboard(targetDashboard);
+            }
+        });
+
+        // Analyst: Filter form
+        document.querySelector('#analyst-dashboard form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const filters = {
+                status: document.getElementById('filterStatus').value,
+                auditor_id: document.getElementById('filterAuditor').value,
+                date: document.getElementById('filterDate').value
+            };
+            const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos'));
+            loadDashboardData('analista', getToken(), cleanFilters);
+        });
+
+        // Delegated listeners for dynamic content
+        document.body.addEventListener('click', async function(e) {
+            const target = e.target;
+            // Auditor: Iniciar Auditoria
+            if (target.matches('.iniciar-auditoria-btn')) {
+                iniciarAuditoria(target.getAttribute('data-audit-id'));
+            }
+
+            // Auditor: Ver Auditoria
+            if (target.matches('.ver-auditoria-btn')) {
+                verAuditoria(target.getAttribute('data-audit-id'));
+            }
+
+            // Analyst/Admin: View Audit Details
+            if (target.matches('.view-audit-btn')) {
+                verAuditoria(target.getAttribute('data-audit-id')); // Reuse auditor's function
+            }
+
+            // Admin: Edit User
+            if (target.matches('.edit-user-btn')) {
+                editingUserId = target.getAttribute('data-user-id');
+                const response = await fetch(`${API_URL}/users/${editingUserId}`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                if (response.ok) {
+                    const user = await response.json();
+                    document.getElementById('new-user-name').value = user.nombre;
+                    document.getElementById('new-user-email').value = user.correo;
+                    document.getElementById('new-user-role').value = user.rol;
+                    document.getElementById('new-user-password').value = ''; // Clear password
+                    document.getElementById('addUserModalLabel').textContent = 'Editar Usuario';
+                    document.getElementById('confirm-add-user').textContent = 'Actualizar Usuario';
+                    addUserModal.show();
+                }
+            }
+            // Admin: Delete User
+            if (target.matches('.delete-user-btn')) {
+                const userId = target.getAttribute('data-user-id');
+                if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
+                    const response = await fetch(`${API_URL}/users/${userId}`, { 
+                        method: 'DELETE', 
+                        headers: { 'Authorization': `Bearer ${getToken()}` }
+                    });
+                    if (response.ok) {
+                        alert('Usuario eliminado.');
+                        loadDashboardData('administrador', getToken());
+                    } else {
+                        alert(`Error al eliminar usuario: ${(await response.json()).detail}`);
+                    }
+                }
+            }
+        });
+
+        // Analyst: Download Report
+        document.getElementById('download-report-btn')?.addEventListener('click', async () => {
             const params = new URLSearchParams({
                 status: document.getElementById('filterStatus').value,
                 auditor_id: document.getElementById('filterAuditor').value,
                 date: document.getElementById('filterDate').value
             });
-            window.location.href = `${API_URL}/audits/report?${params.toString()}`;
+            const cleanParams = new URLSearchParams(Object.fromEntries(Object.entries(Object.fromEntries(params)).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')));
+            
+            try {
+                const response = await fetch(`${API_URL}/audits/report?${cleanParams.toString()}`, { 
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'reporte_auditorias.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    alert(`Error al descargar el informe: ${(await response.json()).detail}`);
+                }
+            } catch (error) {
+                alert('Error de red al descargar el informe.');
+            }
         });
 
+        // Admin: Add/Edit User Modal
         document.getElementById('confirm-add-user')?.addEventListener('click', async () => {
             const name = document.getElementById('new-user-name').value;
             const email = document.getElementById('new-user-email').value;
             const password = document.getElementById('new-user-password').value;
             const role = document.getElementById('new-user-role').value;
-            if (!name || !email || !password || !role) return alert('Por favor, completa todos los campos.');
+            if (!name || !email || !role) return alert('Por favor, completa nombre, correo y rol.');
+
+            const url = editingUserId ? `${API_URL}/users/${editingUserId}` : `${API_URL}/users/`;
+            const method = editingUserId ? 'PUT' : 'POST';
+            const body = {
+                nombre: name, 
+                correo: email, 
+                rol: role
+            };
+            if (password) body.contrasena = password; // Only include password if changed
+
             try {
-                const response = await fetch(`${API_URL}/users/`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }, body: JSON.stringify({ nombre: name, correo: email, contrasena: password, rol: role }) });
+                const response = await fetch(url, { 
+                    method: method, 
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }, 
+                    body: JSON.stringify(body)
+                });
                 if (response.ok) {
-                    alert('Usuario creado exitosamente.');
-                    bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+                    alert(editingUserId ? 'Usuario actualizado.' : 'Usuario creado.');
+                    addUserModal.hide();
                     loadDashboardData('administrador', getToken());
                 } else {
                     alert(`Error: ${(await response.json()).detail}`);
@@ -555,6 +789,122 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 alert('Error de red.');
             }
+        });
+
+        // Reset modal on close
+        document.getElementById('addUserModal').addEventListener('hidden.bs.modal', function () {
+            editingUserId = null;
+            document.getElementById('addUserModalLabel').textContent = 'Agregar Nuevo Usuario';
+            document.getElementById('confirm-add-user').textContent = 'Agregar Usuario';
+            document.getElementById('add-user-form').reset();
+        });
+
+        // Auditor: Finish Audit
+        document.getElementById('finish-audit-btn')?.addEventListener('click', async () => {
+            if (!currentAudit || !confirm('¿Estás seguro de que quieres finalizar esta auditoría?')) return;
+            try {
+                const response = await fetch(`${API_URL}/audits/${currentAudit.id}/finish`, { 
+                    method: 'PUT', 
+                    headers: { 'Authorization': `Bearer ${getToken()}` }
+                });
+                if (response.ok) {
+                    alert('Auditoría finalizada con éxito.');
+                    loadDashboardData('auditor', getToken());
+                } else {
+                    alert(`Error: ${(await response.json()).detail}`);
+                }
+            } catch (error) {
+                alert('Error de red al finalizar la auditoría.');
+            }
+        });
+
+        // Auditor: Collaborative Audit
+        document.getElementById('collaborative-audit-btn')?.addEventListener('click', async () => {
+            const panel = document.getElementById('collaborative-panel');
+            if (!panel || !currentAudit) return;
+
+            panel.classList.toggle('d-none');
+            if (panel.classList.contains('d-none')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/users/`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                if (response.ok) {
+                    const users = await response.json();
+                    const auditorSelect = document.getElementById('collaborative-auditors-select');
+                    auditorSelect.innerHTML = '';
+                    users.filter(u => u.rol === 'auditor' && u.id !== currentAudit.auditor_id).forEach(user => {
+                        const option = new Option(user.nombre, user.id);
+                        auditorSelect.add(option);
+                    });
+                } else {
+                    alert('Error al cargar la lista de auditores.');
+                }
+            } catch (error) {
+                alert('Error de red al cargar auditores.');
+            }
+        });
+
+        document.getElementById('cancel-collaborative-audit')?.addEventListener('click', () => {
+            document.getElementById('collaborative-panel').classList.add('d-none');
+        });
+
+        document.getElementById('collaborative-audit-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentAudit) return;
+
+            const selectedIds = Array.from(document.getElementById('collaborative-auditors-select').selectedOptions).map(opt => opt.value);
+            if (selectedIds.length === 0) return alert('Selecciona al menos un colaborador.');
+
+            try {
+                const response = await fetch(`${API_URL}/audits/${currentAudit.id}/collaborators`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                    body: JSON.stringify({ collaborator_ids: selectedIds })
+                });
+                if (response.ok) {
+                    alert('Colaboradores añadidos con éxito.');
+                    document.getElementById('collaborative-panel').classList.add('d-none');
+                } else {
+                    alert(`Error al añadir colaboradores: ${(await response.json()).detail}`);
+                }
+            } catch (error) {
+                alert('Error de red al añadir colaboradores.');
+            }
+        });
+
+        // Auditor: Camera Scan
+        document.getElementById('start-camera-scan-btn')?.addEventListener('click', () => {
+            const scannerContainer = document.getElementById('scanner-container');
+            scannerContainer.classList.remove('d-none');
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                (decodedText, decodedResult) => {
+                    document.getElementById('scan-input').value = decodedText;
+                    if (html5QrCode) html5QrCode.stop();
+                    scannerContainer.classList.add('d-none');
+                    // Simulate Enter key press
+                    const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+                    document.getElementById('scan-input').dispatchEvent(enterEvent);
+                },
+                (errorMessage) => {
+                    // console.log("QR Code no match: ", errorMessage);
+                }
+            ).catch(err => {
+                alert("Error al iniciar la cámara. Asegúrate de dar permisos.");
+                console.error(err);
+            });
+        });
+
+        document.getElementById('close-scanner-btn')?.addEventListener('click', () => {
+            if (html5QrCode) {
+                try { html5QrCode.stop(); } catch(e) { console.error(e); }
+            }
+            document.getElementById('scanner-container').classList.add('d-none');
         });
     }
 });
