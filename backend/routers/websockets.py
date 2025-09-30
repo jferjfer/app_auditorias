@@ -7,6 +7,19 @@ from backend.database import SessionLocal
 from backend.services.auth_service import get_user_from_token
 from backend import models
 
+async def send_pings(websocket: WebSocket):
+    """Sends a ping message every 20 seconds to keep the connection alive."""
+    while True:
+        await asyncio.sleep(20)
+        try:
+            # The websockets library handles ping/pong frames automatically.
+            # Sending a custom 'ping' message can help on the application level
+            # and with some proxy/load balancer configurations.
+            await websocket.send_text('{"type": "ping"}')
+        except (WebSocketDisconnect, ConnectionClosed):
+            # Connection is closed, stop the ping task
+            break
+
 router = APIRouter(
     tags=["WebSockets"],
 )

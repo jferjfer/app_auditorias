@@ -123,7 +123,10 @@ async def upload_multiple_audit_files(
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
     payload = {"type": "new_audit", "data": audit_response.dict()}
-    await manager.broadcast_to_all(json.dumps(payload, default=str))
+    try:
+        await manager.broadcast_to_all(json.dumps(payload, default=str))
+    except Exception as e:
+        print(f"Error broadcasting new audit: {e}")
 
     return {
         "message": f"Auditoría creada con {num_orders} orden(es) de traslado.",
@@ -162,7 +165,10 @@ async def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), curren
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
     payload = {"type": "audit_updated", "data": audit_response.dict()}
-    await manager.broadcast_to_all(json.dumps(payload, default=str))
+    try:
+        await manager.broadcast_to_all(json.dumps(payload, default=str))
+    except Exception as e:
+        print(f"Error broadcasting audit update: {e}")
     return db_audit
 
 @router.get("/{audit_id}", response_model=schemas.AuditDetails)
@@ -204,7 +210,10 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
     payload = {"type": "audit_updated", "data": audit_response.dict()}
-    await manager.broadcast_to_all(json.dumps(payload, default=str))
+    try:
+        await manager.broadcast_to_all(json.dumps(payload, default=str))
+    except Exception as e:
+        print(f"Error broadcasting audit finish: {e}")
     return db_audit
 
 @router.post("/{audit_id}/collaborators", status_code=status.HTTP_200_OK)
