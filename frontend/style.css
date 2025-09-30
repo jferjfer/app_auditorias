@@ -319,7 +319,7 @@ body::before {
     position: fixed;
     top: 15px;
     left: 15px;
-    z-index: 1001; /* Encima del contenido pero debajo del sidebar abierto */
+    z-index: 1051; /* Encima del sidebar abierto */
     background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
     border: 1px solid var(--border-color);
     color: var(--text-light);

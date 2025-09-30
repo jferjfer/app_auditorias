@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let websocket = null;
     let currentAudit = null;
     let lastFocusedQuantityInput = null; // Para el flujo de escaneo rápido
+    let lastScannedSku = null;
     let chartInstances = {};
     let html5QrCode = null;
     let editingUserId = null; // For admin edit user functionality
@@ -413,13 +414,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const token = getToken();
             const response = await fetch(`${API_URL}/api/audits/${auditId}/iniciar`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
             if (response.ok) {
-                alert("Auditoría iniciada.");
                 loadDashboardData('auditor', token);
             } else {
-                alert(`Error: ${(await response.json()).detail}`);
+                alert(`Error al iniciar auditoría: ${(await response.json()).detail}`);
             }
         } catch (error) {
-            alert("Error de red.");
+            alert("Error de red al iniciar auditoría.");
         }
     }
 
@@ -496,38 +496,39 @@ document.addEventListener('DOMContentLoaded', function() {
             const scannedSku = newScanInput.value.trim();
             newScanInput.value = ''; // Clear input immediately
 
-            // Case 1: Re-scanning the currently focused item's SKU to confirm quantity.
-            if (scannedSku && lastFocusedQuantityInput && lastFocusedQuantityInput.closest('tr').dataset.sku === scannedSku) {
-                const row = lastFocusedQuantityInput.closest('tr');
-                const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10) || 0;
+            // Tarea 2: Logica de doble escaneo
+            if (scannedSku && scannedSku === lastScannedSku) {
+                const row = document.querySelector(`#auditor-products-table-body tr[data-sku="${scannedSku}"]`);
+                if (row) {
+                    const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10) || 0;
+                    const physicalCountInput = row.querySelector('.physical-count');
+                    physicalCountInput.value = docQuantity;
 
-                lastFocusedQuantityInput.value = docQuantity;
-
-                const productId = row.getAttribute('data-product-id');
-                if (!productId || !currentAudit) return;
-
-                const updateData = {
-                    cantidad_fisica: docQuantity,
-                    novedad: 'sin_novedad',
-                    observaciones: row.querySelector('.observations-area').value || ''
-                };
-
-                const saved = await saveProduct(productId, currentAudit.id, updateData);
-
-                if (saved) {
-                    lastFocusedQuantityInput.classList.add('saved-success');
-                    setTimeout(() => lastFocusedQuantityInput.classList.remove('saved-success'), 1000);
-                    await updateCompliancePercentage(currentAudit.id);
-                    lastFocusedQuantityInput = null;
-                    newScanInput.focus();
-                } else {
-                    lastFocusedQuantityInput.classList.add('saved-error');
-                    speak("Error al guardar");
+                    const productId = row.getAttribute('data-product-id');
+                    if (productId && currentAudit) {
+                        const updateData = {
+                            cantidad_fisica: docQuantity,
+                            novedad: 'sin_novedad',
+                            observaciones: row.querySelector('.observations-area').value || ''
+                        };
+                        const saved = await saveProduct(productId, currentAudit.id, updateData);
+                        if (saved) {
+                            physicalCountInput.classList.add('saved-success');
+                            setTimeout(() => physicalCountInput.classList.remove('saved-success'), 1000);
+                            await updateCompliancePercentage(currentAudit.id);
+                            newScanInput.focus();
+                        } else {
+                            physicalCountInput.classList.add('saved-error');
+                            speak("Error al guardar");
+                        }
+                    }
                 }
-                return; // End of this action
+                lastScannedSku = null; // Reset for next scan
+                lastFocusedQuantityInput = null;
+                return;
             }
 
-            // Case 2: A new SKU is scanned, and the previous item's quantity is empty. Auto-save it.
+            // Preserve auto-save from original logic (Case 2)
             if (lastFocusedQuantityInput && lastFocusedQuantityInput.value.trim() === '') {
                 const prevRow = lastFocusedQuantityInput.closest('tr');
                 const productId = prevRow.getAttribute('data-product-id');
@@ -541,9 +542,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         novedad: 'sin_novedad',
                         observaciones: ''
                     };
-
                     const saved = await saveProduct(productId, currentAudit.id, updateData);
-
                     if (saved) {
                         lastFocusedQuantityInput.classList.add('saved-success');
                         setTimeout(() => lastFocusedQuantityInput.classList.remove('saved-success'), 1000);
@@ -551,14 +550,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         lastFocusedQuantityInput.classList.add('saved-error');
                         speak("Error al guardar el producto anterior");
+                        // Do not proceed if saving previous failed
+                        lastScannedSku = null;
                         return;
                     }
                 }
             }
 
-            // Case 3: Normal scan for a new product.
+            // Normal scan logic (Case 3 from original)
             if (!scannedSku) {
                 lastFocusedQuantityInput = null;
+                lastScannedSku = null;
                 return;
             }
 
@@ -574,9 +576,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 physicalCountInput.select();
 
                 lastFocusedQuantityInput = physicalCountInput;
+                lastScannedSku = scannedSku; // Set for next scan
             } else {
                 speak("SKU no encontrado");
                 lastFocusedQuantityInput = null;
+                lastScannedSku = null;
             }
         });
     }
