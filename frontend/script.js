@@ -504,11 +504,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await response.json();
                 console.log('authForm - Result:', result);
                 if (response.ok) {
-                    if (result.access_token) {
+                    if (result.access_token && result.user) {
                         localStorage.setItem('access_token', result.access_token);
+                        authModal.hide();
+                        setupUserSession(result.user, result.access_token);
+                    } else if (result.access_token) { // Fallback for register
+                        localStorage.setItem('access_token', result.access_token);
+                        authModal.hide();
+                        checkAuth();
                     }
-                    authModal.hide();
-                    checkAuth();
                 } else {
                     console.log('authForm - Error:', result.detail);
                     alert(`Error: ${result.detail}`);
