@@ -21,6 +21,13 @@ class UserCreate(UserBase):
     contrasena: str
 
 
+class UserUpdate(BaseModel):
+    nombre: Optional[str] = None
+    correo: Optional[EmailStr] = None
+    rol: Optional[str] = None
+    contrasena: Optional[str] = None
+
+
 
 
 # --- Esquemas para Auditorías ---

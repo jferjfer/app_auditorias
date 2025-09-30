@@ -38,6 +38,35 @@ def get_auditors(db: Session) -> List[models.User]:
     """Devuelve todos los usuarios con rol 'auditor'."""
     return db.query(models.User).filter(models.User.rol == "auditor").all()
 
+def update_user(db: Session, user_id: int, user_update: schemas.UserUpdate):
+    """Actualiza un usuario existente."""
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return None
+
+    update_data = user_update.dict(exclude_unset=True)
+    
+    if "contrasena" in update_data and update_data["contrasena"]:
+        hashed_password = pwd_context.hash(update_data["contrasena"])
+        db_user.contrasena_hash = hashed_password
+        del update_data["contrasena"]
+
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def delete_user(db: Session, user_id: int):
+    """Elimina un usuario."""
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return None
+    db.delete(db_user)
+    db.commit()
+    return db_user
+
 # --- Funciones para Auditorías ---
 def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     """Crea una nueva auditoría y sus productos asociados."""
