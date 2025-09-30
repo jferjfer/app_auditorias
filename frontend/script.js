@@ -239,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         tableBody.innerHTML = products.map(product => `
-            <tr data-product-id="${product.id || product.product_id}">
+            <tr data-product-id="${product.id || product.product_id}" data-sku="${product.sku}">
                 <td data-sku="${product.sku}">${product.sku}</td>
                 <td><strong>${product.orden_traslado_original || 'SIN_OT'}</strong></td>
                 <td>${product.nombre_articulo ?? '--'}</td>
@@ -456,29 +456,81 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupScanInput() {
         const scanInput = document.getElementById('scan-input');
         if (!scanInput) return;
+        
         const newScanInput = scanInput.cloneNode(true);
         scanInput.parentNode.replaceChild(newScanInput, scanInput);
 
         newScanInput.addEventListener('keydown', async (e) => {
             if (e.key !== 'Enter') return;
             e.preventDefault();
-            const scannedSku = newScanInput.value.trim();
-            newScanInput.value = '';
-            if (!scannedSku) return;
 
-            if (lastFocusedQuantityInput && lastFocusedQuantityInput.value.trim() === '') {
-                const prevRow = lastFocusedQuantityInput.closest('tr');
-                const docQuantityCell = prevRow.querySelector('.doc-quantity');
-                const docQuantity = parseInt(docQuantityCell.textContent) || 0;
+            const scannedSku = newScanInput.value.trim();
+            newScanInput.value = ''; // Clear input immediately
+
+            // Case 1: Re-scanning the currently focused item's SKU to confirm quantity.
+            if (scannedSku && lastFocusedQuantityInput && lastFocusedQuantityInput.closest('tr').dataset.sku === scannedSku) {
+                const row = lastFocusedQuantityInput.closest('tr');
+                const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10) || 0;
+                
                 lastFocusedQuantityInput.value = docQuantity;
-                const productId = prevRow.getAttribute('data-product-id');
-                const updateData = { cantidad_fisica: docQuantity, novedad: 'sin_novedad', observaciones: '' };
+
+                const productId = row.getAttribute('data-product-id');
+                if (!productId || !currentAudit) return;
+
+                const updateData = {
+                    cantidad_fisica: docQuantity,
+                    novedad: 'sin_novedad',
+                    observaciones: row.querySelector('.observations-area').value || ''
+                };
+
                 const saved = await saveProduct(productId, currentAudit.id, updateData);
-                if(saved) {
+                
+                if (saved) {
                     lastFocusedQuantityInput.classList.add('saved-success');
                     setTimeout(() => lastFocusedQuantityInput.classList.remove('saved-success'), 1000);
                     await updateCompliancePercentage(currentAudit.id);
+                    lastFocusedQuantityInput = null;
+                    newScanInput.focus();
+                } else {
+                    lastFocusedQuantityInput.classList.add('saved-error');
+                    speak("Error al guardar");
                 }
+                return; // End of this action
+            }
+
+            // Case 2: A new SKU is scanned, and the previous item's quantity is empty. Auto-save it.
+            if (lastFocusedQuantityInput && lastFocusedQuantityInput.value.trim() === '') {
+                const prevRow = lastFocusedQuantityInput.closest('tr');
+                const productId = prevRow.getAttribute('data-product-id');
+
+                if (productId && currentAudit) {
+                    const docQuantity = parseInt(prevRow.querySelector('.doc-quantity').textContent, 10) || 0;
+                    lastFocusedQuantityInput.value = docQuantity;
+
+                    const updateData = { 
+                        cantidad_fisica: docQuantity, 
+                        novedad: 'sin_novedad', 
+                        observaciones: '' 
+                    };
+
+                    const saved = await saveProduct(productId, currentAudit.id, updateData);
+
+                    if (saved) {
+                        lastFocusedQuantityInput.classList.add('saved-success');
+                        setTimeout(() => lastFocusedQuantityInput.classList.remove('saved-success'), 1000);
+                        await updateCompliancePercentage(currentAudit.id);
+                    } else {
+                        lastFocusedQuantityInput.classList.add('saved-error');
+                        speak("Error al guardar el producto anterior");
+                        return; 
+                    }
+                }
+            }
+            
+            // Case 3: Normal scan for a new product.
+            if (!scannedSku) {
+                lastFocusedQuantityInput = null;
+                return;
             }
 
             const skuCell = document.querySelector(`#auditor-products-table-body td[data-sku="${scannedSku}"]`);
@@ -486,9 +538,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const targetRow = skuCell.closest('tr');
                 const physicalCountInput = targetRow.querySelector('.physical-count');
                 const docQuantity = targetRow.querySelector('.doc-quantity').textContent.trim();
+                
                 speak(`Cantidad esperada: ${docQuantity}`);
+                
                 physicalCountInput.focus();
                 physicalCountInput.select();
+                
                 lastFocusedQuantityInput = physicalCountInput;
             } else {
                 speak("SKU no encontrado");
