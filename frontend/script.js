@@ -218,14 +218,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'finalizada': claseEstado = 'estado-completada'; textoEstado = 'Finalizada'; break;
                 default: claseEstado = 'bg-secondary'; textoEstado = audit.estado;
             }
+            const buttons = {
+                'pendiente': `<button class="btn btn-sm btn-primary iniciar-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-play-fill"></i> Iniciar</button>`,
+                'en_progreso': `<button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</button>`,
+                'finalizada': `<button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</button>`
+            };
             return `<tr data-audit-id="${audit.id}">
                 <td>${audit.id}</td>
                 <td>${audit.ubicacion_destino}</td>
                 <td>${fecha}</td>
                 <td><span class="badge ${claseEstado}">${textoEstado}</span></td>
                 <td>
-                    ${audit.estado === 'finalizada' ? '' : '<button class="btn btn-sm btn-primary iniciar-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-play-fill"></i> Iniciar</button>'}
-                    <button class="btn btn-sm btn-info ver-auditoria-btn" data-audit-id="${audit.id}"><i class="bi bi-eye"></i> Ver</button>
+                    ${buttons[audit.estado] || ''}
                 </td>
             </tr>`;
         }).join('');
@@ -405,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function iniciarAuditoria(auditId) {
-        if (!confirm("¿Iniciar esta auditoría?")) return;
         try {
             const token = getToken();
             const response = await fetch(`${API_URL}/api/audits/${auditId}/iniciar`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
@@ -429,13 +432,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentAudit = await response.json();
                 renderProductsTable(currentAudit.productos);
                 initWebSocket(auditId);
-                ['save-all-btn', 'finish-audit-btn', 'collaborative-audit-btn'].forEach(id => document.getElementById(id).classList.remove('d-none'));
 
-                setupScanInput();
-                setupAutoSaveOnEnter();
+                if (currentAudit.estado === 'finalizada') {
+                    // Modo solo lectura para auditorías finalizadas
+                    document.querySelectorAll('#auditor-products-table-body input, #auditor-products-table-body select, #auditor-products-table-body textarea, #auditor-products-table-body button').forEach(el => {
+                        el.disabled = true;
+                    });
+                    ['save-all-btn', 'finish-audit-btn', 'collaborative-audit-btn'].forEach(id => {
+                        const btn = document.getElementById(id);
+                        if (btn) btn.classList.add('d-none');
+                    });
+                    const scanInput = document.getElementById('scan-input');
+                    if(scanInput) scanInput.disabled = true;
+                    const cameraBtn = document.getElementById('start-camera-scan-btn');
+                    if(cameraBtn) cameraBtn.disabled = true;
+
+                } else {
+                    // Modo editable para auditorías activas
+                    ['save-all-btn', 'finish-audit-btn', 'collaborative-audit-btn'].forEach(id => {
+                        const btn = document.getElementById(id);
+                        if (btn) btn.classList.remove('d-none');
+                    });
+                    const scanInput = document.getElementById('scan-input');
+                    if(scanInput) scanInput.disabled = false;
+                    const cameraBtn = document.getElementById('start-camera-scan-btn');
+                    if(cameraBtn) cameraBtn.disabled = false;
+                    
+                    setupScanInput();
+                    setupAutoSaveOnEnter();
+                    document.getElementById('scan-input')?.focus();
+                }
+
                 updateCompliancePercentage(auditId);
 
-                document.getElementById('scan-input')?.focus();
             } else {
                 alert(`Error: ${(await response.json()).detail}`);
             }
