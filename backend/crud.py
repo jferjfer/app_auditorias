@@ -113,14 +113,10 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
 
 def get_audits_by_auditor(db: Session, auditor_id: int):
     """Obtiene todas las auditorías donde el usuario es propietario O colaborador."""
-    owned_audits = db.query(models.Audit).filter(models.Audit.auditor_id == auditor_id)
-    
-    collaborative_audits = db.query(models.Audit).join(
-        models.audit_collaborators
-    ).filter(models.audit_collaborators.c.user_id == auditor_id)
-    
-    # Unir los dos queries y eliminar duplicados si los hubiera
-    return owned_audits.union(collaborative_audits).all()
+    return db.query(models.Audit).filter(
+        (models.Audit.auditor_id == auditor_id) |
+        (models.Audit.collaborators.any(models.User.id == auditor_id))
+    ).all()
 
 def get_products_by_audit(db: Session, audit_id: int):
     """Obtiene todos los productos de una auditoría."""
