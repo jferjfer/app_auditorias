@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const queryString = params.toString();
                 const [auditsRes, usersRes] = await Promise.all([
                     fetch(`${API_URL}/api/audits/?${queryString}`, { headers }),
-                    fetch(`${API_URL}/api/users/`, { headers })
+                    fetch(`${API_URL}/api/users/auditors/`, { headers })
                 ]);
                 if (auditsRes.ok) {
                     const audits = await auditsRes.json();
@@ -184,14 +184,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const tableBody = document.querySelector(tableSelector);
         if (!tableBody) return;
         if (!audits || audits.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="3" class="text-center">No hay auditorías para el día de hoy.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center">No hay auditorías para el día de hoy.</td></tr>`;
             return;
         }
         tableBody.innerHTML = audits.map(audit => {
             const cumplimiento = audit.porcentaje_cumplimiento !== null ? Math.round(audit.porcentaje_cumplimiento) : 0;
+            let estadoTexto, estadoColor;
+            switch (audit.estado) {
+                case 'pendiente': estadoTexto = 'Pendiente'; estadoColor = '#ffc107'; break;
+                case 'en_progreso': estadoTexto = 'En Progreso'; estadoColor = '#0dcaf0'; break;
+                case 'finalizada': estadoTexto = 'Finalizada'; estadoColor = '#198754'; break;
+                default: estadoTexto = audit.estado; estadoColor = '#6c757d';
+            }
             return `<tr data-audit-id="${audit.id}">
                 <td>${audit.ubicacion_destino}</td>
                 <td>${audit.auditor?.nombre ?? 'N/A'}</td>
+                <td><span class="badge rounded-pill" style="background-color: ${estadoColor};">${estadoTexto}</span></td>
                 <td>
                     <div class="progress" style="height: 20px; background-color: #343a40;">
                         <div class="progress-bar bg-info" role="progressbar" style="width: ${cumplimiento}%;" aria-valuenow="${cumplimiento}">${cumplimiento}%</div>
@@ -741,10 +749,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.ok) {
                     if (result.access_token && result.user) {
                         localStorage.setItem('access_token', result.access_token);
+                        if (document.activeElement) document.activeElement.blur();
                         authModal.hide();
                         setupUserSession(result.user, result.access_token);
                     } else if (result.access_token) { // Fallback for register
                         localStorage.setItem('access_token', result.access_token);
+                        if (document.activeElement) document.activeElement.blur();
                         authModal.hide();
                         checkAuth();
                     }
@@ -934,6 +944,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        // Auditor: Save All Products
+        document.getElementById('save-all-btn')?.addEventListener('click', async () => {
+            if (!currentAudit) return;
+            const saveBtn = document.getElementById('save-all-btn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+
+            const productRows = document.querySelectorAll('#auditor-products-table-body tr');
+            let allSaved = true;
+
+            for (const row of productRows) {
+                const productId = row.getAttribute('data-product-id');
+                if (!productId) continue;
+
+                const updateData = {
+                    cantidad_fisica: parseInt(row.querySelector('.physical-count').value) || null,
+                    novedad: row.querySelector('.novelty-select').value || 'sin_novedad',
+                    observaciones: row.querySelector('.observations-area').value || ''
+                };
+
+                // Solo guardar si la cantidad física tiene un valor
+                if (updateData.cantidad_fisica !== null) {
+                    const result = await saveProduct(productId, currentAudit.id, updateData);
+                    if (!result) {
+                        allSaved = false;
+                        row.classList.add('saved-error');
+                    } else {
+                        row.classList.remove('saved-error');
+                        row.classList.add('saved-success');
+                    }
+                }
+            }
+
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-save"></i> Guardar Auditoría';
+
+            if (allSaved) {
+                alert('Todos los cambios han sido guardados.');
+                // Quitar el resaltado de éxito después de un momento
+                setTimeout(() => {
+                    document.querySelectorAll('#auditor-products-table-body tr.saved-success').forEach(row => {
+                        row.classList.remove('saved-success');
+                    });
+                }, 2000);
+            } else {
+                alert('Algunos productos no se pudieron guardar. Revisa los elementos marcados en rojo.');
+            }
+        });
+
         // Auditor: Collaborative Audit
         document.getElementById('collaborative-audit-btn')?.addEventListener('click', async () => {
             const panel = document.getElementById('collaborative-panel');
@@ -943,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (panel.classList.contains('d-none')) return;
 
             try {
-                const response = await fetch(`${API_URL}/api/users/`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
+                const response = await fetch(`${API_URL}/api/users/auditors/`, { headers: { 'Authorization': `Bearer ${getToken()}` } });
                 if (response.ok) {
                     const users = await response.json();
                     const auditorSelect = document.getElementById('collaborative-auditors-select');

@@ -188,6 +188,10 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
     if not updated_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
+    # Recalculate percentage and get updated audit
+    updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
+
+    # Broadcast product update to the specific audit room
     try:
         product_for_broadcast = schemas.Product.from_orm(updated_product).dict()
         payload = {
@@ -197,6 +201,15 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
         await manager.broadcast(json.dumps(payload), audit_id=audit_id)
     except Exception as e:
         print(f"Error broadcasting product update for audit {audit_id}: {e}")
+
+    # Broadcast the general audit update to everyone
+    if updated_audit:
+        try:
+            audit_response = schemas.AuditResponse.from_orm(updated_audit)
+            payload = {"type": "audit_updated", "data": audit_response.dict()}
+            await manager.broadcast_to_all(json.dumps(payload, default=str))
+        except Exception as e:
+            print(f"Error broadcasting audit update: {e}")
 
     return {"message": "Producto actualizado", "product": updated_product}
 

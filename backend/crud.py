@@ -113,7 +113,7 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
 
 def get_audits_by_auditor(db: Session, auditor_id: int):
     """Obtiene todas las auditorías donde el usuario es propietario O colaborador."""
-    return db.query(models.Audit).filter(
+    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
         models.Audit.auditor_id.isnot(None),
         (
             (models.Audit.auditor_id == auditor_id) |
@@ -135,6 +135,32 @@ def update_product(db: Session, product_id: int, product_data: dict):
     db.commit()
     db.refresh(db_product)
     return db_product
+
+def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
+    """Recalcula y actualiza el porcentaje de cumplimiento de una auditoría."""
+    db_audit = get_audit_by_id(db, audit_id)
+    if not db_audit:
+        return None
+
+    products = get_products_by_audit(db, audit_id=audit_id)
+    
+    # Contar solo los productos que han sido auditados (cantidad_fisica no es None)
+    productos_auditados = [p for p in products if p.cantidad_fisica is not None]
+    total_auditados = len(productos_auditados)
+
+    if total_auditados > 0:
+        # El cumplimiento se basa en los productos auditados
+        correctos = sum(1 for p in productos_auditados if p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
+        cumplimiento = round((correctos / total_auditados) * 100)
+    else:
+        # Si no se ha auditado ningún producto, el cumplimiento es 0
+        cumplimiento = 0
+    
+    db_audit.porcentaje_cumplimiento = cumplimiento
+    db.commit()
+    db.refresh(db_audit)
+    return db_audit
+
 
 def finish_audit(db: Session, audit_id: int):
     """Marca una auditoría como finalizada."""
