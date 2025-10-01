@@ -1,0 +1,13 @@
+feat: Implement real-time audit updates and fix bugs
+
+This commit introduces several features and bug fixes to improve the functionality and user experience of the application.
+
+Features:
+- The audit completion percentage is now updated in real-time whenever a product is updated.
+- The admin dashboard now displays the status of each audit.
+- A "Save All" button has been added to the auditor dashboard to save all product changes at once.
+
+Fixes:
+- Fixed a 500 error on the `/api/audits/auditor/{auditor_id}` endpoint by eagerly loading the auditor relationship.
+- Fixed a 403 error for the 'analista' role by pointing the user fetch to the correct `/api/users/auditors/` endpoint.
+- Fixed a console accessibility warning related to the authentication modal.
