@@ -93,7 +93,7 @@ def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
 
 def get_audits(db: Session) -> List[models.Audit]:
     """Obtiene todas las auditorías."""
-    return db.query(models.Audit).all()
+    return db.query(models.Audit).filter(models.Audit.auditor_id.isnot(None)).all()
 
 def get_audit_by_id(db: Session, audit_id: int):
     """Obtiene una auditoría por su ID, incluyendo sus productos."""
@@ -114,8 +114,11 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
 def get_audits_by_auditor(db: Session, auditor_id: int):
     """Obtiene todas las auditorías donde el usuario es propietario O colaborador."""
     return db.query(models.Audit).filter(
-        (models.Audit.auditor_id == auditor_id) |
-        (models.Audit.collaborators.any(models.User.id == auditor_id))
+        models.Audit.auditor_id.isnot(None),
+        (
+            (models.Audit.auditor_id == auditor_id) |
+            (models.Audit.collaborators.any(models.User.id == auditor_id))
+        )
     ).all()
 
 def get_products_by_audit(db: Session, audit_id: int):
@@ -165,7 +168,7 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     """
     Obtiene todas las auditorías con filtros opcionales.
     """
-    query = db.query(models.Audit).options(joinedload(models.Audit.auditor), joinedload(models.Audit.productos))
+    query = db.query(models.Audit).options(joinedload(models.Audit.auditor), joinedload(models.Audit.productos)).filter(models.Audit.auditor_id.isnot(None))
 
     if status and status != "Todos":
         query = query.filter(models.Audit.estado == status)
@@ -188,4 +191,7 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
     No se carga la lista de productos para mayor eficiencia.
     """
     today = datetime.now().date()
-    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(func.date(models.Audit.creada_en) == today).all()
+    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+        models.Audit.auditor_id.isnot(None),
+        func.date(models.Audit.creada_en) == today
+    ).all()
