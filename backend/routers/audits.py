@@ -187,7 +187,17 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
     updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
     if not updated_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    
+
+    try:
+        product_for_broadcast = schemas.Product.from_orm(updated_product).dict()
+        payload = {
+            "type": "product_updated",
+            "product": product_for_broadcast
+        }
+        await manager.broadcast(json.dumps(payload), audit_id=audit_id)
+    except Exception as e:
+        print(f"Error broadcasting product update for audit {audit_id}: {e}")
+
     return {"message": "Producto actualizado", "product": updated_product}
 
 @router.put("/{audit_id}/finish", response_model=schemas.Audit)
