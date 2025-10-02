@@ -3,7 +3,7 @@ import { checkAuth, handleAuthFormSubmit, clearSession, getToken } from './auth.
 import { state, setEditingUserId, setCurrentAudit, setHtml5QrCode } from './state.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
-import { initWebSocket } from './websockets.js';
+import { initGeneralWebSocket } from './websockets.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
@@ -25,7 +25,7 @@ function initUserDashboard(user, token) {
     if (user && user.rol && token) {
         ui.loadDashboardData(user.rol, token);
         // Inicializa la conexión WebSocket general para notificaciones
-        initWebSocket(token); 
+        initGeneralWebSocket(ui.loadDashboardData); 
     } else {
         console.error("No se pudo inicializar el dashboard: usuario, rol o token no válidos.", { user, token });
     }

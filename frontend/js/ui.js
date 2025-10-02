@@ -227,10 +227,16 @@ function populateAuditorFilter(users) {
 }
 
 function renderComplianceChart(audits) {
-    const ctx = document.getElementById('complianceChart')?.getContext('2d');
+    const canvasId = 'complianceChart';
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
     if (!ctx) return;
 
-    setChartInstance('complianceChart', new Chart(ctx, {
+    const existingChart = Chart.getChart(canvasId);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+
+    setChartInstance(canvasId, new Chart(ctx, {
         type: 'bar',
         data: {
             labels: audits.map(a => `Audit #${a.id}`),
@@ -254,8 +260,14 @@ function renderComplianceChart(audits) {
 }
 
 async function renderNoveltiesChart(audits) {
-    const ctx = document.getElementById('noveltiesChart')?.getContext('2d');
+    const canvasId = 'noveltiesChart';
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
     if (!ctx) return;
+
+    const existingChart = Chart.getChart(canvasId);
+    if (existingChart) {
+        existingChart.destroy();
+    }
 
     const noveltyData = { faltante: 0, sobrante: 0, averia: 0 };
     for (const audit of audits) {
@@ -268,7 +280,7 @@ async function renderNoveltiesChart(audits) {
         }
     }
 
-    setChartInstance('noveltiesChart', new Chart(ctx, {
+    setChartInstance(canvasId, new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: ['Faltante', 'Sobrante', 'Avería'],
