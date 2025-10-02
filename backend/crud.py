@@ -137,25 +137,23 @@ def update_product(db: Session, product_id: int, product_data: dict):
     return db_product
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
-    """Recalcula y actualiza el porcentaje de cumplimiento de una auditoría."""
+    """Recalcula y actualiza el porcentaje de cumplimiento de una auditoría de forma progresiva."""
     db_audit = get_audit_by_id(db, audit_id)
     if not db_audit:
         return None
 
     products = get_products_by_audit(db, audit_id=audit_id)
-    
-    # Contar solo los productos que han sido auditados (cantidad_fisica no es None)
-    productos_auditados = [p for p in products if p.cantidad_fisica is not None]
-    total_auditados = len(productos_auditados)
+    total_productos = len(products)
 
-    if total_auditados > 0:
-        # El cumplimiento se basa en los productos auditados
-        correctos = sum(1 for p in productos_auditados if p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
-        cumplimiento = round((correctos / total_auditados) * 100)
-    else:
-        # Si no se ha auditado ningún producto, el cumplimiento es 0
+    if total_productos == 0:
         cumplimiento = 0
-    
+    else:
+        # Contar productos correctos (auditados, cantidad correcta y sin novedad)
+        correctos = sum(1 for p in products if p.cantidad_fisica is not None and p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
+        
+        # El cumplimiento se basa en el total de productos de la auditoría
+        cumplimiento = round((correctos / total_productos) * 100)
+
     db_audit.porcentaje_cumplimiento = cumplimiento
     db.commit()
     db.refresh(db_audit)

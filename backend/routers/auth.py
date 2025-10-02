@@ -16,21 +16,7 @@ router = APIRouter(
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
-@router.post("/register", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """
-    Registra un nuevo usuario en el sistema.
-    """
-    db_user = crud.get_user_by_email(db, email=user.correo)
-    if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="El correo electrónico ya está registrado."
-        )
 
-    hashed_password = get_password_hash(user.contrasena)
-    new_user = crud.create_user(db=db, user=user, hashed_password=hashed_password)
-    return new_user
 
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(

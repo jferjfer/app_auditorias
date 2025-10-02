@@ -225,7 +225,7 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
         correctos = sum(1 for p in products if p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
         cumplimiento = round((correctos / total_productos) * 100)
     else:
-        cumplimiento = 100
+        cumplimiento = 0
     
     db_audit.estado = "finalizada"
     db_audit.porcentaje_cumplimiento = cumplimiento
