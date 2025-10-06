@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Table
+import enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Table, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -61,6 +62,15 @@ class Audit(Base):
     archivos = relationship("File", back_populates="auditoria")
 
 # La tabla "productos_auditados" del script SQL
+class NovedadEnum(str, enum.Enum):
+    sin_novedad = "sin_novedad"
+    sobrante = "sobrante"
+    faltante = "faltante"
+    averia = "averia"
+    fecha_corta = "fecha_corta"
+    contaminado = "contaminado"
+    vencido = "vencido"
+
 class Product(Base):
     __tablename__ = "productos_auditados"
 
@@ -71,7 +81,7 @@ class Product(Base):
     cantidad_documento = Column(Integer, nullable=False)
     cantidad_enviada = Column(Integer, nullable=False)
     cantidad_fisica = Column(Integer)
-    novedad = Column(String, default="sin_novedad")
+    novedad = Column(Enum(NovedadEnum), default=NovedadEnum.sin_novedad, nullable=False)
     observaciones = Column(String, nullable=True)
     orden_traslado_original = Column(String)
     registrado_en = Column(DateTime, default=datetime.utcnow)
