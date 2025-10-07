@@ -1,5 +1,5 @@
 
-import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setLastScannedSku, setHtml5QrCode } from './state.js';
+import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setAnalystAudits, setHtml5QrCode } from './state.js';
 import * as api from './api.js';
 import { getToken } from './auth.js';
 import { initWebSocket } from './websockets.js';
@@ -58,10 +58,12 @@ export async function loadDashboardData(role, token, filters = {}) {
                 api.fetchAudits(filters),
                 api.fetchAuditors()
             ]);
+            setAnalystAudits(audits); // Guardar en el estado
             renderAuditsTable(audits, '#analyst-audits-table-body');
             renderComplianceChart(audits);
             renderNoveltiesChart(audits);
             populateAuditorFilter(users);
+            setupAnalystDashboardListeners(filters); // Activar listeners
         } else if (role === 'auditor') {
             const auditorId = localStorage.getItem('user_id');
             const audits = await api.fetchAuditsByAuditor(auditorId);
@@ -347,43 +349,41 @@ async function handleSkuScan(sku) {
         return;
     }
 
+    const physicalCountInput = productRow.querySelector('.physical-count');
     const docQuantity = productRow.querySelector('.doc-quantity').textContent;
+    const productId = productRow.getAttribute('data-product-id');
 
-    if (state.lastScannedSku === sku) {
-        const physicalCountInput = productRow.querySelector('.physical-count');
-        const noveltySelect = productRow.querySelector('.novelty-select');
-        const productId = productRow.getAttribute('data-product-id');
-
+    // Flujo 1: Escanear el mismo SKU dos veces para confirmar
+    if (document.activeElement === physicalCountInput) {
         physicalCountInput.value = docQuantity;
-        noveltySelect.value = 'sin_novedad';
-        
+        productRow.querySelector('.novelty-select').value = 'sin_novedad';
+        productRow.querySelector('.observations-area').value = ''; // Limpiar observaciones
+
         try {
             await api.updateProduct(state.currentAudit.id, productId, {
                 cantidad_fisica: docQuantity,
                 novedad: 'sin_novedad',
-                observaciones: productRow.querySelector('.observations-area').value
+                observaciones: ''
             });
-            speak('Guardado');
+            speak('Confirmado y guardado');
             productRow.classList.add('is-saved');
-            setTimeout(() => productRow.classList.remove('is-saved'), 1000);
+            setTimeout(() => productRow.classList.remove('is-saved'), 1200);
             updateCompliancePercentage(state.currentAudit.id);
+            
+            if(scanInput) {
+                scanInput.value = '';
+                scanInput.focus();
+            }
         } catch (error) {
             alert(`Error al guardar el producto: ${error.message}`);
             speak(`Error al guardar producto ${sku}.`);
         }
-
-        setLastScannedSku(null);
-        if(scanInput) {
-            scanInput.value = '';
-            scanInput.focus();
-        }
     } else {
-        setLastScannedSku(sku);
-        const physicalCountInput = productRow.querySelector('.physical-count');
+        // Flujo normal: Primer escaneo, encontrar y enfocar
         physicalCountInput.focus();
         physicalCountInput.select();
         productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        speak(`Cantidad: ${docQuantity}`);
+        speak(`Esperando cantidad para ${sku}. Cantidad esperada: ${docQuantity}`);
         if(scanInput) scanInput.value = '';
     }
 }
@@ -391,6 +391,7 @@ async function handleSkuScan(sku) {
 function setupAuditViewListeners() {
     const productsTable = document.getElementById('auditor-products-table-body');
     if (productsTable) {
+        // Listener para guardado manual con botón
         productsTable.addEventListener('click', async (e) => {
             if (e.target.closest('.save-product-btn')) {
                 const row = e.target.closest('tr');
@@ -406,9 +407,66 @@ function setupAuditViewListeners() {
                         observaciones: observations
                     });
                     speak('Guardado');
+                    row.classList.add('is-saved');
+                    setTimeout(() => row.classList.remove('is-saved'), 1200);
                     updateCompliancePercentage(state.currentAudit.id);
                 } catch (error) {
                     alert(`Error al guardar el producto: ${error.message}`);
+                }
+            }
+        });
+
+        // Listener para entrada manual con Enter (Flujo 2)
+        productsTable.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && e.target.classList.contains('physical-count')) {
+                e.preventDefault(); // Prevenir cualquier acción por defecto del Enter
+                const row = e.target.closest('tr');
+                const scanInput = document.getElementById('scan-input');
+
+                const physicalCountInput = e.target;
+                const docQuantity = parseFloat(row.querySelector('.doc-quantity').textContent);
+                const physicalCount = parseFloat(physicalCountInput.value);
+                const noveltySelect = row.querySelector('.novelty-select');
+                const observationsArea = row.querySelector('.observations-area');
+                const productId = row.getAttribute('data-product-id');
+
+                if (isNaN(physicalCount)) {
+                    speak("Por favor, introduce un número válido.");
+                    return;
+                }
+
+                let novelty = 'sin_novedad';
+                let observations = '';
+                const diff = physicalCount - docQuantity;
+
+                if (diff < 0) {
+                    novelty = 'faltante';
+                    observations = `Faltan ${Math.abs(diff)}`;
+                } else if (diff > 0) {
+                    novelty = 'sobrante';
+                    observations = `Sobran ${diff}`;
+                }
+
+                noveltySelect.value = novelty;
+                observationsArea.value = observations;
+
+                try {
+                    await api.updateProduct(state.currentAudit.id, productId, {
+                        cantidad_fisica: physicalCount,
+                        novedad: novelty,
+                        observaciones: observations
+                    });
+                    speak('Guardado');
+                    row.classList.add('is-saved');
+                    setTimeout(() => row.classList.remove('is-saved'), 1200);
+                    updateCompliancePercentage(state.currentAudit.id);
+                    
+                    if (scanInput) {
+                        scanInput.focus();
+                    }
+                } catch (error) {
+                    alert(`Error al guardar el producto: ${error.message}`);
+                    speak("Error al guardar.");
                 }
             }
         });
@@ -582,4 +640,191 @@ export function setupAuditorDashboard(audits) {
         });
     }
     renderAuditorAuditsTable(audits, '#auditor-audits-table-body', false);
+}
+
+// --- Funciones para Generación de Informes (Analista) ---
+
+function setupAnalystDashboardListeners(filters) {
+    const downloadOptions = [
+        { id: 'download-general-excel', type: 'general', format: 'excel' },
+        { id: 'download-general-pdf', type: 'general', format: 'pdf' },
+        { id: 'download-novelties-excel', type: 'novedades', format: 'excel' },
+        { id: 'download-novelties-pdf', type: 'novedades', format: 'pdf' },
+    ];
+
+    downloadOptions.forEach(option => {
+        const element = document.getElementById(option.id);
+        // Remover listeners anteriores para evitar duplicados
+        element.replaceWith(element.cloneNode(true));
+        document.getElementById(option.id).addEventListener('click', (e) => {
+            e.preventDefault();
+            const reportData = prepareReportData(option.type);
+            if (option.format === 'excel') {
+                generateExcelReport(reportData, option.type, filters);
+            } else if (option.format === 'pdf') {
+                generatePdfReport(reportData, option.type, filters);
+            }
+        });
+    });
+}
+
+function prepareReportData(reportType) {
+    let allProducts = [];
+    state.analystAudits.forEach(audit => {
+        if (audit.productos && audit.productos.length > 0) {
+            const productsWithContext = audit.productos.map(p => ({ ...p, orden_traslado: audit.ubicacion_destino }));
+            allProducts.push(...productsWithContext);
+        }
+    });
+
+    if (reportType === 'novedades') {
+        allProducts = allProducts.filter(p => p.novedad !== 'sin_novedad');
+    }
+
+    const totalPedidos = allProducts.length;
+    const totalProductos = allProducts.reduce((sum, p) => sum + (p.cantidad_fisica || 0), 0);
+    
+    const noveltyCounts = allProducts.reduce((acc, p) => {
+        if (p.novedad !== 'sin_novedad') {
+            acc[p.novedad] = (acc[p.novedad] || 0) + 1;
+        }
+        return acc;
+    }, {});
+
+    return { products: allProducts, totalPedidos, totalProductos, noveltyCounts };
+}
+
+function generateExcelReport(reportData, reportType, filters) {
+    const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
+    const wb = XLSX.utils.book_new();
+    const reportTitle = reportType === 'general' ? 'Informe General de Auditoría' : 'Informe de Novedades';
+    const fileName = `${reportTitle.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // --- Crear Hoja de Resumen ---
+    const summaryData = [
+        [reportTitle],
+        [],
+        ['Filtros Aplicados'],
+        ['Fecha Inicio:', filters.start_date || 'N/A'],
+        ['Fecha Fin:', filters.end_date || 'N/A'],
+        [],
+        ['Resumen General'],
+        ['Total de Pedidos (líneas de producto):', totalPedidos],
+        ['Total de Productos (unidades físicas):', totalProductos],
+        [],
+        ['Resumen de Novedades'],
+        ...Object.entries(noveltyCounts).map(([key, value]) => [key, value])
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+
+    // --- Crear Hoja de Datos ---
+    const tableHeader = ['Item', 'Orden de Traslado', 'SKU', 'Descripción', 'Novedad', 'Cant. Documento', 'Cant. Física', 'Diferencia', 'Observaciones'];
+    const tableBody = products.map((p, index) => ({
+        Item: index + 1,
+        'Orden de Traslado': p.orden_traslado,
+        SKU: p.sku,
+        Descripción: p.nombre_articulo,
+        Novedad: p.novedad,
+        'Cant. Documento': p.cantidad_documento,
+        'Cant. Física': p.cantidad_fisica,
+        Diferencia: (p.cantidad_fisica || 0) - (p.cantidad_documento || 0),
+        Observaciones: p.observaciones
+    }));
+
+    const wsData = XLSX.utils.json_to_sheet(tableBody, { header: tableHeader });
+    XLSX.utils.book_append_sheet(wb, wsData, 'Detalle de Productos');
+
+    XLSX.writeFile(wb, fileName);
+}
+
+function generatePdfReport(reportData, reportType, filters) {
+    const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const reportTitle = reportType === 'general' ? 'Informe General de Auditoría' : 'Informe de Novedades';
+    const fileName = `${reportTitle.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const today = new Date().toLocaleDateString('es-ES');
+
+    // Título
+    doc.setFontSize(18);
+    doc.text(reportTitle, 14, 22);
+    doc.setFontSize(11);
+    doc.text(`Fecha de Generación: ${today}`, 14, 28);
+
+    // Resumen y Filtros
+    doc.setFontSize(12);
+    doc.text('Resumen y Filtros Aplicados', 14, 40);
+    doc.autoTable({
+        startY: 42,
+        head: [['Concepto', 'Valor']],
+        body: [
+            ['Fecha Inicio Filtro', filters.start_date || 'N/A'],
+            ['Fecha Fin Filtro', filters.end_date || 'N/A'],
+            ['Total de Pedidos (líneas)', totalPedidos],
+            ['Total de Productos (unidades)', totalProductos],
+        ],
+        theme: 'grid',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    let finalY = doc.lastAutoTable.finalY || 80;
+
+    // Tabla de Productos
+    doc.setFontSize(12);
+    doc.text('Detalle de Productos', 14, finalY + 10);
+    const tableHeader = ['#', 'Orden T.', 'SKU', 'Descripción', 'Novedad', 'Cant. Doc', 'Cant. Fís', 'Dif.'];
+    const tableBody = products.map((p, index) => [
+        index + 1,
+        p.orden_traslado,
+        p.sku,
+        p.nombre_articulo,
+        p.novedad,
+        p.cantidad_documento,
+        p.cantidad_fisica,
+        (p.cantidad_fisica || 0) - (p.cantidad_documento || 0)
+    ]);
+
+    doc.autoTable({
+        startY: finalY + 12,
+        head: [tableHeader],
+        body: tableBody,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [41, 128, 185], fontSize: 7 },
+        didParseCell: function (data) {
+            if (data.column.dataKey === 3 && data.cell.section === 'body') { // Columna 'Descripción'
+                data.cell.text = data.cell.text[0].substring(0, 25) + (data.cell.text[0].length > 25 ? '...' : '');
+            }
+        }
+    });
+    finalY = doc.lastAutoTable.finalY;
+
+    // Gráfico de Novedades (movido después de la tabla)
+    const noveltyChartCanvas = state.chartInstances.noveltiesChart?.canvas;
+    if (noveltyChartCanvas && Object.keys(noveltyCounts).length > 0) {
+        finalY += 10;
+        doc.setFontSize(12);
+        doc.text('Gráfico de Novedades', 14, finalY);
+        const chartImage = noveltyChartCanvas.toDataURL('image/png', 1.0);
+        doc.addImage(chartImage, 'PNG', 14, finalY + 2, 90, 60);
+        finalY += 70; // Incrementar espacio para el gráfico
+    }
+
+    // Conclusiones
+    doc.setFontSize(12);
+    doc.text('Conclusiones', 14, finalY);
+    let conclusionText = `El informe de tipo '${reportType}' generó un total de ${totalPedidos} líneas de producto. `;
+    if(Object.keys(noveltyCounts).length > 0) {
+        const mainNovelty = Object.entries(noveltyCounts).sort((a, b) => b[1] - a[1])[0];
+        conclusionText += `Se encontraron ${Object.keys(noveltyCounts).length} tipos de novedades, siendo la más común '${mainNovelty[0]}' con ${mainNovelty[1]} ocurrencias.`;
+    } else {
+        conclusionText += 'No se encontraron novedades significativas en los productos analizados.';
+    }
+    const splitText = doc.splitTextToSize(conclusionText, 180);
+    doc.text(splitText, 14, finalY + 5);
+
+    doc.save(fileName);
 }

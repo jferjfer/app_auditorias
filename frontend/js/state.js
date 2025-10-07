@@ -3,11 +3,11 @@ export const state = {
     websocket: null,
     currentAudit: null,
     lastFocusedQuantityInput: null,
-    lastScannedSku: null,
     chartInstances: {},
     html5QrCode: null,
     editingUserId: null,
     auditorAuditsList: [],
+    analystAudits: [], // Para almacenar las auditorías del dashboard de analista
 };
 
 export function setWebSocket(ws) {
@@ -20,10 +20,6 @@ export function setCurrentAudit(audit) {
 
 export function setLastFocusedQuantityInput(input) {
     state.lastFocusedQuantityInput = input;
-}
-
-export function setLastScannedSku(sku) {
-    state.lastScannedSku = sku;
 }
 
 export function setChartInstance(name, instance) {
@@ -43,4 +39,8 @@ export function setEditingUserId(id) {
 
 export function setAuditorAuditsList(audits) {
     state.auditorAuditsList = audits;
+}
+
+export function setAnalystAudits(audits) {
+    state.analystAudits = audits;
 }
