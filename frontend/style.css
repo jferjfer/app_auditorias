@@ -313,6 +313,12 @@ body::before {
     max-width: 500px;
 }
 
+/* --- Estilo para feedback visual de guardado --- */
+.is-saved {
+    transition: background-color 0.1s ease-in-out;
+    background-color: rgba(0, 198, 255, 0.2) !important; /* A light blue flash */
+}
+
 /* --- Responsive Design --- */
 .sidebar-toggle-btn {
     display: none; /* Oculto en escritorio */

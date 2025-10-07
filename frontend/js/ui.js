@@ -1,5 +1,5 @@
 
-import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList } from './state.js';
+import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setLastScannedSku, setHtml5QrCode } from './state.js';
 import * as api from './api.js';
 import { getToken } from './auth.js';
 import { initWebSocket } from './websockets.js';
@@ -336,6 +336,58 @@ export async function verAuditoria(auditId) {
     }
 }
 
+async function handleSkuScan(sku) {
+    const scanInput = document.getElementById('scan-input');
+    if (!sku) return;
+
+    const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
+    if (!productRow) {
+        speak(`Producto ${sku} no encontrado.`);
+        if(scanInput) scanInput.value = '';
+        return;
+    }
+
+    const docQuantity = productRow.querySelector('.doc-quantity').textContent;
+
+    if (state.lastScannedSku === sku) {
+        const physicalCountInput = productRow.querySelector('.physical-count');
+        const noveltySelect = productRow.querySelector('.novelty-select');
+        const productId = productRow.getAttribute('data-product-id');
+
+        physicalCountInput.value = docQuantity;
+        noveltySelect.value = 'sin_novedad';
+        
+        try {
+            await api.updateProduct(state.currentAudit.id, productId, {
+                cantidad_fisica: docQuantity,
+                novedad: 'sin_novedad',
+                observaciones: productRow.querySelector('.observations-area').value
+            });
+            speak('Guardado');
+            productRow.classList.add('is-saved');
+            setTimeout(() => productRow.classList.remove('is-saved'), 1000);
+            updateCompliancePercentage(state.currentAudit.id);
+        } catch (error) {
+            alert(`Error al guardar el producto: ${error.message}`);
+            speak(`Error al guardar producto ${sku}.`);
+        }
+
+        setLastScannedSku(null);
+        if(scanInput) {
+            scanInput.value = '';
+            scanInput.focus();
+        }
+    } else {
+        setLastScannedSku(sku);
+        const physicalCountInput = productRow.querySelector('.physical-count');
+        physicalCountInput.focus();
+        physicalCountInput.select();
+        productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        speak(`Cantidad esperada: ${docQuantity}`);
+        if(scanInput) scanInput.value = '';
+    }
+}
+
 function setupAuditViewListeners() {
     const productsTable = document.getElementById('auditor-products-table-body');
     if (productsTable) {
@@ -348,12 +400,12 @@ function setupAuditViewListeners() {
                 const observations = row.querySelector('.observations-area').value;
 
                 try {
-                    await api.updateProduct(productId, {
+                    await api.updateProduct(state.currentAudit.id, productId, {
                         cantidad_fisica: physicalCount,
                         novedad: novelty,
                         observaciones: observations
                     });
-                    alert('Producto guardado con éxito.');
+                    speak('Guardado');
                     updateCompliancePercentage(state.currentAudit.id);
                 } catch (error) {
                     alert(`Error al guardar el producto: ${error.message}`);
@@ -380,32 +432,113 @@ function setupAuditViewListeners() {
 
     const collaborativeAuditBtn = document.getElementById('collaborative-audit-btn');
     if (collaborativeAuditBtn) {
-        collaborativeAuditBtn.addEventListener('click', () => {
-            // Logic for collaborative audit
-            alert('Función de auditoría colaborativa aún no implementada.');
+        collaborativeAuditBtn.addEventListener('click', async () => {
+            const panel = document.getElementById('collaborative-panel');
+            const select = document.getElementById('collaborative-auditors-select');
+            if (!panel || !select) return;
+
+            try {
+                const users = await api.fetchAuditors();
+                const currentUserId = localStorage.getItem('user_id');
+                const existingCollaboratorIds = new Set(state.currentAudit.collaborators.map(c => c.id));
+
+                const availableAuditors = users.filter(user => 
+                    user.id.toString() !== currentUserId && !existingCollaboratorIds.has(user.id)
+                );
+
+                select.innerHTML = ''; // Clear previous options
+                availableAuditors.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.nombre;
+                    select.appendChild(option);
+                });
+
+                panel.classList.remove('d-none');
+            } catch (error) {
+                alert(`Error al cargar auditores: ${error.message}`);
+            }
+        });
+    }
+
+    const confirmCollaborativeBtn = document.getElementById('confirm-collaborative-audit');
+    if (confirmCollaborativeBtn) {
+        confirmCollaborativeBtn.addEventListener('click', async () => {
+            const select = document.getElementById('collaborative-auditors-select');
+            const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
+
+            if (selectedIds.length === 0) {
+                alert('Por favor, selecciona al menos un auditor.');
+                return;
+            }
+
+            try {
+                await api.addCollaborators(state.currentAudit.id, selectedIds);
+                alert('Colaboradores agregados con éxito.');
+                document.getElementById('collaborative-panel').classList.add('d-none');
+                verAuditoria(state.currentAudit.id); // Refresh view
+            } catch (error) {
+                alert(`Error al agregar colaboradores: ${error.message}`);
+            }
+        });
+    }
+
+    const cancelCollaborativeBtn = document.getElementById('cancel-collaborative-audit');
+    if (cancelCollaborativeBtn) {
+        cancelCollaborativeBtn.addEventListener('click', () => {
+            document.getElementById('collaborative-panel').classList.add('d-none');
         });
     }
 
     const scanInput = document.getElementById('scan-input');
     if (scanInput) {
-        scanInput.addEventListener('change', (e) => {
-            const sku = e.target.value;
-            const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
-            if (productRow) {
-                productRow.querySelector('.physical-count').focus();
-                productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                speak(`Producto ${sku} encontrado.`);
-            } else {
-                speak(`Producto ${sku} no encontrado en la lista.`);
-            }
-            e.target.value = '';
-        });
+        scanInput.addEventListener('change', (e) => handleSkuScan(e.target.value));
     }
     
     const startCameraScanBtn = document.getElementById('start-camera-scan-btn');
     if(startCameraScanBtn) {
         startCameraScanBtn.addEventListener('click', () => {
-            alert('Función de escaneo con cámara aún no implementada.');
+            const scannerContainer = document.getElementById('scanner-container');
+            if (!scannerContainer) return;
+
+            scannerContainer.classList.remove('d-none');
+            const html5QrCode = new Html5Qrcode("reader");
+            setHtml5QrCode(html5QrCode);
+
+            const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                handleSkuScan(decodedText);
+                // We don't say "Code scanned" anymore to avoid interrupting the next message
+            };
+
+            const config = {
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                formatsToSupport: [ 
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.CODE_128,
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.UPC_A
+                ]
+            }; 
+
+            html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
+                .catch(err => {
+                    console.error("Unable to start scanning.", err);
+                    alert("No se pudo iniciar el escáner. Asegúrate de dar permiso para usar la cámara.");
+                    scannerContainer.classList.add('d-none');
+                });
+        });
+    }
+
+    const closeScannerBtn = document.getElementById('close-scanner-btn');
+    if (closeScannerBtn) {
+        closeScannerBtn.addEventListener('click', () => {
+            if (state.html5QrCode) {
+                state.html5QrCode.stop().then(() => {
+                    document.getElementById('scanner-container').classList.add('d-none');
+                    setHtml5QrCode(null);
+                }).catch(err => console.error("Failed to stop scanner.", err));
+            }
         });
     }
 }
