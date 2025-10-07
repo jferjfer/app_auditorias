@@ -383,7 +383,7 @@ async function handleSkuScan(sku) {
         physicalCountInput.focus();
         physicalCountInput.select();
         productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        speak(`Esperando cantidad para ${sku}. Cantidad esperada: ${docQuantity}`);
+        speak(`Cantidad: ${docQuantity}`);
         if(scanInput) scanInput.value = '';
     }
 }
