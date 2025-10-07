@@ -189,6 +189,9 @@ export function renderProductsTable(products) {
                 <option value="faltante" ${product.novedad === 'faltante' ? 'selected' : ''}>Faltante</option>
                 <option value="sobrante" ${product.novedad === 'sobrante' ? 'selected' : ''}>Sobrante</option>
                 <option value="averia" ${product.novedad === 'averia' ? 'selected' : ''}>Avería</option>
+                <option value="fecha_corta" ${product.novedad === 'fecha_corta' ? 'selected' : ''}>Fecha Corta</option>
+                <option value="contaminado" ${product.novedad === 'contaminado' ? 'selected' : ''}>Contaminado</option>
+                <option value="vencido" ${product.novedad === 'vencido' ? 'selected' : ''}>Vencido</option>
             </select></td>
             <td><textarea class="form-control form-control-sm observations-area">${product.observaciones || ''}</textarea></td>
             <td><button class="btn btn-sm btn-success save-product-btn"><i class="bi bi-save"></i></button></td>
@@ -299,6 +302,7 @@ export async function verAuditoria(auditId) {
         setCurrentAudit(audit);
         renderProductsTable(audit.productos);
         initWebSocket(auditId);
+        setupAuditViewListeners(); // Call to setup listeners
 
         if (audit.estado === 'finalizada') {
             document.querySelectorAll('#auditor-products-table-body input, #auditor-products-table-body select, #auditor-products-table-body textarea, #auditor-products-table-body button').forEach(el => {
@@ -329,6 +333,80 @@ export async function verAuditoria(auditId) {
 
     } catch (error) {
         alert("Error de red.");
+    }
+}
+
+function setupAuditViewListeners() {
+    const productsTable = document.getElementById('auditor-products-table-body');
+    if (productsTable) {
+        productsTable.addEventListener('click', async (e) => {
+            if (e.target.closest('.save-product-btn')) {
+                const row = e.target.closest('tr');
+                const productId = row.getAttribute('data-product-id');
+                const physicalCount = row.querySelector('.physical-count').value;
+                const novelty = row.querySelector('.novelty-select').value;
+                const observations = row.querySelector('.observations-area').value;
+
+                try {
+                    await api.updateProduct(productId, {
+                        cantidad_fisica: physicalCount,
+                        novedad: novelty,
+                        observaciones: observations
+                    });
+                    alert('Producto guardado con éxito.');
+                    updateCompliancePercentage(state.currentAudit.id);
+                } catch (error) {
+                    alert(`Error al guardar el producto: ${error.message}`);
+                }
+            }
+        });
+    }
+
+    const finishAuditBtn = document.getElementById('finish-audit-btn');
+    if (finishAuditBtn) {
+        finishAuditBtn.addEventListener('click', async () => {
+            if (confirm('¿Estás seguro de que quieres finalizar esta auditoría?')) {
+                try {
+                    await api.finishAudit(state.currentAudit.id);
+                    alert('Auditoría finalizada con éxito.');
+                    loadDashboardData('auditor', getToken());
+                    showDashboard('auditor-dashboard'); 
+                } catch (error) {
+                    alert(`Error al finalizar la auditoría: ${error.message}`);
+                }
+            }
+        });
+    }
+
+    const collaborativeAuditBtn = document.getElementById('collaborative-audit-btn');
+    if (collaborativeAuditBtn) {
+        collaborativeAuditBtn.addEventListener('click', () => {
+            // Logic for collaborative audit
+            alert('Función de auditoría colaborativa aún no implementada.');
+        });
+    }
+
+    const scanInput = document.getElementById('scan-input');
+    if (scanInput) {
+        scanInput.addEventListener('change', (e) => {
+            const sku = e.target.value;
+            const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
+            if (productRow) {
+                productRow.querySelector('.physical-count').focus();
+                productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                speak(`Producto ${sku} encontrado.`);
+            } else {
+                speak(`Producto ${sku} no encontrado en la lista.`);
+            }
+            e.target.value = '';
+        });
+    }
+    
+    const startCameraScanBtn = document.getElementById('start-camera-scan-btn');
+    if(startCameraScanBtn) {
+        startCameraScanBtn.addEventListener('click', () => {
+            alert('Función de escaneo con cámara aún no implementada.');
+        });
     }
 }
 
