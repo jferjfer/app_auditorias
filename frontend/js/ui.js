@@ -1,5 +1,5 @@
 
-import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setAnalystAudits, setHtml5QrCode } from './state.js';
+import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setAnalystAudits, setHtml5QrCode, setLastScanned } from './state.js';
 import * as api from './api.js';
 import { getToken } from './auth.js';
 import { initWebSocket } from './websockets.js';
@@ -391,6 +391,7 @@ async function handleSkuScan(sku) {
 function setupAuditViewListeners() {
     const productsTable = document.getElementById('auditor-products-table-body');
     if (productsTable) {
+
         // Listener para guardado manual con botón
         productsTable.addEventListener('click', async (e) => {
             if (e.target.closest('.save-product-btn')) {
@@ -416,13 +417,57 @@ function setupAuditViewListeners() {
             }
         });
 
+        // Listener para el flujo de DOBLE ESCANEO (se activa al escribir en el input)
+        productsTable.addEventListener('input', async (e) => {
+            if (e.target.classList.contains('physical-count')) {
+                const row = e.target.closest('tr');
+                const physicalCountInput = e.target;
+                const currentValue = physicalCountInput.value.trim();
+                const lastScan = state.lastScanned;
+
+                // Si el valor introducido es el mismo SKU que se acaba de escanear (en un margen de 2 seg)
+                if (lastScan && currentValue === lastScan.sku && (Date.now() - lastScan.timestamp < 2000)) {
+                    e.preventDefault();
+                    setLastScanned(null); // Limpiar para no volver a activar
+
+                    const docQuantity = row.querySelector('.doc-quantity').textContent;
+                    const productId = row.getAttribute('data-product-id');
+                    const scanInput = document.getElementById('scan-input');
+
+                    physicalCountInput.value = docQuantity; // Confirmar cantidad del documento
+                    row.querySelector('.novelty-select').value = 'sin_novedad';
+                    row.querySelector('.observations-area').value = '';
+
+                    try {
+                        await api.updateProduct(state.currentAudit.id, productId, {
+                            cantidad_fisica: docQuantity,
+                            novedad: 'sin_novedad',
+                            observaciones: ''
+                        });
+                        speak('Confirmado');
+                        row.classList.add('is-saved');
+                        setTimeout(() => row.classList.remove('is-saved'), 1200);
+                        updateCompliancePercentage(state.currentAudit.id);
+                        
+                        if (scanInput) {
+                            scanInput.focus(); // Devolver el foco al campo principal
+                        }
+                    } catch (error) {
+                        alert(`Error al auto-guardar el producto: ${error.message}`);
+                        speak('Error al confirmar.');
+                    }
+                }
+            }
+        });
+
         // Listener para entrada manual con Enter (Flujo 2)
         productsTable.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter' && e.target.classList.contains('physical-count')) {
                 e.preventDefault(); // Prevenir cualquier acción por defecto del Enter
+                setLastScanned(null); // Invalida el doble escaneo si se presiona Enter
+
                 const row = e.target.closest('tr');
                 const scanInput = document.getElementById('scan-input');
-
                 const physicalCountInput = e.target;
                 const docQuantity = parseFloat(row.querySelector('.doc-quantity').textContent);
                 const physicalCount = parseFloat(physicalCountInput.value);

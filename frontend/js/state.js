@@ -8,6 +8,7 @@ export const state = {
     editingUserId: null,
     auditorAuditsList: [],
     analystAudits: [], // Para almacenar las auditorías del dashboard de analista
+    lastScanned: null, // Para el flujo de doble escaneo
 };
 
 export function setWebSocket(ws) {
@@ -43,4 +44,8 @@ export function setAuditorAuditsList(audits) {
 
 export function setAnalystAudits(audits) {
     state.analystAudits = audits;
+}
+
+export function setLastScanned(scanData) {
+    state.lastScanned = scanData;
 }
