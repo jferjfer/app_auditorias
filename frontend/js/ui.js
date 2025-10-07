@@ -383,7 +383,7 @@ async function handleSkuScan(sku) {
         physicalCountInput.focus();
         physicalCountInput.select();
         productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        speak(`Cantidad esperada: ${docQuantity}`);
+        speak(`Cantidad: ${docQuantity}`);
         if(scanInput) scanInput.value = '';
     }
 }
@@ -440,7 +440,7 @@ function setupAuditViewListeners() {
             try {
                 const users = await api.fetchAuditors();
                 const currentUserId = localStorage.getItem('user_id');
-                const existingCollaboratorIds = new Set(state.currentAudit.collaborators.map(c => c.id));
+                const existingCollaboratorIds = new Set((state.currentAudit.collaborators || []).map(c => c.id));
 
                 const availableAuditors = users.filter(user => 
                     user.id.toString() !== currentUserId && !existingCollaboratorIds.has(user.id)
