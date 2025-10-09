@@ -757,66 +757,15 @@ export function setupAuditorDashboard(audits) {
 
 // --- Funciones para Generación de Informes (Analista) ---
 
-function setupAnalystDashboardListeners() {
-    const downloadOptions = [
-        { id: 'download-general-excel', type: 'general', format: 'excel' },
-        { id: 'download-general-pdf', type: 'general', format: 'pdf' },
-        { id: 'download-novelties-excel', type: 'novedades', format: 'excel' },
-        { id: 'download-novelties-pdf', type: 'novedades', format: 'pdf' },
-    ];
-
-    downloadOptions.forEach(option => {
-        const element = document.getElementById(option.id);
-        if (element) {
-            // Clonar y reemplazar para limpiar listeners antiguos
-            const newElement = element.cloneNode(true);
-            element.parentNode.replaceChild(newElement, element);
-            
-            newElement.addEventListener('click', (e) => {
-                e.preventDefault();
-
-                // 1. Obtener los valores actuales de los filtros
-                const currentFilters = {
-                    status: document.getElementById('filterStatus').value,
-                    auditorId: document.getElementById('filterAuditor').value,
-                    startDate: document.getElementById('filterStartDate').value,
-                    endDate: document.getElementById('filterEndDate').value,
-                };
-
-                // 2. Preparar los datos del informe CON los filtros
-                const reportData = prepareReportData(option.type, currentFilters);
-
-                if (!reportData || reportData.products.length === 0) {
-                    alert('No hay datos para generar el informe con los filtros seleccionados.');
-                    return;
-                }
-
-                // 3. Generar el informe
-                if (option.format === 'excel') {
-                    generateExcelReport(reportData, option.type, currentFilters);
-                } else if (option.format === 'pdf') {
-                    generatePdfReport(reportData, option.type, currentFilters);
-                }
-            });
-        }
-    });
-}
-
-
-function prepareReportData(reportType, filters) {
-    console.log("Preparing report with filters:", filters);
-    console.log("Audits before filtering:", state.analystAudits.length, state.analystAudits);
-
-    // Filtrar las auditorías del estado global según los filtros actuales
-    const filteredAudits = state.analystAudits.filter(audit => {
+async function prepareReportData(reportType, filters) {
+    const filteredAuditsSummaries = state.analystAudits.filter(audit => {
         const auditDate = new Date(audit.creada_en);
+        
         const startDate = filters.startDate ? new Date(filters.startDate) : null;
-        const endDate = filters.endDate ? new Date(filters.endDate) : null;
+        if (startDate) startDate.setUTCHours(0, 0, 0, 0); 
 
-        // Ajustar la fecha de fin para que incluya todo el día
-        if (endDate) {
-            endDate.setHours(23, 59, 59, 999);
-        }
+        const endDate = filters.endDate ? new Date(filters.endDate) : null;
+        if (endDate) endDate.setUTCHours(23, 59, 59, 999);
         
         const statusMatch = !filters.status || filters.status === 'Todos' || audit.estado === filters.status.toLowerCase().replace(' ', '_');
         const auditorMatch = !filters.auditorId || audit.auditor_id == filters.auditorId;
@@ -826,10 +775,16 @@ function prepareReportData(reportType, filters) {
         return statusMatch && auditorMatch && startDateMatch && endDateMatch;
     });
 
-    console.log("Audits after filtering:", filteredAudits.length, filteredAudits);
+    if (filteredAuditsSummaries.length === 0) {
+        return { products: [], totalPedidos: 0, totalProductos: 0, noveltyCounts: {} };
+    }
+
+    const detailedAudits = await Promise.all(
+        filteredAuditsSummaries.map(audit => api.fetchAuditDetails(audit.id))
+    );
 
     let allProducts = [];
-    filteredAudits.forEach(audit => {
+    detailedAudits.forEach(audit => {
         if (audit.productos && audit.productos.length > 0) {
             const productsWithContext = audit.productos.map(p => ({
                 ...p,
@@ -857,6 +812,47 @@ function prepareReportData(reportType, filters) {
     }, {});
 
     return { products: allProducts, totalPedidos, totalProductos, noveltyCounts };
+}
+
+function setupAnalystDashboardListeners() {
+    const downloadOptions = [
+        { id: 'download-general-excel', type: 'general', format: 'excel' },
+        { id: 'download-general-pdf', type: 'general', format: 'pdf' },
+        { id: 'download-novelties-excel', type: 'novedades', format: 'excel' },
+        { id: 'download-novelties-pdf', type: 'novedades', format: 'pdf' },
+    ];
+
+    downloadOptions.forEach(option => {
+        const element = document.getElementById(option.id);
+        if (element) {
+            const newElement = element.cloneNode(true);
+            element.parentNode.replaceChild(newElement, element);
+            
+            newElement.addEventListener('click', async (e) => {
+                e.preventDefault();
+
+                const currentFilters = {
+                    status: document.getElementById('filterStatus').value,
+                    auditorId: document.getElementById('filterAuditor').value,
+                    startDate: document.getElementById('filterStartDate').value,
+                    endDate: document.getElementById('filterEndDate').value,
+                };
+
+                const reportData = await prepareReportData(option.type, currentFilters);
+
+                if (!reportData || reportData.products.length === 0) {
+                    alert('No hay datos para generar el informe con los filtros seleccionados.');
+                    return;
+                }
+
+                if (option.format === 'excel') {
+                    generateExcelReport(reportData, option.type, currentFilters);
+                } else if (option.format === 'pdf') {
+                    generatePdfReport(reportData, option.type, currentFilters);
+                }
+            });
+        }
+    });
 }
 
 function generateExcelReport(reportData, reportType, filters) {
