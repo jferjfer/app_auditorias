@@ -366,65 +366,78 @@ export async function verAuditoria(auditId) {
     }
 }
 
-async function handleSkuScan(sku, source = 'input') {
+async function handleSkuScan(scannedSku, source = 'input') {
     const scanInput = document.getElementById('scan-input');
-    if (!sku) return;
+    if (!scannedSku) return;
 
-    if(scanInput) scanInput.value = '';
+    if (scanInput) scanInput.value = '';
 
-    const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
+    const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
     if (!productRow) {
-        speak(`Producto ${sku} no encontrado.`);
-        setLastScanned(null);
+        speak(`Producto ${scannedSku} no encontrado.`);
+        setLastScanned(null); // Limpiar el último escaneo si no se encuentra el producto
         return;
     }
-    
-    const lastScan = state.lastScanned;
-    const isSecondScan = lastScan && lastScan.sku === sku;
 
-    if (isSecondScan && source === 'input') {
-        const docQuantityStr = productRow.querySelector('.doc-quantity').textContent;
-        let docQuantity = parseInt(docQuantityStr, 10);
-        const productId = productRow.getAttribute('data-product-id');
+    const lastScanned = state.lastScanned;
+    const productId = productRow.getAttribute('data-product-id');
 
-        // FIX: Handle cases where quantity might not be a number (e.g., '--')
-        if (isNaN(docQuantity)) {
-            docQuantity = 0;
-        }
-        
-        productRow.querySelector('.physical-count').value = docQuantity;
-        productRow.querySelector('.novelty-select').value = 'sin_novedad';
-        productRow.querySelector('.observations-area').value = '';
-
-        try {
-            await api.updateProduct(state.currentAudit.id, productId, {
-                cantidad_fisica: docQuantity,
-                novedad: 'sin_novedad',
-                observaciones: ''
-            });
-            speak('Confirmado');
-            productRow.classList.add('is-saved');
-            setTimeout(() => productRow.classList.remove('is-saved'), 1200);
-            updateCompliancePercentage(state.currentAudit.id);
-            
-            if(scanInput) scanInput.focus();
-        } catch (error) {
-            alert(`Error al guardar el producto: ${error.message}`);
-            speak(`Error al guardar.`);
-        }
-        
-        setLastScanned(null);
-
-    } else {
+    // Flujo de Novedad: Escaneo repetido del mismo SKU
+    if (lastScanned && lastScanned.sku === scannedSku) {
+        // Detener el flujo rápido y activar la edición manual
         const physicalCountInput = productRow.querySelector('.physical-count');
+        productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        productRow.classList.add('highlight-manual'); // Resaltar la fila
         physicalCountInput.focus();
         physicalCountInput.select();
-        productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        setLastScanned({ sku: sku });
-        
-        const docQuantity = productRow.querySelector('.doc-quantity').textContent;
-        speak(`Cantidad: ${docQuantity}`);
+        // Limpiar el último escaneo para que el siguiente inicie un nuevo ciclo
+        setLastScanned(null); 
+        return; // Salir de la función para esperar la entrada manual
+    }
+
+    // Flujo Rápido (Sin Novedad): Escaneo de un nuevo SKU
+    // Si hay un producto anteriormente escaneado y es diferente al actual, guárdalo.
+    if (lastScanned && lastScanned.sku !== scannedSku) {
+        const lastProductRow = document.querySelector(`tr[data-sku="${lastScanned.sku}"]`);
+        if (lastProductRow) {
+            const lastProductId = lastProductRow.getAttribute('data-product-id');
+            const docQuantityStr = lastProductRow.querySelector('.doc-quantity').textContent;
+            const docQuantity = parseInt(docQuantityStr, 10) || 0;
+
+            try {
+                // Guardar el producto anterior como "sin novedad" en segundo plano
+                await api.updateProduct(state.currentAudit.id, lastProductId, {
+                    cantidad_fisica: docQuantity,
+                    novedad: 'sin_novedad',
+                    observaciones: ''
+                });
+                lastProductRow.classList.add('is-saved');
+                // Actualizar visualmente la fila guardada
+                lastProductRow.querySelector('.physical-count').value = docQuantity;
+                lastProductRow.querySelector('.novelty-select').value = 'sin_novedad';
+                lastProductRow.querySelector('.observations-area').value = '';
+                setTimeout(() => lastProductRow.classList.remove('is-saved'), 1200);
+                updateCompliancePercentage(state.currentAudit.id);
+            } catch (error) {
+                // No alertar, solo loguear para no interrumpir el flujo
+                console.error(`Error al autoguardar producto ${lastScanned.sku}: ${error.message}`);
+                speak(`Error al guardar ${lastScanned.sku}`);
+            }
+        }
+    }
+
+    // Para el SKU actual (sea el primero o uno nuevo en la secuencia)
+    // 1. Anunciar la cantidad
+    const currentDocQuantity = productRow.querySelector('.doc-quantity').textContent;
+    speak(`Cantidad: ${currentDocQuantity}`);
+
+    // 2. Recordar este SKU como el último escaneado
+    setLastScanned({ sku: scannedSku, productId: productId });
+
+    // 3. Mantener el foco en el campo de escaneo principal
+    if (scanInput) {
+        scanInput.focus();
     }
 }
 
