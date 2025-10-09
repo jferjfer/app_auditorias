@@ -137,22 +137,27 @@ def update_product(db: Session, product_id: int, product_data: dict):
     return db_product
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
-    """Recalcula y actualiza el porcentaje de cumplimiento de una auditoría de forma progresiva."""
+    """
+    Recalcula y actualiza el porcentaje de cumplimiento de una auditoría basándose en las unidades de producto.
+    El cumplimiento se calcula como: (SUMA(min(fisico, documento)) / SUMA(documento)) * 100
+    """
     db_audit = get_audit_by_id(db, audit_id)
     if not db_audit:
         return None
 
     products = get_products_by_audit(db, audit_id=audit_id)
-    total_productos = len(products)
-
-    if total_productos == 0:
-        cumplimiento = 0
+    
+    total_documento_unidades = sum(p.cantidad_documento for p in products if p.cantidad_documento is not None)
+    
+    if total_documento_unidades == 0:
+        cumplimiento = 100 # Si no se esperan productos, el cumplimiento es del 100%
     else:
-        # Contar productos correctos (auditados, cantidad correcta y sin novedad)
-        correctos = sum(1 for p in products if p.cantidad_fisica is not None and p.cantidad_fisica == p.cantidad_documento and p.novedad == 'sin_novedad')
+        unidades_cumplidas = 0
+        for p in products:
+            if p.cantidad_fisica is not None and p.cantidad_documento is not None:
+                unidades_cumplidas += min(p.cantidad_fisica, p.cantidad_documento)
         
-        # El cumplimiento se basa en el total de productos de la auditoría
-        cumplimiento = round((correctos / total_productos) * 100)
+        cumplimiento = round((unidades_cumplidas / total_documento_unidades) * 100)
 
     db_audit.porcentaje_cumplimiento = cumplimiento
     db.commit()
