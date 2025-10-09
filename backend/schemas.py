@@ -182,3 +182,12 @@ class AuditFinishResponse(BaseModel):
 # Esquema para añadir colaboradores a una auditoría
 class CollaboratorUpdate(BaseModel):
     collaborator_ids: List[int]
+
+class ProductBulkUpdate(BaseModel):
+    id: int
+    cantidad_fisica: Optional[int] = None
+    novedad: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class ProductBulkUpdateRequest(BaseModel):
+    products: List[ProductBulkUpdate]

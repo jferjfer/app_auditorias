@@ -213,6 +213,29 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
 
     return {"message": "Producto actualizado", "product": updated_product}
 
+@router.post("/{audit_id}/products/bulk-update", response_model=dict)
+async def bulk_update_products_endpoint(
+    audit_id: int,
+    update_request: schemas.ProductBulkUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
+
+    updated_products_count = 0
+    for product_data in update_request.products:
+        update_data = product_data.dict(exclude={"id"}, exclude_unset=True)
+        updated_product = crud.update_product(db, product_data.id, update_data)
+        if updated_product:
+            updated_products_count += 1
+
+    if updated_products_count > 0:
+        crud.recalculate_and_update_audit_percentage(db, audit_id)
+
+    return {"message": f"{updated_products_count} productos actualizados exitosamente."}
+
 @router.put("/{audit_id}/finish", response_model=schemas.Audit)
 async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)

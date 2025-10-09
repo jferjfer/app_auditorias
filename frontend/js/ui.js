@@ -1,4 +1,3 @@
-
 import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setAnalystAudits, setHtml5QrCode, setLastScanned } from './state.js';
 import * as api from './api.js';
 import { getToken } from './auth.js';
@@ -513,6 +512,58 @@ function setupAuditViewListeners() {
                     alert(`Error al guardar el producto: ${error.message}`);
                     speak("Error al guardar.");
                 }
+            }
+        });
+    }
+
+    const saveAllBtn = document.getElementById('save-all-btn');
+    if (saveAllBtn) {
+        saveAllBtn.addEventListener('click', async () => {
+            const productsTable = document.getElementById('auditor-products-table-body');
+            const rows = productsTable.querySelectorAll('tr');
+            const productsToUpdate = [];
+
+            for (const row of rows) {
+                const physicalCountInput = row.querySelector('.physical-count');
+                if (physicalCountInput.value !== null && physicalCountInput.value !== '') {
+                    productsToUpdate.push({
+                        id: parseInt(row.getAttribute('data-product-id')),
+                        cantidad_fisica: parseInt(physicalCountInput.value),
+                        novedad: row.querySelector('.novelty-select').value,
+                        observaciones: row.querySelector('.observations-area').value
+                    });
+                }
+            }
+
+            if (productsToUpdate.length === 0) {
+                alert("No hay cambios para guardar.");
+                return;
+            }
+
+            saveAllBtn.disabled = true;
+            saveAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+
+            try {
+                await api.bulkUpdateProducts(state.currentAudit.id, productsToUpdate);
+                alert(`Guardado completado. ${productsToUpdate.length} productos actualizados.`);
+                
+                rows.forEach(row => {
+                    const productId = parseInt(row.getAttribute('data-product-id'));
+                    if (productsToUpdate.some(p => p.id === productId)) {
+                        row.classList.add('is-saved');
+                        setTimeout(() => row.classList.remove('is-saved'), 1200);
+                    }
+                });
+
+                if (state.currentAudit) {
+                    updateCompliancePercentage(state.currentAudit.id);
+                }
+
+            } catch (error) {
+                alert(`Error al guardar los cambios: ${error.message}`);
+            } finally {
+                saveAllBtn.disabled = false;
+                saveAllBtn.innerHTML = '<i class="bi bi-save"></i> Guardar Auditoría';
             }
         });
     }

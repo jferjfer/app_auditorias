@@ -1,4 +1,3 @@
-
 const DEPLOYMENT_URL = 'https://app-auditorias.onrender.com';
 const IS_LOCAL = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 export const API_URL = IS_LOCAL ? 'http://127.0.0.1:8000' : DEPLOYMENT_URL;
@@ -82,6 +81,11 @@ export async function fetchAuditDetails(auditId) {
 export async function updateProduct(auditId, productId, updateData) {
     const body = JSON.stringify(updateData);
     return fetchApi(`${API_URL}/api/audits/${auditId}/products/${productId}`, { method: 'PUT', body });
+}
+
+export async function bulkUpdateProducts(auditId, products) {
+    const body = JSON.stringify({ products });
+    return fetchApi(`${API_URL}/api/audits/${auditId}/products/bulk-update`, { method: 'POST', body });
 }
 
 export async function finishAudit(auditId) {
