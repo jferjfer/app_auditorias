@@ -401,3 +401,7 @@ body::before {
 .highlight-manual .physical-count:focus {
     background-color: transparent !important;
 }
+
+.card-body .btn-group {
+    z-index: 10;
+}

@@ -804,6 +804,9 @@ function setupAnalystDashboardListeners() {
 
 
 function prepareReportData(reportType, filters) {
+    console.log("Preparing report with filters:", filters);
+    console.log("Audits before filtering:", state.analystAudits.length, state.analystAudits);
+
     // Filtrar las auditorías del estado global según los filtros actuales
     const filteredAudits = state.analystAudits.filter(audit => {
         const auditDate = new Date(audit.creada_en);
@@ -822,6 +825,8 @@ function prepareReportData(reportType, filters) {
 
         return statusMatch && auditorMatch && startDateMatch && endDateMatch;
     });
+
+    console.log("Audits after filtering:", filteredAudits.length, filteredAudits);
 
     let allProducts = [];
     filteredAudits.forEach(audit => {
