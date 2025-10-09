@@ -149,7 +149,7 @@ def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optio
         cumplimiento = 0
     else:
         # Contar productos correctos (auditados, cantidad correcta y sin novedad)
-        correctos = sum(1 for p in products if p.cantidad_fisica is not None and p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
+        correctos = sum(1 for p in products if p.cantidad_fisica is not None and p.cantidad_fisica == p.cantidad_documento and p.novedad == 'sin_novedad')
         
         # El cumplimiento se basa en el total de productos de la auditoría
         cumplimiento = round((correctos / total_productos) * 100)

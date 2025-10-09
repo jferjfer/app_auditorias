@@ -222,7 +222,7 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     products = crud.get_products_by_audit(db, audit_id=audit_id)
     total_productos = len(products)
     if total_productos > 0:
-        correctos = sum(1 for p in products if p.cantidad_fisica == p.cantidad_enviada and p.novedad == 'sin_novedad')
+        correctos = sum(1 for p in products if p.cantidad_fisica == p.cantidad_documento and p.novedad == 'sin_novedad')
         cumplimiento = round((correctos / total_productos) * 100)
     else:
         cumplimiento = 0
