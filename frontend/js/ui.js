@@ -384,8 +384,13 @@ async function handleSkuScan(sku, source = 'input') {
 
     if (isSecondScan && source === 'input') {
         const docQuantityStr = productRow.querySelector('.doc-quantity').textContent;
-        const docQuantity = parseInt(docQuantityStr, 10);
+        let docQuantity = parseInt(docQuantityStr, 10);
         const productId = productRow.getAttribute('data-product-id');
+
+        // FIX: Handle cases where quantity might not be a number (e.g., '--')
+        if (isNaN(docQuantity)) {
+            docQuantity = 0;
+        }
         
         productRow.querySelector('.physical-count').value = docQuantity;
         productRow.querySelector('.novelty-select').value = 'sin_novedad';
