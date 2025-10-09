@@ -9,6 +9,35 @@ const roleMap = {
     administrador: 'admin-dashboard'
 };
 
+/**
+ * Genera un sonido de 'beep' corto usando la Web Audio API.
+ * @param {number} frequency - La frecuencia del tono en Hz.
+ * @param {number} duration - La duración del sonido en milisegundos.
+ * @param {number} volume - El volumen del sonido (0.0 a 1.0).
+ */
+function playBeep(frequency = 523.25, duration = 200, volume = 0.5) {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime); // C5 note
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        setTimeout(() => {
+            oscillator.stop();
+        }, duration);
+    } catch (e) {
+        console.error("Web Audio API is not supported in this browser.", e);
+    }
+}
+
+
 export function showDashboard(dashboardId) {
     document.querySelectorAll('.dashboard-section').forEach(section => {
         section.classList.add('d-none');
@@ -341,22 +370,29 @@ async function handleSkuScan(sku) {
     const scanInput = document.getElementById('scan-input');
     if (!sku) return;
 
+    // Limpiar el campo de escaneo principal inmediatamente
+    if(scanInput) scanInput.value = '';
+
     const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
     if (!productRow) {
         speak(`Producto ${sku} no encontrado.`);
-        if(scanInput) scanInput.value = '';
+        setLastScanned(null); // Limpiar el último escaneo si no se encuentra el producto
         return;
     }
+    
+    // --- Lógica de Doble Escaneo ---
+    const now = Date.now();
+    const lastScan = state.lastScanned;
+    const isSecondScan = lastScan && lastScan.sku === sku && (now - lastScan.timestamp < 2000); // Ventana de 2 segundos
 
-    const physicalCountInput = productRow.querySelector('.physical-count');
-    const docQuantity = productRow.querySelector('.doc-quantity').textContent;
-    const productId = productRow.getAttribute('data-product-id');
-
-    // Flujo 1: Escanear el mismo SKU dos veces para confirmar
-    if (document.activeElement === physicalCountInput) {
-        physicalCountInput.value = docQuantity;
+    if (isSecondScan) {
+        // Es el segundo escaneo del mismo producto, confirmar "sin novedad"
+        const docQuantity = productRow.querySelector('.doc-quantity').textContent;
+        const productId = productRow.getAttribute('data-product-id');
+        
+        productRow.querySelector('.physical-count').value = docQuantity;
         productRow.querySelector('.novelty-select').value = 'sin_novedad';
-        productRow.querySelector('.observations-area').value = ''; // Limpiar observaciones
+        productRow.querySelector('.observations-area').value = '';
 
         try {
             await api.updateProduct(state.currentAudit.id, productId, {
@@ -364,26 +400,32 @@ async function handleSkuScan(sku) {
                 novedad: 'sin_novedad',
                 observaciones: ''
             });
-            speak('Confirmado y guardado');
+            speak('Confirmado');
             productRow.classList.add('is-saved');
             setTimeout(() => productRow.classList.remove('is-saved'), 1200);
             updateCompliancePercentage(state.currentAudit.id);
             
-            if(scanInput) {
-                scanInput.value = '';
-                scanInput.focus();
-            }
+            if(scanInput) scanInput.focus(); // Devolver foco al input principal
         } catch (error) {
             alert(`Error al guardar el producto: ${error.message}`);
             speak(`Error al guardar producto ${sku}.`);
         }
+        
+        setLastScanned(null); // Limpiar el estado después de la confirmación
+
     } else {
-        // Flujo normal: Primer escaneo, encontrar y enfocar
+        // Es el primer escaneo, enfocar el producto y prepararse para el segundo
+        const physicalCountInput = productRow.querySelector('.physical-count');
         physicalCountInput.focus();
         physicalCountInput.select();
         productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Guardar este escaneo como el "último escaneo"
+        setLastScanned({ sku: sku, timestamp: now });
+        
+        // Opcional: dar feedback de voz
+        const docQuantity = productRow.querySelector('.doc-quantity').textContent;
         speak(`Cantidad: ${docQuantity}`);
-        if(scanInput) scanInput.value = '';
     }
 }
 
@@ -660,6 +702,7 @@ function setupAuditViewListeners() {
             setHtml5QrCode(html5QrCode);
 
             const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+                playBeep();
                 handleSkuScan(decodedText);
                 // We don't say "Code scanned" anymore to avoid interrupting the next message
             };
