@@ -366,28 +366,25 @@ export async function verAuditoria(auditId) {
     }
 }
 
-async function handleSkuScan(sku) {
+async function handleSkuScan(sku, source = 'input') {
     const scanInput = document.getElementById('scan-input');
     if (!sku) return;
 
-    // Limpiar el campo de escaneo principal inmediatamente
     if(scanInput) scanInput.value = '';
 
     const productRow = document.querySelector(`tr[data-sku="${sku}"]`);
     if (!productRow) {
         speak(`Producto ${sku} no encontrado.`);
-        setLastScanned(null); // Limpiar el último escaneo si no se encuentra el producto
+        setLastScanned(null);
         return;
     }
     
-    // --- Lógica de Doble Escaneo ---
-    const now = Date.now();
     const lastScan = state.lastScanned;
-    const isSecondScan = lastScan && lastScan.sku === sku && (now - lastScan.timestamp < 2000); // Ventana de 2 segundos
+    const isSecondScan = lastScan && lastScan.sku === sku;
 
-    if (isSecondScan) {
-        // Es el segundo escaneo del mismo producto, confirmar "sin novedad"
-        const docQuantity = productRow.querySelector('.doc-quantity').textContent;
+    if (isSecondScan && source === 'input') {
+        const docQuantityStr = productRow.querySelector('.doc-quantity').textContent;
+        const docQuantity = parseInt(docQuantityStr, 10);
         const productId = productRow.getAttribute('data-product-id');
         
         productRow.querySelector('.physical-count').value = docQuantity;
@@ -405,25 +402,22 @@ async function handleSkuScan(sku) {
             setTimeout(() => productRow.classList.remove('is-saved'), 1200);
             updateCompliancePercentage(state.currentAudit.id);
             
-            if(scanInput) scanInput.focus(); // Devolver foco al input principal
+            if(scanInput) scanInput.focus();
         } catch (error) {
             alert(`Error al guardar el producto: ${error.message}`);
-            speak(`Error al guardar producto ${sku}.`);
+            speak(`Error al guardar.`);
         }
         
-        setLastScanned(null); // Limpiar el estado después de la confirmación
+        setLastScanned(null);
 
     } else {
-        // Es el primer escaneo, enfocar el producto y prepararse para el segundo
         const physicalCountInput = productRow.querySelector('.physical-count');
         physicalCountInput.focus();
         physicalCountInput.select();
         productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // Guardar este escaneo como el "último escaneo"
-        setLastScanned({ sku: sku, timestamp: now });
+        setLastScanned({ sku: sku });
         
-        // Opcional: dar feedback de voz
         const docQuantity = productRow.querySelector('.doc-quantity').textContent;
         speak(`Cantidad: ${docQuantity}`);
     }
@@ -458,54 +452,11 @@ function setupAuditViewListeners() {
             }
         });
 
-        // Listener para el flujo de DOBLE ESCANEO (se activa al escribir en el input)
-        productsTable.addEventListener('input', async (e) => {
-            if (e.target.classList.contains('physical-count')) {
-                const row = e.target.closest('tr');
-                const physicalCountInput = e.target;
-                const currentValue = physicalCountInput.value.trim();
-                const lastScan = state.lastScanned;
-
-                // Si el valor introducido es el mismo SKU que se acaba de escanear (en un margen de 2 seg)
-                if (lastScan && currentValue === lastScan.sku && (Date.now() - lastScan.timestamp < 2000)) {
-                    e.preventDefault();
-                    setLastScanned(null); // Limpiar para no volver a activar
-
-                    const docQuantity = row.querySelector('.doc-quantity').textContent;
-                    const productId = row.getAttribute('data-product-id');
-                    const scanInput = document.getElementById('scan-input');
-
-                    physicalCountInput.value = docQuantity; // Confirmar cantidad del documento
-                    row.querySelector('.novelty-select').value = 'sin_novedad';
-                    row.querySelector('.observations-area').value = '';
-
-                    try {
-                        await api.updateProduct(state.currentAudit.id, productId, {
-                            cantidad_fisica: docQuantity,
-                            novedad: 'sin_novedad',
-                            observaciones: ''
-                        });
-                        speak('Confirmado');
-                        row.classList.add('is-saved');
-                        setTimeout(() => row.classList.remove('is-saved'), 1200);
-                        updateCompliancePercentage(state.currentAudit.id);
-                        
-                        if (scanInput) {
-                            scanInput.focus(); // Devolver el foco al campo principal
-                        }
-                    } catch (error) {
-                        alert(`Error al auto-guardar el producto: ${error.message}`);
-                        speak('Error al confirmar.');
-                    }
-                }
-            }
-        });
-
         // Listener para entrada manual con Enter (Flujo 2)
         productsTable.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter' && e.target.classList.contains('physical-count')) {
-                e.preventDefault(); // Prevenir cualquier acción por defecto del Enter
-                setLastScanned(null); // Invalida el doble escaneo si se presiona Enter
+                e.preventDefault();
+                setLastScanned(null);
 
                 const row = e.target.closest('tr');
                 const scanInput = document.getElementById('scan-input');
@@ -688,7 +639,7 @@ function setupAuditViewListeners() {
 
     const scanInput = document.getElementById('scan-input');
     if (scanInput) {
-        scanInput.addEventListener('change', (e) => handleSkuScan(e.target.value));
+        scanInput.addEventListener('change', (e) => handleSkuScan(e.target.value, 'input'));
     }
     
     const startCameraScanBtn = document.getElementById('start-camera-scan-btn');
@@ -703,8 +654,13 @@ function setupAuditViewListeners() {
 
             const qrCodeSuccessCallback = (decodedText, decodedResult) => {
                 playBeep();
-                handleSkuScan(decodedText);
-                // We don't say "Code scanned" anymore to avoid interrupting the next message
+                handleSkuScan(decodedText, 'camera');
+                if (state.html5QrCode) {
+                    state.html5QrCode.stop().then(() => {
+                        document.getElementById('scanner-container').classList.add('d-none');
+                        setHtml5QrCode(null);
+                    }).catch(err => console.error("Failed to stop scanner.", err));
+                }
             };
 
             const config = {
