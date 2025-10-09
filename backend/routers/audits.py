@@ -98,8 +98,8 @@ async def upload_multiple_audit_files(
                 producto_data = {
                     "sku": sku,
                     "nombre_articulo": str(row.get("nombre articulo", "Sin nombre")).strip(),
-                    "cantidad_documento": row.get("cantidad", 0),
-                    "cantidad_enviada": row.get("un enviada", 0),
+                    "cantidad_documento": row.get("un enviada", 0),
+                    "cantidad_enviada": row.get("cantidad", 0),
                     "orden_traslado_original": orden_traslado,
                     "novedad": "sin_novedad"
                 }
