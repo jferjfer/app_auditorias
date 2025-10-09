@@ -757,7 +757,7 @@ export function setupAuditorDashboard(audits) {
 
 // --- Funciones para Generación de Informes (Analista) ---
 
-function setupAnalystDashboardListeners(filters) {
+function setupAnalystDashboardListeners() {
     const downloadOptions = [
         { id: 'download-general-excel', type: 'general', format: 'excel' },
         { id: 'download-general-pdf', type: 'general', format: 'pdf' },
@@ -767,38 +767,85 @@ function setupAnalystDashboardListeners(filters) {
 
     downloadOptions.forEach(option => {
         const element = document.getElementById(option.id);
-        // Remover listeners anteriores para evitar duplicados
-        element.replaceWith(element.cloneNode(true));
-        document.getElementById(option.id).addEventListener('click', (e) => {
-            e.preventDefault();
-            const reportData = prepareReportData(option.type);
-            if (option.format === 'excel') {
-                generateExcelReport(reportData, option.type, filters);
-            } else if (option.format === 'pdf') {
-                generatePdfReport(reportData, option.type, filters);
-            }
-        });
+        if (element) {
+            // Clonar y reemplazar para limpiar listeners antiguos
+            const newElement = element.cloneNode(true);
+            element.parentNode.replaceChild(newElement, element);
+            
+            newElement.addEventListener('click', (e) => {
+                e.preventDefault();
+
+                // 1. Obtener los valores actuales de los filtros
+                const currentFilters = {
+                    status: document.getElementById('filterStatus').value,
+                    auditorId: document.getElementById('filterAuditor').value,
+                    startDate: document.getElementById('filterStartDate').value,
+                    endDate: document.getElementById('filterEndDate').value,
+                };
+
+                // 2. Preparar los datos del informe CON los filtros
+                const reportData = prepareReportData(option.type, currentFilters);
+
+                if (!reportData || reportData.products.length === 0) {
+                    alert('No hay datos para generar el informe con los filtros seleccionados.');
+                    return;
+                }
+
+                // 3. Generar el informe
+                if (option.format === 'excel') {
+                    generateExcelReport(reportData, option.type, currentFilters);
+                } else if (option.format === 'pdf') {
+                    generatePdfReport(reportData, option.type, currentFilters);
+                }
+            });
+        }
     });
 }
 
-function prepareReportData(reportType) {
+
+function prepareReportData(reportType, filters) {
+    // Filtrar las auditorías del estado global según los filtros actuales
+    const filteredAudits = state.analystAudits.filter(audit => {
+        const auditDate = new Date(audit.creada_en);
+        const startDate = filters.startDate ? new Date(filters.startDate) : null;
+        const endDate = filters.endDate ? new Date(filters.endDate) : null;
+
+        // Ajustar la fecha de fin para que incluya todo el día
+        if (endDate) {
+            endDate.setHours(23, 59, 59, 999);
+        }
+        
+        const statusMatch = !filters.status || filters.status === 'Todos' || audit.estado === filters.status.toLowerCase().replace(' ', '_');
+        const auditorMatch = !filters.auditorId || audit.auditor_id == filters.auditorId;
+        const startDateMatch = !startDate || auditDate >= startDate;
+        const endDateMatch = !endDate || auditDate <= endDate;
+
+        return statusMatch && auditorMatch && startDateMatch && endDateMatch;
+    });
+
     let allProducts = [];
-    state.analystAudits.forEach(audit => {
+    filteredAudits.forEach(audit => {
         if (audit.productos && audit.productos.length > 0) {
-            const productsWithContext = audit.productos.map(p => ({ ...p, orden_traslado: audit.ubicacion_destino }));
+            const productsWithContext = audit.productos.map(p => ({
+                ...p,
+                orden_traslado: audit.ubicacion_destino,
+                audit_id: audit.id,
+                auditor_nombre: audit.auditor?.nombre ?? 'N/A',
+                audit_fecha: new Date(audit.creada_en).toLocaleDateString()
+            }));
             allProducts.push(...productsWithContext);
         }
     });
 
     if (reportType === 'novedades') {
-        allProducts = allProducts.filter(p => p.novedad !== 'sin_novedad');
+        allProducts = allProducts.filter(p => p.novedad && p.novedad !== 'sin_novedad');
     }
 
     const totalPedidos = allProducts.length;
     const totalProductos = allProducts.reduce((sum, p) => sum + (p.cantidad_fisica || 0), 0);
     
     const noveltyCounts = allProducts.reduce((acc, p) => {
-        if (p.novedad !== 'sin_novedad') {
+        if (p.novedad && p.novedad !== 'sin_novedad') {
             acc[p.novedad] = (acc[p.novedad] || 0) + 1;
         }
         return acc;
