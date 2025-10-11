@@ -370,6 +370,9 @@ async function handleSkuScan(scannedSku, source = 'input') {
     const scanInput = document.getElementById('scan-input');
     if (!scannedSku) return;
 
+    // Normalize SKU: trim whitespace, convert to uppercase, and remove leading zeros.
+    scannedSku = scannedSku.trim().toUpperCase().replace(/^0+/, '');
+
     if (scanInput) scanInput.value = '';
 
     const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
