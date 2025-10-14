@@ -147,4 +147,44 @@ function setupGlobalListeners() {
             }
         });
     }
+
+    const confirmAddUserBtn = document.getElementById('confirm-add-user');
+    if (confirmAddUserBtn) {
+        confirmAddUserBtn.addEventListener('click', async () => {
+            const isEditing = state.editingUserId;
+            const userData = {
+                nombre: document.getElementById('new-user-name').value,
+                correo: document.getElementById('new-user-email').value,
+                rol: document.getElementById('new-user-role').value,
+            };
+            const password = document.getElementById('new-user-password').value;
+            if (password) {
+                userData.contrasena = password;
+            }
+
+            try {
+                if (isEditing) {
+                    await api.updateUser(isEditing, userData);
+                    alert('Usuario actualizado con éxito.');
+                } else {
+                    await api.createUser(userData);
+                    alert('Usuario creado con éxito.');
+                }
+                
+                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+                modalInstance.hide();
+                
+                // Reset form y state
+                document.getElementById('add-user-form').reset();
+                setEditingUserId(null);
+                document.getElementById('addUserModalLabel').textContent = 'Agregar Nuevo Usuario';
+                confirmAddUserBtn.textContent = 'Agregar Usuario';
+
+                ui.loadDashboardData('administrador', getToken());
+
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+    }
 }

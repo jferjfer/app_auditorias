@@ -193,9 +193,9 @@ def add_collaborators_to_audit(db: Session, audit_id: int, collaborator_ids: Lis
     db.refresh(db_audit)
     return db_audit
 
-def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, date: Optional[str] = None) -> List[models.Audit]:
+def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[models.Audit]:
     """
-    Obtiene todas las auditorías con filtros opcionales.
+    Obtiene todas las auditorías con filtros opcionales, incluyendo rango de fechas.
     """
     query = db.query(models.Audit).options(joinedload(models.Audit.auditor), joinedload(models.Audit.productos)).filter(models.Audit.auditor_id.isnot(None))
 
@@ -205,12 +205,19 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     if auditor_id:
         query = query.filter(models.Audit.auditor_id == auditor_id)
 
-    if date:
+    if start_date:
         try:
-            filter_date = datetime.strptime(date, "%Y-%m-%d").date()
-            query = query.filter(func.date(models.Audit.creada_en) == filter_date)
+            filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(func.date(models.Audit.creada_en) >= filter_start_date)
         except ValueError:
-            pass # Ignore invalid date format
+            pass # Ignorar formato de fecha inválido
+
+    if end_date:
+        try:
+            filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(func.date(models.Audit.creada_en) <= filter_end_date)
+        except ValueError:
+            pass # Ignorar formato de fecha inválido
 
     return query.all()
 

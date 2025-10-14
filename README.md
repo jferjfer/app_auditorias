@@ -169,7 +169,7 @@ Si tienes problemas:
 ## 🎯 Características Principales
 
 - ✅ **Carga de Archivos Excel**: Procesamiento automático de órdenes de traslado
-- ✅ **Escaneo de Productos**: Funcionalidad para escanear SKUs
+- ✅ **Escaneo de Productos Flexible**: Búsqueda inteligente de SKUs que tolera diferencias de mayúsculas/minúsculas y ceros iniciales (ej. `pd123` o `000123`).
 - ✅ **Auditoría en Tiempo Real**: Cálculo de cumplimiento automático
 - ✅ **Múltiples Roles**: Auditor, Analista, Administrador
 - ✅ **Interfaz Moderna**: Diseño responsive y intuitivo

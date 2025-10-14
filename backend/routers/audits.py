@@ -271,6 +271,27 @@ def add_collaborators(audit_id: int, collaborators: schemas.CollaboratorUpdate, 
     crud.add_collaborators_to_audit(db, audit_id=audit_id, collaborator_ids=collaborators.collaborator_ids)
     return {"message": "Colaboradores añadidos exitosamente"}
 
+@router.get("/report/details", response_model=List[schemas.AuditDetails])
+async def get_report_details(
+    status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene los detalles completos de las auditorías para la generación de informes en el frontend.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+
+    # Renombrar 'status' a 'state' si es necesario para que coincida con el modelo de BD
+    db_status = status.lower().replace(' ', '_') if status and status != 'Todos' else None
+
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    return audits
+
 @router.get("/report", response_class=StreamingResponse)
 async def download_audit_report(
     status: Optional[str] = None,

@@ -127,6 +127,14 @@ export async function createUser(userData) {
     return fetchApi(`${API_URL}/api/users/`, { method: 'POST', body });
 }
 
+export async function fetchReportData(filters = {}) {
+    const cleanFilters = Object.fromEntries(
+        Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')
+    );
+    const params = new URLSearchParams(cleanFilters);
+    return fetchApi(`${API_URL}/api/audits/report/details?${params.toString()}`);
+}
+
 export async function uploadAuditFiles(files) {
     const formData = new FormData();
     for (const file of files) {

@@ -761,30 +761,11 @@ export function setupAuditorDashboard(audits) {
 // --- Funciones para Generación de Informes (Analista) ---
 
 async function prepareReportData(reportType, filters) {
-    const filteredAuditsSummaries = state.analystAudits.filter(audit => {
-        const auditDate = new Date(audit.creada_en);
-        
-        const startDate = filters.startDate ? new Date(filters.startDate) : null;
-        if (startDate) startDate.setUTCHours(0, 0, 0, 0); 
+    const detailedAudits = await api.fetchReportData(filters);
 
-        const endDate = filters.endDate ? new Date(filters.endDate) : null;
-        if (endDate) endDate.setUTCHours(23, 59, 59, 999);
-        
-        const statusMatch = !filters.status || filters.status === 'Todos' || audit.estado === filters.status.toLowerCase().replace(' ', '_');
-        const auditorMatch = !filters.auditorId || audit.auditor_id == filters.auditorId;
-        const startDateMatch = !startDate || auditDate >= startDate;
-        const endDateMatch = !endDate || auditDate <= endDate;
-
-        return statusMatch && auditorMatch && startDateMatch && endDateMatch;
-    });
-
-    if (filteredAuditsSummaries.length === 0) {
+    if (!detailedAudits || detailedAudits.length === 0) {
         return { products: [], totalPedidos: 0, totalProductos: 0, noveltyCounts: {} };
     }
-
-    const detailedAudits = await Promise.all(
-        filteredAuditsSummaries.map(audit => api.fetchAuditDetails(audit.id))
-    );
 
     let allProducts = [];
     detailedAudits.forEach(audit => {
@@ -818,42 +799,62 @@ async function prepareReportData(reportType, filters) {
 }
 
 function setupAnalystDashboardListeners() {
-    const downloadOptions = [
-        { id: 'download-general-excel', type: 'general', format: 'excel' },
-        { id: 'download-general-pdf', type: 'general', format: 'pdf' },
-        { id: 'download-novelties-excel', type: 'novedades', format: 'excel' },
-        { id: 'download-novelties-pdf', type: 'novedades', format: 'pdf' },
-    ];
+    const downloadContainer = document.querySelector('#analyst-dashboard .btn-group.w-100');
+    if (!downloadContainer) return;
 
-    downloadOptions.forEach(option => {
-        const element = document.getElementById(option.id);
-        if (element) {
-            const newElement = element.cloneNode(true);
-            element.parentNode.replaceChild(newElement, element);
-            
-            newElement.addEventListener('click', async (e) => {
-                e.preventDefault();
+    // Event delegation for download buttons
+    downloadContainer.addEventListener('click', async (e) => {
+        const target = e.target.closest('.dropdown-item');
+        if (!target) return;
 
-                const currentFilters = {
-                    status: document.getElementById('filterStatus').value,
-                    auditorId: document.getElementById('filterAuditor').value,
-                    startDate: document.getElementById('filterStartDate').value,
-                    endDate: document.getElementById('filterEndDate').value,
-                };
+        e.preventDefault();
 
-                const reportData = await prepareReportData(option.type, currentFilters);
+        const reportMap = {
+            'download-general-excel': { type: 'general', format: 'excel' },
+            'download-general-pdf': { type: 'general', format: 'pdf' },
+            'download-novelties-excel': { type: 'novedades', format: 'excel' },
+            'download-novelties-pdf': { type: 'novedades', format: 'pdf' },
+        };
 
-                if (!reportData || reportData.products.length === 0) {
-                    alert('No hay datos para generar el informe con los filtros seleccionados.');
-                    return;
-                }
+        const reportConfig = reportMap[target.id];
+        if (!reportConfig) return;
 
-                if (option.format === 'excel') {
-                    generateExcelReport(reportData, option.type, currentFilters);
-                } else if (option.format === 'pdf') {
-                    generatePdfReport(reportData, option.type, currentFilters);
-                }
-            });
+        const currentFilters = {
+            status: document.getElementById('filterStatus').value,
+            auditor_id: document.getElementById('filterAuditor').value,
+            start_date: document.getElementById('filterStartDate').value,
+            end_date: document.getElementById('filterEndDate').value,
+        };
+
+        try {
+            target.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando...';
+            target.classList.add('disabled');
+
+            const reportData = await prepareReportData(reportConfig.type, currentFilters);
+
+            if (!reportData || reportData.products.length === 0) {
+                alert('No hay datos para generar el informe con los filtros seleccionados.');
+                return;
+            }
+
+            if (reportConfig.format === 'excel') {
+                generateExcelReport(reportData, reportConfig.type, currentFilters);
+            } else if (reportConfig.format === 'pdf') {
+                generatePdfReport(reportData, reportConfig.type, currentFilters);
+            }
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert(`Error al generar el informe: ${error.message}`);
+        } finally {
+            // Restore original text
+            const originalTextMap = {
+                'download-general-excel': 'General (Excel)',
+                'download-general-pdf': 'General (PDF)',
+                'download-novelties-excel': 'Detalle Novedades (Excel)',
+                'download-novelties-pdf': 'Detalle Novedades (PDF)',
+            };
+            target.innerHTML = originalTextMap[target.id] || 'Descargar';
+            target.classList.remove('disabled');
         }
     });
 }
