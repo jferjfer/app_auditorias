@@ -798,14 +798,14 @@ async function prepareReportData(reportType, filters) {
     return { products: allProducts, totalPedidos, totalProductos, noveltyCounts };
 }
 
-function setupAnalystDashboardListeners() {
+export function initAnalystEventListeners() {
     const downloadContainer = document.querySelector('#analyst-dashboard .btn-group.w-100');
     if (!downloadContainer) return;
 
     // Event delegation for download buttons
     downloadContainer.addEventListener('click', async (e) => {
         const target = e.target.closest('.dropdown-item');
-        if (!target) return;
+        if (!target || target.classList.contains('disabled')) return;
 
         e.preventDefault();
 
@@ -826,6 +826,7 @@ function setupAnalystDashboardListeners() {
             end_date: document.getElementById('filterEndDate').value,
         };
 
+        const originalText = target.innerHTML;
         try {
             target.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando...';
             target.classList.add('disabled');
@@ -840,20 +841,13 @@ function setupAnalystDashboardListeners() {
             if (reportConfig.format === 'excel') {
                 generateExcelReport(reportData, reportConfig.type, currentFilters);
             } else if (reportConfig.format === 'pdf') {
-                generatePdfReport(reportData, reportConfig.type, currentFilters);
+                await generatePdfReport(reportData, reportConfig.type, currentFilters);
             }
         } catch (error) {
             console.error('Error generating report:', error);
             alert(`Error al generar el informe: ${error.message}`);
         } finally {
-            // Restore original text
-            const originalTextMap = {
-                'download-general-excel': 'General (Excel)',
-                'download-general-pdf': 'General (PDF)',
-                'download-novelties-excel': 'Detalle Novedades (Excel)',
-                'download-novelties-pdf': 'Detalle Novedades (PDF)',
-            };
-            target.innerHTML = originalTextMap[target.id] || 'Descargar';
+            target.innerHTML = originalText;
             target.classList.remove('disabled');
         }
     });
@@ -903,7 +897,7 @@ function generateExcelReport(reportData, reportType, filters) {
     XLSX.writeFile(wb, fileName);
 }
 
-function generatePdfReport(reportData, reportType, filters) {
+async function generatePdfReport(reportData, reportType, filters) {
     const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -937,6 +931,44 @@ function generatePdfReport(reportData, reportType, filters) {
 
     let finalY = doc.lastAutoTable.finalY || 80;
 
+    // Gráfico de Novedades (generado off-screen)
+    if (Object.keys(noveltyCounts).length > 0) {
+        finalY += 10;
+        doc.setFontSize(12);
+        doc.text('Gráfico de Novedades', 14, finalY);
+        
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = 400;
+        offscreenCanvas.height = 250;
+
+        const chartImage = await new Promise((resolve) => {
+            new Chart(offscreenCanvas.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(noveltyCounts),
+                    datasets: [{
+                        data: Object.values(noveltyCounts),
+                        backgroundColor: ['#ffc107', '#fd7e14', '#dc3545', '#6f42c1', '#20c997', '#0dcaf0'],
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    animation: {
+                        onComplete: function() {
+                            resolve(this.toBase64Image());
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        });
+
+        doc.addImage(chartImage, 'PNG', 14, finalY + 2, 90, 60);
+        finalY += 70; // Incrementar espacio para el gráfico
+    }
+
     // Tabla de Productos
     doc.setFontSize(12);
     doc.text('Detalle de Productos', 14, finalY + 10);
@@ -967,20 +999,9 @@ function generatePdfReport(reportData, reportType, filters) {
     });
     finalY = doc.lastAutoTable.finalY;
 
-    // Gráfico de Novedades (movido después de la tabla)
-    const noveltyChartCanvas = state.chartInstances.noveltiesChart?.canvas;
-    if (noveltyChartCanvas && Object.keys(noveltyCounts).length > 0) {
-        finalY += 10;
-        doc.setFontSize(12);
-        doc.text('Gráfico de Novedades', 14, finalY);
-        const chartImage = noveltyChartCanvas.toDataURL('image/png', 1.0);
-        doc.addImage(chartImage, 'PNG', 14, finalY + 2, 90, 60);
-        finalY += 70; // Incrementar espacio para el gráfico
-    }
-
     // Conclusiones
     doc.setFontSize(12);
-    doc.text('Conclusiones', 14, finalY);
+    doc.text('Conclusiones', 14, finalY + 5);
     let conclusionText = `El informe de tipo '${reportType}' generó un total de ${totalPedidos} líneas de producto. `;
     if(Object.keys(noveltyCounts).length > 0) {
         const mainNovelty = Object.entries(noveltyCounts).sort((a, b) => b[1] - a[1])[0];
@@ -989,7 +1010,7 @@ function generatePdfReport(reportData, reportType, filters) {
         conclusionText += 'No se encontraron novedades significativas en los productos analizados.';
     }
     const splitText = doc.splitTextToSize(conclusionText, 180);
-    doc.text(splitText, 14, finalY + 5);
+    doc.text(splitText, 14, finalY + 10);
 
     doc.save(fileName);
 }

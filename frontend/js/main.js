@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initApp() {
     initTheme();
+    ui.initAnalystEventListeners(); // Se inicializa una sola vez
     // Se pasa la función para inicializar el dashboard al verificar la autenticación
     checkAuth(initUserDashboard);
     setupGlobalListeners();

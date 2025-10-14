@@ -405,3 +405,9 @@ body::before {
 .dropdown-menu {
     z-index: 1060;
 }
+
+/* Fix: Eleva el dropdown de informes sobre los gráficos */
+#analyst-dashboard .btn-group {
+    position: relative;
+    z-index: 2;
+}
