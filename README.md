@@ -9,7 +9,8 @@ Sistema completo para la gestión de auditorías de inventario con carga de arch
 - Un editor de código como VS Code
 - Git
 
-### 2. Instalación
+### 2. Instalación y Ejecución
+
 ```bash
 # 1. Clona el repositorio (si aún no lo has hecho)
 # git clone <url-del-repositorio>
@@ -21,33 +22,16 @@ python -m venv venv
 
 # 3. Instala las dependencias
 pip install -r requirements.txt
-```
 
-#### 2. Frontend (Web)
-```bash
-# Ejecutar servidor frontend
-cd frontend
-python -m http.server 3000
-```
-
-### 🔄 Para Ejecutar Ambos Servidores
-
-**Terminal 1 - Backend:**
-```bash
-.\venv\Scripts\activate.bat
+# 4. Ejecuta el servidor
+# El servidor de FastAPI sirve tanto el backend como el frontend.
+# No necesitas un segundo servidor.
 uvicorn backend.main:app --reload
-```
-
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-python -m http.server 3000
 ```
 
 ## 🌐 URLs de Acceso
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://127.0.0.1:8000
+- **Aplicación (Frontend y Backend)**: http://127.0.0.1:8000
 - **Documentación API**: http://127.0.0.1:8000/docs
 
 ## 👥 Roles de Usuario

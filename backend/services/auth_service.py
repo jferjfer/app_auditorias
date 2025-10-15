@@ -23,7 +23,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 # --- Lógica JWT ---
-SECRET_KEY = os.getenv("SECRET_KEY", "tu-clave-secreta-debe-ser-fuerte-y-unica")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if SECRET_KEY is None:
+    raise ValueError("La variable de entorno SECRET_KEY no está configurada. La aplicación no puede iniciar de forma segura.")
+
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
