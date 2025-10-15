@@ -24,6 +24,16 @@ export async function verAuditoria(auditId) {
         initWebSocket(auditId);
         setupAuditViewListeners();
 
+        const toggleContainer = document.getElementById('toggle-correct-products-container');
+        if (toggleContainer) {
+            // A collaborative audit is defined by having more than one collaborator.
+            if (audit.colaboradores && audit.colaboradores.length > 0) {
+                toggleContainer.classList.remove('d-none');
+            } else {
+                toggleContainer.classList.add('d-none');
+            }
+        }
+
         if (audit.estado === 'finalizada') {
             document.querySelectorAll('#auditor-products-table-body input, #auditor-products-table-body select, #auditor-products-table-body textarea, #auditor-products-table-body button').forEach(el => {
                 el.disabled = true;
@@ -53,54 +63,178 @@ async function handleSkuScan(scannedSku) {
     scannedSku = scannedSku.trim().toUpperCase().replace(/^0+/, '');
     if (scanInput) scanInput.value = '';
 
-    const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
-    if (!productRow) {
-        speak(`Producto ${scannedSku} no encontrado.`);
-        setLastScanned(null);
-        return;
-    }
+    const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
 
-    const lastScanned = state.lastScanned;
-    const productId = productRow.getAttribute('data-product-id');
+    if (isCollaborative) {
+        speak("Procesando SKU");
+        const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
+        if (!productRow) {
+            handleCollaborativeScanNotFound(scannedSku);
+        } else {
+            handleCollaborativeScanFound(productRow);
+        }
+    } else {
+        // Non-collaborative flow
+        const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
+        if (!productRow) {
+            speak(`Producto ${scannedSku} no encontrado.`);
+            setLastScanned(null);
+            return;
+        }
 
-    if (lastScanned && lastScanned.sku === scannedSku) {
-        const physicalCountInput = productRow.querySelector('.physical-count');
-        productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        productRow.classList.add('highlight-manual');
-        physicalCountInput.focus();
-        physicalCountInput.select();
-        setLastScanned(null);
-        return;
-    }
+        const lastScanned = state.lastScanned;
+        const productId = productRow.getAttribute('data-product-id');
 
-    if (lastScanned && lastScanned.sku !== scannedSku) {
-        const lastProductRow = document.querySelector(`tr[data-sku="${lastScanned.sku}"]`);
-        if (lastProductRow) {
-            const lastProductId = lastProductRow.getAttribute('data-product-id');
-            const docQuantity = parseInt(lastProductRow.querySelector('.doc-quantity').textContent, 10) || 0;
-            try {
-                await api.updateProduct(state.currentAudit.id, lastProductId, {
-                    cantidad_fisica: docQuantity,
-                    novedad: 'sin_novedad',
-                    observaciones: ''
-                });
-                lastProductRow.classList.add('is-saved');
-                lastProductRow.querySelector('.physical-count').value = docQuantity;
-                lastProductRow.querySelector('.novelty-select').value = 'sin_novedad';
-                setTimeout(() => lastProductRow.classList.remove('is-saved'), 1200);
-                updateCompliancePercentage(state.currentAudit.id);
-            } catch (error) {
-                console.error(`Error al autoguardar producto ${lastScanned.sku}: ${error.message}`);
-                speak(`Error al guardar ${lastScanned.sku}`);
+        if (lastScanned && lastScanned.sku === scannedSku) {
+            const physicalCountInput = productRow.querySelector('.physical-count');
+            productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            productRow.classList.add('highlight-manual');
+            physicalCountInput.focus();
+            physicalCountInput.select();
+            setLastScanned(null);
+            return;
+        }
+
+        if (lastScanned && lastScanned.sku !== scannedSku) {
+            const lastProductRow = document.querySelector(`tr[data-sku="${lastScanned.sku}"]`);
+            if (lastProductRow) {
+                const lastProductId = lastProductRow.getAttribute('data-product-id');
+                const docQuantity = parseInt(lastProductRow.querySelector('.doc-quantity').textContent, 10) || 0;
+                try {
+                    await api.updateProduct(state.currentAudit.id, lastProductId, {
+                        cantidad_fisica: docQuantity,
+                        novedad: 'sin_novedad',
+                        observaciones: ''
+                    });
+                    lastProductRow.classList.add('is-saved');
+                    lastProductRow.querySelector('.physical-count').value = docQuantity;
+                    lastProductRow.querySelector('.novelty-select').value = 'sin_novedad';
+                    setTimeout(() => lastProductRow.classList.remove('is-saved'), 1200);
+                    updateCompliancePercentage(state.currentAudit.id);
+                } catch (error) {
+                    console.error(`Error al autoguardar producto ${lastScanned.sku}: ${error.message}`);
+                    speak(`Error al guardar ${lastScanned.sku}`);
+                }
             }
         }
-    }
 
-    const currentDocQuantity = productRow.querySelector('.doc-quantity').textContent;
-    speak(`Cantidad: ${currentDocQuantity}`);
-    setLastScanned({ sku: scannedSku, productId: productId });
-    if (scanInput) scanInput.focus();
+        const currentDocQuantity = productRow.querySelector('.doc-quantity').textContent;
+        speak(`Cantidad: ${currentDocQuantity}`);
+        setLastScanned({ sku: scannedSku, productId: productId });
+        if (scanInput) scanInput.focus();
+    }
 }
+
+function handleCollaborativeScanNotFound(scannedSku) {
+    const surplusModalEl = document.getElementById('surplus-modal');
+    const surplusModal = new bootstrap.Modal(surplusModalEl);
+    
+    document.getElementById('surplus-modal-message').textContent = `El producto con SKU ${scannedSku} no se encontró. Registra el sobrante.`;
+    const quantityInput = document.getElementById('surplus-quantity');
+    const observationsInput = document.getElementById('surplus-observations');
+    quantityInput.value = 1;
+    observationsInput.value = 'Sobrante registrado por colaborador.';
+
+    const confirmBtn = document.getElementById('confirm-surplus-btn');
+    
+    const handleConfirm = async () => {
+        // NOTE: The API does not currently support adding a new product from the audit view.
+        // This would require a new endpoint and further implementation.
+        // For now, we just show a toast.
+        showToast(`Funcionalidad para agregar sobrantes no implementada en el backend.`, 'info');
+        surplusModal.hide();
+    };
+    
+    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+    document.getElementById('confirm-surplus-btn').addEventListener('click', handleConfirm);
+
+    surplusModal.show();
+}
+
+function handleCollaborativeScanFound(productRow) {
+    const discrepancyModalEl = document.getElementById('discrepancy-modal');
+    const discrepancyModal = new bootstrap.Modal(discrepancyModalEl);
+
+    const docQuantity = parseInt(productRow.querySelector('.doc-quantity').textContent, 10);
+    const physicalCount = parseInt(productRow.querySelector('.physical-count').value, 10) || 0;
+    const productName = productRow.cells[2].textContent;
+    const sku = productRow.dataset.sku;
+
+    document.getElementById('discrepancy-modal-message').textContent = `Discrepancia en ${productName} (SKU: ${sku}). Documento: ${docQuantity}, Físico: ${physicalCount}.`;
+
+    const actionsContainer = document.getElementById('discrepancy-actions-container');
+    actionsContainer.innerHTML = `
+        <button class="btn btn-lg btn-success" id="confirm-match-btn">Confirmar ${docQuantity} Unidades</button>
+        <button class="btn btn-lg btn-warning" id="add-one-btn">Añadir 1 Unidad</button>
+        <button class="btn btn-lg btn-info" id="manual-entry-btn">Ingreso Manual</button>
+    `;
+
+    const manualInputContainer = document.getElementById('discrepancy-manual-input-container');
+    const confirmDiscrepancyBtn = document.getElementById('confirm-discrepancy-btn');
+    const discrepancyQuantityInput = document.getElementById('discrepancy-quantity');
+    const discrepancyObservationsInput = document.getElementById('discrepancy-observations');
+
+    const hideManualInput = () => {
+        manualInputContainer.classList.add('d-none');
+        confirmDiscrepancyBtn.classList.add('d-none');
+        discrepancyQuantityInput.value = '';
+        discrepancyObservationsInput.value = '';
+    };
+
+    hideManualInput(); // Reset on open
+
+    const updateAndClose = async (quantity, novelty, obs) => {
+        await updateProductAndClose(productRow, quantity, novelty, obs);
+        discrepancyModal.hide();
+    };
+
+    document.getElementById('confirm-match-btn').addEventListener('click', () => {
+        updateAndClose(docQuantity, 'sin_novedad', 'Confirmado por colaborador.');
+    });
+
+    document.getElementById('add-one-btn').addEventListener('click', () => {
+        const newQuantity = physicalCount + 1;
+        const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
+        updateAndClose(newQuantity, novelty, `Ajuste de +1 por colaborador. Total: ${newQuantity}`);
+    });
+
+    document.getElementById('manual-entry-btn').addEventListener('click', () => {
+        manualInputContainer.classList.remove('d-none');
+        confirmDiscrepancyBtn.classList.remove('d-none');
+        discrepancyQuantityInput.focus();
+    });
+
+    confirmDiscrepancyBtn.addEventListener('click', () => {
+        const newQuantity = parseInt(discrepancyQuantityInput.value, 10);
+        const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
+        updateAndClose(newQuantity, novelty, discrepancyObservationsInput.value || 'Ajuste manual por colaborador.');
+    });
+
+    discrepancyModal.show();
+}
+
+async function updateProductAndClose(row, quantity, novelty, observation) {
+    const productId = row.getAttribute('data-product-id');
+    if (!productId) return;
+
+    const updateData = {
+        cantidad_fisica: quantity,
+        novedad: novelty,
+        observaciones: observation
+    };
+
+    try {
+        await api.updateProduct(state.currentAudit.id, productId, updateData);
+        row.querySelector('.physical-count').value = quantity;
+        row.querySelector('.novelty-select').value = novelty;
+        row.querySelector('.observations-area').value = observation;
+        showToast(`Producto ${row.dataset.sku} actualizado.`, 'success');
+        updateCompliancePercentage(state.currentAudit.id);
+    } catch (error) {
+        showToast(`Error al actualizar producto: ${error.message}`, 'error');
+    }
+}
+
 
 async function saveProductData(row) {
     const productId = row.getAttribute('data-product-id');
@@ -123,6 +257,49 @@ async function saveProductData(row) {
     }
 }
 
+function updateNoveltyAndObservation(row) {
+    const physicalCountInput = row.querySelector('.physical-count');
+    const physicalCount = parseInt(physicalCountInput.value, 10);
+    const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10);
+    const noveltySelect = row.querySelector('.novelty-select');
+    const observationsArea = row.querySelector('.observations-area');
+
+    if (isNaN(physicalCount) || isNaN(docQuantity)) return;
+
+    const diff = physicalCount - docQuantity;
+
+    if (diff === 0) {
+        noveltySelect.value = 'sin_novedad';
+        observationsArea.value = ''; // Clear observations
+    } else if (diff < 0) {
+        noveltySelect.value = 'faltante';
+        observationsArea.value = `Faltante: ${Math.abs(diff)}`;
+    } else { // diff > 0
+        noveltySelect.value = 'sobrante';
+        observationsArea.value = `Sobrante: ${diff}`;
+    }
+}
+
+function toggleCorrectProducts(hide) {
+    const tableBody = document.getElementById('auditor-products-table-body');
+    if (!tableBody) return;
+
+    const rows = tableBody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const docQuantityEl = row.querySelector('.doc-quantity');
+        const physicalCountInput = row.querySelector('.physical-count');
+
+        if (docQuantityEl && physicalCountInput && physicalCountInput.value) {
+            const docQuantity = parseInt(docQuantityEl.textContent, 10);
+            const physicalCount = parseInt(physicalCountInput.value, 10);
+
+            if (docQuantity === physicalCount) {
+                row.style.display = hide ? 'none' : '';
+            }
+        }
+    });
+}
+
 function setupAuditViewListeners() {
     const productsTable = document.getElementById('auditor-products-table-body');
     if (!productsTable) return;
@@ -138,50 +315,38 @@ function setupAuditViewListeners() {
         }
     });
 
-    // 2. Save on Enter key press in any input/select/textarea within a row
+    // 2. Save on Enter key press in the physical count input
     productsTable.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter' && e.target.matches('.physical-count, .novelty-select, .observations-area')) {
-            e.preventDefault();
+        if (e.key === 'Enter' && e.target.matches('.physical-count')) {
+            e.preventDefault(); // Prevent form submission
             const row = e.target.closest('tr');
+            
+            // Calculate novelty and observation first
+            updateNoveltyAndObservation(row);
+            
+            // Then, save the data
             await saveProductData(row);
             speak('Guardado');
 
-            const nextRow = row.nextElementSibling;
-            if (nextRow && nextRow.querySelector('.physical-count')) {
-                nextRow.querySelector('.physical-count').focus();
-                nextRow.querySelector('.physical-count').select();
-            } else {
-                 // If it's the last row, maybe move focus back to the main scan input
-                document.getElementById('scan-input')?.focus();
-            }
+            // Finally, return focus to the main SKU scan input
+            document.getElementById('scan-input')?.focus();
         }
     });
 
-    // 3. Auto-calculate novelty on quantity change
+    // 3. Auto-calculate novelty on quantity change (when using mouse or tab)
     productsTable.addEventListener('change', (e) => {
         if (e.target.matches('.physical-count')) {
             const row = e.target.closest('tr');
-            const physicalCount = parseInt(e.target.value, 10);
-            const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10);
-            const noveltySelect = row.querySelector('.novelty-select');
-            const observationsArea = row.querySelector('.observations-area');
-
-            if (isNaN(physicalCount) || isNaN(docQuantity)) return;
-
-            if (physicalCount === docQuantity) {
-                noveltySelect.value = 'sin_novedad';
-                observationsArea.value = 'OK';
-            } else if (physicalCount < docQuantity) {
-                noveltySelect.value = 'faltante';
-            } else {
-                noveltySelect.value = 'sobrante';
-            }
+            updateNoveltyAndObservation(row);
         }
     });
 
     // --- Event Listeners for Main Audit Actions ---
 
-    // 3. Save All button
+    document.getElementById('toggle-correct-products-checkbox')?.addEventListener('change', (e) => {
+        toggleCorrectProducts(e.target.checked);
+    });
+
     document.getElementById('save-all-btn')?.addEventListener('click', async () => {
         const rows = productsTable.querySelectorAll('tr');
         speak('Guardando todos los cambios.');
@@ -196,7 +361,6 @@ function setupAuditViewListeners() {
         }
     });
 
-    // 4. Finish Audit button
     document.getElementById('finish-audit-btn')?.addEventListener('click', async () => {
         if (!confirm('¿Estás seguro de que quieres finalizar esta auditoría? No podrás hacer más cambios.')) {
             return;
@@ -205,18 +369,60 @@ function setupAuditViewListeners() {
             await api.finishAudit(state.currentAudit.id);
             showToast('Auditoría finalizada con éxito.', 'success');
             speak('Auditoría finalizada');
-            // Refresh the view to lock inputs
             await verAuditoria(state.currentAudit.id);
         } catch (error) {
             showToast(`Error al finalizar la auditoría: ${error.message}`, 'error');
         }
     });
 
-    // 5. Collaborative Audit button
-    document.getElementById('collaborative-audit-btn')?.addEventListener('click', () => {
-        showToast('La función de auditoría colaborativa aún no está implementada.', 'info');
-        // Here you would trigger a modal to select users
-        // e.g., openCollaboratorModal();
+    document.getElementById('collaborative-audit-btn')?.addEventListener('click', async () => {
+        const panel = document.getElementById('collaborative-panel');
+        if (!panel || !state.currentAudit) return;
+
+        try {
+            const allAuditors = await api.fetchAuditors();
+            const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+            const currentCollaboratorIds = state.currentAudit.colaboradores.map(c => c.id);
+
+            const listContainer = document.getElementById('collaborative-auditors-list');
+            listContainer.innerHTML = '';
+
+            allAuditors.forEach(auditor => {
+                if (auditor.id === currentUserId) return;
+
+                const isChecked = currentCollaboratorIds.includes(auditor.id);
+                const item = document.createElement('label');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    ${auditor.nombre}
+                    <input class="form-check-input" type="checkbox" value="${auditor.id}" ${isChecked ? 'checked' : ''}>
+                `;
+                listContainer.appendChild(item);
+            });
+
+            panel.classList.remove('d-none');
+        } catch (error) {
+            showToast(`Error al cargar auditores: ${error.message}`, 'error');
+        }
+    });
+
+    document.getElementById('cancel-collaborative-audit')?.addEventListener('click', () => {
+        document.getElementById('collaborative-panel').classList.add('d-none');
+    });
+
+    document.getElementById('collaborative-audit-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const selectedCheckboxes = document.querySelectorAll('#collaborative-auditors-list .form-check-input:checked');
+        const collaboratorIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
+
+        try {
+            await api.addCollaborators(state.currentAudit.id, collaboratorIds);
+            showToast('Colaboradores actualizados con éxito.', 'success');
+            document.getElementById('collaborative-panel').classList.add('d-none');
+            await verAuditoria(state.currentAudit.id);
+        } catch (error) {
+            showToast(`Error al asignar colaboradores: ${error.message}`, 'error');
+        }
     });
 }
 
@@ -268,7 +474,4 @@ function setupAuditorDashboardListeners() {
             });
         }
     });
-    
-    // Listeners for save all, finish, collaborative audit buttons
-    // These can be moved from ui.js or main.js
 }
