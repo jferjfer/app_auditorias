@@ -102,32 +102,122 @@ async function handleSkuScan(scannedSku) {
     if (scanInput) scanInput.focus();
 }
 
+async function saveProductData(row) {
+    const productId = row.getAttribute('data-product-id');
+    if (!productId) return; // Skip rows without a product id
+
+    const updateData = {
+        cantidad_fisica: row.querySelector('.physical-count').value,
+        novedad: row.querySelector('.novelty-select').value,
+        observaciones: row.querySelector('.observations-area').value
+    };
+
+    try {
+        await api.updateProduct(state.currentAudit.id, productId, updateData);
+        row.classList.add('is-saved');
+        setTimeout(() => row.classList.remove('is-saved'), 1200);
+        updateCompliancePercentage(state.currentAudit.id);
+    } catch (error) {
+        showToast(`Error al guardar producto ${productId}: ${error.message}`, 'error');
+        console.error(`Failed to save product ${productId}:`, error);
+    }
+}
+
 function setupAuditViewListeners() {
     const productsTable = document.getElementById('auditor-products-table-body');
     if (!productsTable) return;
 
+    // --- Event Listeners for Product Rows ---
+
+    // 1. Save on button click
     productsTable.addEventListener('click', async (e) => {
         if (e.target.closest('.save-product-btn')) {
             const row = e.target.closest('tr');
-            const productId = row.getAttribute('data-product-id');
-            const updateData = {
-                cantidad_fisica: row.querySelector('.physical-count').value,
-                novedad: row.querySelector('.novelty-select').value,
-                observaciones: row.querySelector('.observations-area').value
-            };
-            try {
-                await api.updateProduct(state.currentAudit.id, productId, updateData);
-                speak('Guardado');
-                row.classList.add('is-saved');
-                setTimeout(() => row.classList.remove('is-saved'), 1200);
-                updateCompliancePercentage(state.currentAudit.id);
-            } catch (error) {
-                showToast(`Error al guardar: ${error.message}`, 'error');
+            await saveProductData(row);
+            speak('Guardado');
+        }
+    });
+
+    // 2. Save on Enter key press in any input/select/textarea within a row
+    productsTable.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' && e.target.matches('.physical-count, .novelty-select, .observations-area')) {
+            e.preventDefault();
+            const row = e.target.closest('tr');
+            await saveProductData(row);
+            speak('Guardado');
+
+            const nextRow = row.nextElementSibling;
+            if (nextRow && nextRow.querySelector('.physical-count')) {
+                nextRow.querySelector('.physical-count').focus();
+                nextRow.querySelector('.physical-count').select();
+            } else {
+                 // If it's the last row, maybe move focus back to the main scan input
+                document.getElementById('scan-input')?.focus();
             }
         }
     });
-    
-    // Other listeners like keydown for Enter, etc. can be added here
+
+    // 3. Auto-calculate novelty on quantity change
+    productsTable.addEventListener('change', (e) => {
+        if (e.target.matches('.physical-count')) {
+            const row = e.target.closest('tr');
+            const physicalCount = parseInt(e.target.value, 10);
+            const docQuantity = parseInt(row.querySelector('.doc-quantity').textContent, 10);
+            const noveltySelect = row.querySelector('.novelty-select');
+            const observationsArea = row.querySelector('.observations-area');
+
+            if (isNaN(physicalCount) || isNaN(docQuantity)) return;
+
+            if (physicalCount === docQuantity) {
+                noveltySelect.value = 'sin_novedad';
+                observationsArea.value = 'OK';
+            } else if (physicalCount < docQuantity) {
+                noveltySelect.value = 'faltante';
+            } else {
+                noveltySelect.value = 'sobrante';
+            }
+        }
+    });
+
+    // --- Event Listeners for Main Audit Actions ---
+
+    // 3. Save All button
+    document.getElementById('save-all-btn')?.addEventListener('click', async () => {
+        const rows = productsTable.querySelectorAll('tr');
+        speak('Guardando todos los cambios.');
+        const savePromises = Array.from(rows).map(row => saveProductData(row));
+        
+        try {
+            await Promise.all(savePromises);
+            showToast('Todos los cambios han sido guardados.', 'success');
+        } catch (error) {
+            showToast('Ocurrió un error al guardar todo. Revisa la consola.', 'error');
+            console.error("Error during save all:", error);
+        }
+    });
+
+    // 4. Finish Audit button
+    document.getElementById('finish-audit-btn')?.addEventListener('click', async () => {
+        if (!confirm('¿Estás seguro de que quieres finalizar esta auditoría? No podrás hacer más cambios.')) {
+            return;
+        }
+        try {
+            await api.finishAudit(state.currentAudit.id);
+            showToast('Auditoría finalizada con éxito.', 'success');
+            speak('Auditoría finalizada');
+            // Refresh the view to lock inputs
+            await verAuditoria(state.currentAudit.id);
+        } catch (error) {
+            showToast(`Error al finalizar la auditoría: ${error.message}`, 'error');
+        }
+    });
+
+    // 5. Collaborative Audit button
+    document.getElementById('collaborative-audit-btn')?.addEventListener('click', () => {
+        showToast('La función de auditoría colaborativa aún no está implementada.', 'info');
+        // Here you would trigger a modal to select users
+        // e.g., openCollaboratorModal();
+    });
 }
 
 function setupAuditorDashboardListeners() {
