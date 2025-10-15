@@ -96,8 +96,11 @@ def get_audits(db: Session) -> List[models.Audit]:
     return db.query(models.Audit).filter(models.Audit.auditor_id.isnot(None)).all()
 
 def get_audit_by_id(db: Session, audit_id: int):
-    """Obtiene una auditoría por su ID, incluyendo sus productos."""
-    return db.query(models.Audit).options(joinedload(models.Audit.productos)).filter(models.Audit.id == audit_id).first()
+    """Obtiene una auditoría por su ID, incluyendo sus productos y colaboradores."""
+    return db.query(models.Audit).options(
+        joinedload(models.Audit.productos),
+        joinedload(models.Audit.collaborators)
+    ).filter(models.Audit.id == audit_id).first()
 
 def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
     """Crea un nuevo registro de archivo asociado a una auditoría."""

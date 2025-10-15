@@ -381,8 +381,15 @@ function setupAuditViewListeners() {
 
         try {
             const allAuditors = await api.fetchAuditors();
+            
+            // Defensive check to ensure allAuditors is an array
+            if (!Array.isArray(allAuditors)) {
+                console.error('Se esperaba un array de auditores, pero se recibió:', allAuditors);
+                throw new Error('La respuesta de la API de auditores no es válida.');
+            }
+
             const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-            const currentCollaboratorIds = state.currentAudit.colaboradores.map(c => c.id);
+            const currentCollaboratorIds = (state.currentAudit.collaborators || []).map(c => c.id);
 
             const listContainer = document.getElementById('collaborative-auditors-list');
             listContainer.innerHTML = '';

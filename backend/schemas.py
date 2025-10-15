@@ -76,6 +76,7 @@ class Audit(AuditBase):
 # Esquema para mostrar los detalles de la auditoría con productos
 class AuditDetails(Audit):
     productos: List[Product]
+    collaborators: List[User] = []
 
     class Config:
         orm_mode = True
