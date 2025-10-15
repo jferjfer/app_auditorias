@@ -1,4 +1,5 @@
 import { setChartInstance } from './state.js';
+import * as api from './api.js';
 
 export function showToast(message, type = 'info') {
     const backgroundColor = {
@@ -320,3 +321,58 @@ export async function renderNoveltiesChart(audits) {
         }
     }));
 }
+
+/**
+ * Genera un sonido de 'beep' corto usando la Web Audio API.
+ */
+export function playBeep(frequency = 523.25, duration = 200, volume = 0.5) {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        setTimeout(() => {
+            oscillator.stop();
+        }, duration);
+    } catch (e) {
+        console.error("Web Audio API is not supported in this browser.", e);
+    }
+}
+
+/**
+ * Actualiza el círculo de progreso del cumplimiento de la auditoría.
+ * @param {number} auditId - El ID de la auditoría.
+ */
+export async function updateCompliancePercentage(auditId) {
+    const complianceDiv = document.getElementById('compliance-percentage');
+    if (!complianceDiv) return;
+    try {
+        const auditData = await api.fetchAuditDetails(auditId);
+        const percentage = auditData.porcentaje_cumplimiento ?? 0;
+        complianceDiv.textContent = `${percentage}%`;
+        complianceDiv.style.background = `conic-gradient(#00c6ff ${percentage}%, transparent ${percentage}%)`;
+    } catch (error) {
+        console.error('Error al actualizar porcentaje:', error);
+    }
+}
+
+/**
+ * Utiliza la API de síntesis de voz del navegador para leer un texto.
+ * @param {string} text - El texto a leer.
+ */
+export function speak(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'es-ES';
+    window.speechSynthesis.speak(utterance);
+}
+

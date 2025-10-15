@@ -1,6 +1,7 @@
 import { loginUser, fetchCurrentUser } from './api.js';
 import { state } from './state.js';
-import { showDashboard, loadDashboardData, updateSidebar, showToast } from './ui.js';
+import { showDashboard, updateSidebar } from './ui.js';
+import { showToast } from './ui-helpers.js';
 
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');

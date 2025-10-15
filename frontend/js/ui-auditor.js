@@ -1,9 +1,5 @@
 import * as api from './api.js';
-import { showToast } from './ui-helpers.js';
-import { renderAuditorAuditsTable, renderProductsTable } from './ui-helpers.js';
-import { state, setCurrentAudit, setAuditorAuditsList, setLastScanned, setHtml5QrCode } from './state.js';
-import { initWebSocket } from './websockets.js';
-import { speak, updateCompliancePercentage, playBeep } from './ui.js'; // Assuming these will become shared helpers
+import { showToast, renderAuditorAuditsTable, renderProductsTable, speak, updateCompliancePercentage, playBeep } from './ui-helpers.js';
 
 export async function loadAuditorDashboard(token) {
     try {

@@ -1,6 +1,9 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from backend.routers import auth, audits, users, websockets
 from backend.database import engine
