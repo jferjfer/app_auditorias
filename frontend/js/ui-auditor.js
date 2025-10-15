@@ -1,5 +1,7 @@
 import * as api from './api.js';
 import { showToast, renderAuditorAuditsTable, renderProductsTable, speak, updateCompliancePercentage, playBeep } from './ui-helpers.js';
+import { state, setAuditorAuditsList, setCurrentAudit, setLastScanned, setHtml5QrCode } from './state.js';
+import { initWebSocket } from './websockets.js';
 
 export async function loadAuditorDashboard(token) {
     try {
