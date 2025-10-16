@@ -30,7 +30,13 @@ async function fetchApi(url, options = {}) {
         let errorDetail = 'API request failed';
         try {
             const error = await response.json();
-            errorDetail = error.detail || JSON.stringify(error);
+            if (typeof error.detail === 'string') {
+                errorDetail = error.detail;
+            } else if (error.detail && typeof error.detail.msg === 'string') {
+                errorDetail = error.detail.msg;
+            } else {
+                errorDetail = JSON.stringify(error);
+            }
         } catch (e) {
             // Not a JSON response
             errorDetail = response.statusText;

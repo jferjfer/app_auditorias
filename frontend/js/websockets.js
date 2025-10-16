@@ -20,8 +20,19 @@ export function initWebSocket(auditId) {
                 row.querySelector('.physical-count').value = product.cantidad_fisica;
                 row.querySelector('.novelty-select').value = product.novedad;
                 row.querySelector('.observations-area').value = product.observaciones;
-                row.classList.add('table-info');
-                setTimeout(() => row.classList.remove('table-info'), 2000);
+                
+                // Si el producto está correcto (sin novedad), lo ocultamos.
+                if (product.novedad === 'sin_novedad') {
+                    row.classList.add('fade-out');
+                    setTimeout(() => {
+                        row.style.display = 'none';
+                        row.classList.remove('fade-out'); // Limpiar clase para futuras reapariciones
+                    }, 500); // 500ms para la animación de fade-out
+                } else {
+                    // Si tiene novedad, solo lo resaltamos
+                    row.classList.add('table-info');
+                    setTimeout(() => row.classList.remove('table-info'), 2000);
+                }
             }
         }
     };
