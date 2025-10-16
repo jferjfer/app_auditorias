@@ -5,8 +5,7 @@ import { initWebSocket } from './websockets.js';
 
 export async function loadAuditorDashboard(token) {
     try {
-        const auditorId = localStorage.getItem('user_id');
-        const audits = await api.fetchAuditsByAuditor(auditorId);
+        const audits = await api.fetchAudits();
         setAuditorAuditsList(audits);
         renderAuditorAuditsTable(audits, '#auditor-audits-table-body');
         setupAuditorDashboardListeners();

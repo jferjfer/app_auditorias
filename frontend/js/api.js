@@ -81,9 +81,6 @@ export async function fetchAuditors() {
     return fetchApi(`${API_URL}/api/users/auditors/`);
 }
 
-export async function fetchAuditsByAuditor(auditorId) {
-    return fetchApi(`${API_URL}/api/audits/auditor/${auditorId}`);
-}
 
 export async function fetchAllUsers() {
     return fetchApi(`${API_URL}/api/users/`);
