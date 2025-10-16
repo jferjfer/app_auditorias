@@ -113,6 +113,11 @@ export async function addCollaborators(auditId, collaborator_ids) {
     return fetchApi(`${API_URL}/api/audits/${auditId}/collaborators`, { method: 'POST', body });
 }
 
+export async function addSurplusProduct(auditId, productData) {
+    const body = JSON.stringify(productData);
+    return fetchApi(`${API_URL}/api/audits/${auditId}/products`, { method: 'POST', body });
+}
+
 export async function downloadReport(filters = {}) {
     const params = new URLSearchParams(filters);
     const response = await fetch(`${API_URL}/api/audits/report?${params.toString()}`, {

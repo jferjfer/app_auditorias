@@ -184,6 +184,11 @@ class AuditFinishResponse(BaseModel):
 class CollaboratorUpdate(BaseModel):
     collaborator_ids: List[int]
 
+class SurplusProductCreate(BaseModel):
+    sku: str
+    cantidad_fisica: int
+    observaciones: Optional[str] = None
+
 class ProductBulkUpdate(BaseModel):
     id: int
     cantidad_fisica: Optional[int] = None

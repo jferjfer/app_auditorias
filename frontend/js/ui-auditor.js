@@ -148,7 +148,7 @@ async function handleSkuScan(scannedSku) {
 
 function handleCollaborativeScanNotFound(scannedSku) {
     const surplusModalEl = document.getElementById('surplus-modal');
-    const surplusModal = new bootstrap.Modal(surplusModalEl);
+    const surplusModal = bootstrap.Modal.getInstance(surplusModalEl) || new bootstrap.Modal(surplusModalEl);
     
     document.getElementById('surplus-modal-message').textContent = `El producto con SKU ${scannedSku} no se encontró. Registra el sobrante.`;
     const quantityInput = document.getElementById('surplus-quantity');
@@ -159,10 +159,28 @@ function handleCollaborativeScanNotFound(scannedSku) {
     const confirmBtn = document.getElementById('confirm-surplus-btn');
     
     const handleConfirm = async () => {
-        showToast(`Funcionalidad para agregar sobrantes no implementada en el backend.`, 'info');
-        surplusModal.hide();
+        const productData = {
+            sku: scannedSku,
+            cantidad_fisica: parseInt(quantityInput.value, 10),
+            observaciones: observationsInput.value
+        };
+
+        if (!productData.cantidad_fisica || productData.cantidad_fisica <= 0) {
+            showToast('La cantidad debe ser un número mayor a cero.', 'error');
+            return;
+        }
+
+        try {
+            await api.addSurplusProduct(state.currentAudit.id, productData);
+            showToast(`Sobrante para SKU ${scannedSku} registrado con éxito.`, 'success');
+            surplusModal.hide();
+        } catch (error) {
+            showToast(`Error al registrar sobrante: ${error.message}`, 'error');
+            console.error('Error adding surplus product:', error);
+        }
     };
     
+    // Replace the event listener to avoid duplicates
     confirmBtn.replaceWith(confirmBtn.cloneNode(true));
     document.getElementById('confirm-surplus-btn').addEventListener('click', handleConfirm);
 
@@ -171,7 +189,7 @@ function handleCollaborativeScanNotFound(scannedSku) {
 
 function handleCollaborativeScanFound(productRow) {
     const discrepancyModalEl = document.getElementById('discrepancy-modal');
-    const discrepancyModal = new bootstrap.Modal(discrepancyModalEl);
+    const discrepancyModal = bootstrap.Modal.getInstance(discrepancyModalEl) || new bootstrap.Modal(discrepancyModalEl);
 
     const docQuantity = parseInt(productRow.querySelector('.doc-quantity').textContent, 10);
     const physicalCount = parseInt(productRow.querySelector('.physical-count').value, 10) || 0;

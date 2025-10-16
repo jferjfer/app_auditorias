@@ -196,6 +196,34 @@ def add_collaborators_to_audit(db: Session, audit_id: int, collaborator_ids: Lis
     db.refresh(db_audit)
     return db_audit
 
+def create_surplus_product(db: Session, audit_id: int, product_data: schemas.SurplusProductCreate) -> Optional[models.Product]:
+    """Crea un nuevo producto 'sobrante' y lo asocia a una auditoría existente."""
+    db_audit = get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit:
+        return None
+
+    # Intentar obtener una orden de traslado de otro producto en la misma auditoría
+    orden_traslado = "SOBRANTE"
+    if db_audit.productos:
+        orden_traslado = db_audit.productos[0].orden_traslado_original
+
+    new_product = models.Product(
+        auditoria_id=audit_id,
+        sku=product_data.sku,
+        nombre_articulo="SOBRANTE NO REGISTRADO",
+        cantidad_documento=0,
+        cantidad_enviada=0,
+        cantidad_fisica=product_data.cantidad_fisica,
+        novedad="sobrante",
+        observaciones=product_data.observaciones or "Sobrante registrado por colaborador",
+        orden_traslado_original=orden_traslado
+    )
+    
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
+    return new_product
+
 def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[models.Audit]:
     """
     Obtiene todas las auditorías con filtros opcionales, incluyendo rango de fechas.
