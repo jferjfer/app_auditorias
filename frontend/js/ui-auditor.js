@@ -99,66 +99,6 @@ function filterProducts(searchText) {
     });
 }
 
-async function processSingleProduct(productRow) {
-    const scanInput = document.getElementById('scan-input');
-    const scannedSku = productRow.dataset.sku;
-
-    if (scanInput) scanInput.value = '';
-    filterProducts(''); // Reset the filter to show all rows
-
-    const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
-
-    if (isCollaborative) {
-        speak("Procesando SKU");
-        if (productRow.style.display === 'none') {
-            productRow.style.display = '';
-            speak('Producto re-escaneado, registrando novedad.');
-        }
-        handleCollaborativeScanFound(productRow);
-    } else {
-        const productId = productRow.getAttribute('data-product-id');
-        const lastScanned = state.lastScanned;
-
-        if (lastScanned && lastScanned.sku === scannedSku) {
-            const physicalCountInput = productRow.querySelector('.physical-count');
-            productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            productRow.classList.add('highlight-manual');
-            physicalCountInput.focus();
-            physicalCountInput.select();
-            setLastScanned(null);
-            return;
-        }
-
-        if (lastScanned && lastScanned.sku !== scannedSku) {
-            const lastProductRow = document.querySelector(`tr[data-sku="${lastScanned.sku}"]`);
-            if (lastProductRow) {
-                const lastProductId = lastProductRow.getAttribute('data-product-id');
-                const docQuantity = parseInt(lastProductRow.querySelector('.doc-quantity').textContent, 10) || 0;
-                try {
-                    await api.updateProduct(state.currentAudit.id, lastProductId, {
-                        cantidad_fisica: docQuantity,
-                        novedad: 'sin_novedad',
-                        observaciones: ''
-                    });
-                    lastProductRow.classList.add('is-saved');
-                    lastProductRow.querySelector('.physical-count').value = docQuantity;
-                    lastProductRow.querySelector('.novelty-select').value = 'sin_novedad';
-                    setTimeout(() => lastProductRow.classList.remove('is-saved'), 1200);
-                    updateCompliancePercentage(state.currentAudit.id);
-                } catch (error) {
-                    console.error(`Error al autoguardar producto ${lastScanned.sku}: ${error.message}`);
-                    speak(`Error al guardar ${lastScanned.sku}`);
-                }
-            }
-        }
-
-        const currentDocQuantity = productRow.querySelector('.doc-quantity').textContent;
-        speak(`Cantidad: ${currentDocQuantity}`);
-        setLastScanned({ sku: scannedSku, productId: productId });
-        if (scanInput) scanInput.focus();
-    }
-}
-
 async function handleSkuScan(searchText) {
     const tableBody = document.getElementById('auditor-products-table-body');
     if (!tableBody) return;
@@ -166,23 +106,14 @@ async function handleSkuScan(searchText) {
     const visibleRows = Array.from(tableBody.querySelectorAll('tr')).filter(row => row.style.display !== 'none' && !row.querySelector('td[colspan="8"]'));
     const scanInput = document.getElementById('scan-input');
 
+    if (scanInput) scanInput.value = '';
+    filterProducts(''); // Reset filter regardless of outcome
+
     // Case 1: Exactly one product matches the filter
     if (visibleRows.length === 1) {
-        processSingleProduct(visibleRows[0]);
+        await processFoundProduct(visibleRows[0]);
 
-    // Case 2: No products match -> Surplus
-    } else if (visibleRows.length === 0 && searchText.trim() !== '') {
-        const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
-        if (isCollaborative) {
-            speak("Producto no encontrado en la lista.");
-            handleCollaborativeScanNotFound(searchText); // Use the original search text
-        } else {
-            speak("Producto no encontrado.");
-        }
-        if (scanInput) scanInput.value = '';
-        filterProducts(''); // Reset filter
-
-    // Case 3: Multiple products match -> Show selection modal
+    // Case 2: Multiple products match -> Show selection modal
     } else if (visibleRows.length > 1) {
         const modalEl = document.getElementById('product-selection-modal');
         const selectionModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
@@ -198,8 +129,8 @@ async function handleSkuScan(searchText) {
             button.className = 'list-group-item list-group-item-action';
             button.innerHTML = `<strong>${sku}</strong> - ${name}`;
             
-            button.addEventListener('click', () => {
-                processSingleProduct(row);
+            button.addEventListener('click', async () => {
+                await processFoundProduct(row);
                 selectionModal.hide();
             });
             
@@ -207,8 +138,218 @@ async function handleSkuScan(searchText) {
         });
 
         selectionModal.show();
+
+    // Case 3: No products match -> Handle as potential surplus
+    } else if (visibleRows.length === 0 && searchText.trim() !== '') {
+        const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
+        if (isCollaborative) {
+            speak("Producto no encontrado en la lista.");
+            handleCollaborativeScanNotFound(searchText);
+        } else {
+            speak("Producto no encontrado.");
+            // Maybe open a simplified surplus modal for single-user audits too?
+            // For now, just a voice message as per original logic.
+        }
     }
 }
+
+async function processFoundProduct(productRow) {
+    const productId = parseInt(productRow.getAttribute('data-product-id'), 10);
+    const productInState = state.currentAudit.productos.find(p => p.id === productId);
+    const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
+
+    // For non-collaborative audits, if the product is scanned again, just focus the input.
+    // This preserves the simple, fast workflow for single users unless a conflict arises.
+    const lastScanned = state.lastScanned;
+    if (!isCollaborative && lastScanned && lastScanned.sku === productInState.sku) {
+        const physicalCountInput = productRow.querySelector('.physical-count');
+        productRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        productRow.classList.add('highlight-manual');
+        physicalCountInput.focus();
+        physicalCountInput.select();
+        setLastScanned(null); // Reset for next scan
+        return;
+    }
+
+    // --- Smart Modal Logic (applies to ALL audits) ---
+    if (productInState) {
+        // SCENARIO A: Product already marked as CORRECT
+        if (productInState.novedad === 'sin_novedad') {
+            speak("Este producto ya fue verificado. Indica si encontraste un sobrante o una avería.");
+            showDynamicDiscrepancyModal(productRow, productInState, 'conflict');
+            return;
+        }
+        // SCENARIO B: Product already marked as MISSING
+        if (productInState.novedad === 'faltante') {
+            speak("Este producto tiene un faltante. Por favor, introduce la cantidad que encontraste.");
+            showDynamicDiscrepancyModal(productRow, productInState, 'complete_missing');
+            return;
+        }
+    }
+
+    // --- Default Behavior ---
+    // For collaborative audits, always show the generic discrepancy modal first.
+    if (isCollaborative) {
+        speak("Se encontró una discrepancia. Por favor, resuelve.");
+        showDynamicDiscrepancyModal(productRow, productInState, 'generic');
+    // For single-user audits, do the quick-scan workflow.
+    } else {
+        if (lastScanned && lastScanned.sku !== productInState.sku) {
+            // Auto-save the previously scanned item as correct if user moved to a new one
+            const lastProductRow = document.querySelector(`tr[data-sku="${lastScanned.sku}"]`);
+            if (lastProductRow) {
+                const lastProductId = lastProductRow.getAttribute('data-product-id');
+                const docQuantity = parseInt(lastProductRow.querySelector('.doc-quantity').textContent, 10) || 0;
+                try {
+                    await api.updateProduct(state.currentAudit.id, lastProductId, { cantidad_fisica: docQuantity, novedad: 'sin_novedad', observaciones: '' });
+                    lastProductRow.classList.add('is-saved');
+                    lastProductRow.querySelector('.physical-count').value = docQuantity;
+                    lastProductRow.querySelector('.novelty-select').value = 'sin_novedad';
+                    setTimeout(() => lastProductRow.classList.remove('is-saved'), 1200);
+                    updateCompliancePercentage(state.currentAudit.id);
+                } catch (error) {
+                    console.error(`Error al autoguardar producto ${lastScanned.sku}: ${error.message}`);
+                }
+            }
+        }
+        const currentDocQuantity = productRow.querySelector('.doc-quantity').textContent;
+        speak(`Cantidad: ${currentDocQuantity}`);
+        setLastScanned({ sku: productInState.sku, productId: productInState.id });
+        document.getElementById('scan-input')?.focus();
+    }
+}
+
+
+function showDynamicDiscrepancyModal(productRow, productState, mode) {
+    const modalEl = document.getElementById('discrepancy-modal');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    const titleEl = document.getElementById('discrepancyModalLabel');
+    const messageEl = document.getElementById('discrepancy-modal-message');
+    const actionsContainer = document.getElementById('discrepancy-actions-container');
+    const manualInputContainer = document.getElementById('discrepancy-manual-input-container');
+    const quantityInput = document.getElementById('discrepancy-quantity');
+    const quantityLabel = document.querySelector('label[for="discrepancy-quantity"]');
+    const observationsInput = document.getElementById('discrepancy-observations');
+    const confirmBtn = document.getElementById('confirm-discrepancy-btn');
+
+    // Reset modal to a clean state
+    actionsContainer.innerHTML = '';
+    manualInputContainer.classList.add('d-none');
+    confirmBtn.classList.add('d-none');
+    confirmBtn.onclick = null; // Remove previous event listeners
+
+    const docQuantity = parseInt(productRow.querySelector('.doc-quantity').textContent, 10);
+    const physicalCount = parseInt(productState.cantidad_fisica, 10) || 0;
+    const productName = productRow.cells[2].textContent;
+
+    switch (mode) {
+        case 'conflict':
+            titleEl.textContent = 'Acción Adicional para Producto Verificado';
+            messageEl.textContent = `El producto "${productName}" ya fue contado como correcto con ${physicalCount} unidades. ¿Qué acción deseas realizar?`;
+            actionsContainer.innerHTML = `
+                <button class="btn btn-lg btn-primary" id="modal-add-surplus-btn">Registrar Sobrante</button>
+                <button class="btn btn-lg btn-secondary" id="modal-report-damage-btn">Reportar Avería</button>
+            `;
+
+            document.getElementById('modal-add-surplus-btn').onclick = () => {
+                messageEl.textContent = 'Introduce la cantidad ADICIONAL encontrada.';
+                actionsContainer.innerHTML = '';
+                manualInputContainer.classList.remove('d-none');
+                quantityLabel.textContent = 'Cantidad Sobrante';
+                quantityInput.value = '1';
+                observationsInput.value = 'Sobrante registrado tras verificación.';
+                confirmBtn.classList.remove('d-none');
+                confirmBtn.onclick = async () => {
+                    const surplusQuantity = parseInt(quantityInput.value, 10);
+                    if (!surplusQuantity || surplusQuantity <= 0) {
+                        showToast('La cantidad sobrante debe ser mayor a cero.', 'error');
+                        return;
+                    }
+                    const newTotal = physicalCount + surplusQuantity;
+                    await updateProductAndClose(productRow, newTotal, 'sobrante', observationsInput.value);
+                    modal.hide();
+                };
+            };
+
+            document.getElementById('modal-report-damage-btn').onclick = () => {
+                messageEl.textContent = 'Introduce la cantidad de unidades dañadas.';
+                actionsContainer.innerHTML = '';
+                manualInputContainer.classList.remove('d-none');
+                quantityLabel.textContent = 'Cantidad Averiada';
+                quantityInput.value = '1';
+                observationsInput.value = 'Producto dañado.';
+                confirmBtn.classList.remove('d-none');
+                confirmBtn.onclick = async () => {
+                    const damagedQuantity = parseInt(quantityInput.value, 10);
+                    if (!damagedQuantity || damagedQuantity <= 0) {
+                        showToast('La cantidad averiada debe ser mayor a cero.', 'error');
+                        return;
+                    }
+                    const obs = `Avería: ${damagedQuantity}. ${observationsInput.value}`;
+                    await updateProductAndClose(productRow, physicalCount, 'averia', obs);
+                    modal.hide();
+                };
+            };
+            break;
+
+        case 'complete_missing':
+            titleEl.textContent = 'Completar Faltante';
+            messageEl.textContent = `Se reportó un faltante para "${productName}" (encontradas ${physicalCount} de ${docQuantity}). Introduce la cantidad que encontraste TÚ.`;
+            manualInputContainer.classList.remove('d-none');
+            quantityLabel.textContent = 'Cantidad Encontrada Ahora';
+            quantityInput.value = '1';
+            observationsInput.value = 'Completando faltante.';
+            confirmBtn.classList.remove('d-none');
+            confirmBtn.onclick = async () => {
+                const foundQuantity = parseInt(quantityInput.value, 10);
+                if (!foundQuantity || foundQuantity < 0) {
+                    showToast('La cantidad debe ser cero o más.', 'error');
+                    return;
+                }
+                const newTotal = physicalCount + foundQuantity;
+                const newNovelty = newTotal > docQuantity ? 'sobrante' : (newTotal < docQuantity ? 'faltante' : 'sin_novedad');
+                await updateProductAndClose(productRow, newTotal, newNovelty, observationsInput.value);
+                modal.hide();
+            };
+            break;
+
+        case 'generic':
+        default:
+            titleEl.textContent = 'Resolver Discrepancia';
+            messageEl.textContent = `Discrepancia en ${productName} (SKU: ${productState.sku}). Documento: ${docQuantity}, Físico: ${physicalCount}.`;
+            actionsContainer.innerHTML = `
+                <button class="btn btn-lg btn-success" id="modal-confirm-match-btn">Confirmar ${docQuantity} Unidades</button>
+                <button class="btn btn-lg btn-warning" id="modal-add-one-btn">Añadir 1 Unidad</button>
+                <button class="btn btn-lg btn-info" id="modal-manual-entry-btn">Ingreso Manual</button>
+            `;
+
+            document.getElementById('modal-confirm-match-btn').onclick = async () => {
+                await updateProductAndClose(productRow, docQuantity, 'sin_novedad', 'Confirmado por colaborador.');
+                modal.hide();
+            };
+            document.getElementById('modal-add-one-btn').onclick = async () => {
+                const newQuantity = physicalCount + 1;
+                const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
+                await updateProductAndClose(productRow, newQuantity, novelty, `Ajuste de +1 por colaborador. Total: ${newQuantity}`);
+                modal.hide();
+            };
+            document.getElementById('modal-manual-entry-btn').onclick = () => {
+                actionsContainer.innerHTML = '';
+                manualInputContainer.classList.remove('d-none');
+                quantityLabel.textContent = 'Cantidad Encontrada';
+                confirmBtn.classList.remove('d-none');
+                confirmBtn.onclick = async () => {
+                    const newQuantity = parseInt(quantityInput.value, 10);
+                    const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
+                    await updateProductAndClose(productRow, newQuantity, novelty, observationsInput.value || 'Ajuste manual por colaborador.');
+                    modal.hide();
+                };
+            };
+            break;
+    }
+    modal.show();
+}
+
 
 function handleCollaborativeScanNotFound(scannedSku) {
     const surplusModalEl = document.getElementById('surplus-modal');
@@ -249,68 +390,6 @@ function handleCollaborativeScanNotFound(scannedSku) {
     document.getElementById('confirm-surplus-btn').addEventListener('click', handleConfirm);
 
     surplusModal.show();
-}
-
-function handleCollaborativeScanFound(productRow) {
-    const discrepancyModalEl = document.getElementById('discrepancy-modal');
-    const discrepancyModal = bootstrap.Modal.getInstance(discrepancyModalEl) || new bootstrap.Modal(discrepancyModalEl);
-
-    const docQuantity = parseInt(productRow.querySelector('.doc-quantity').textContent, 10);
-    const physicalCount = parseInt(productRow.querySelector('.physical-count').value, 10) || 0;
-    const productName = productRow.cells[2].textContent;
-    const sku = productRow.dataset.sku;
-
-    document.getElementById('discrepancy-modal-message').textContent = `Discrepancia en ${productName} (SKU: ${sku}). Documento: ${docQuantity}, Físico: ${physicalCount}.`;
-
-    const actionsContainer = document.getElementById('discrepancy-actions-container');
-    actionsContainer.innerHTML = `
-        <button class="btn btn-lg btn-success" id="confirm-match-btn">Confirmar ${docQuantity} Unidades</button>
-        <button class="btn btn-lg btn-warning" id="add-one-btn">Añadir 1 Unidad</button>
-        <button class="btn btn-lg btn-info" id="manual-entry-btn">Ingreso Manual</button>
-    `;
-
-    const manualInputContainer = document.getElementById('discrepancy-manual-input-container');
-    const confirmDiscrepancyBtn = document.getElementById('confirm-discrepancy-btn');
-    const discrepancyQuantityInput = document.getElementById('discrepancy-quantity');
-    const discrepancyObservationsInput = document.getElementById('discrepancy-observations');
-
-    const hideManualInput = () => {
-        manualInputContainer.classList.add('d-none');
-        confirmDiscrepancyBtn.classList.add('d-none');
-        discrepancyQuantityInput.value = '';
-        discrepancyObservationsInput.value = '';
-    };
-
-    hideManualInput();
-
-    const updateAndClose = async (quantity, novelty, obs) => {
-        await updateProductAndClose(productRow, quantity, novelty, obs);
-        discrepancyModal.hide();
-    };
-
-    document.getElementById('confirm-match-btn').addEventListener('click', () => {
-        updateAndClose(docQuantity, 'sin_novedad', 'Confirmado por colaborador.');
-    });
-
-    document.getElementById('add-one-btn').addEventListener('click', () => {
-        const newQuantity = physicalCount + 1;
-        const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
-        updateAndClose(newQuantity, novelty, `Ajuste de +1 por colaborador. Total: ${newQuantity}`);
-    });
-
-    document.getElementById('manual-entry-btn').addEventListener('click', () => {
-        manualInputContainer.classList.remove('d-none');
-        confirmDiscrepancyBtn.classList.remove('d-none');
-        discrepancyQuantityInput.focus();
-    });
-
-    confirmDiscrepancyBtn.addEventListener('click', () => {
-        const newQuantity = parseInt(discrepancyQuantityInput.value, 10);
-        const novelty = newQuantity > docQuantity ? 'sobrante' : (newQuantity < docQuantity ? 'faltante' : 'sin_novedad');
-        updateAndClose(newQuantity, novelty, discrepancyObservationsInput.value || 'Ajuste manual por colaborador.');
-    });
-
-    discrepancyModal.show();
 }
 
 async function updateProductAndClose(row, quantity, novelty, observation) {
