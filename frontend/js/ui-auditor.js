@@ -376,13 +376,13 @@ function setupAuditViewListeners() {
     });
 
     document.getElementById('collaborative-audit-btn')?.addEventListener('click', async () => {
-        const panel = document.getElementById('collaborative-panel');
-        if (!panel || !state.currentAudit) return;
+        const modalEl = document.getElementById('collaborativeAuditModal');
+        if (!modalEl || !state.currentAudit) return;
+
+        const modal = new bootstrap.Modal(modalEl);
 
         try {
             const allAuditors = await api.fetchAuditors();
-            
-            // Defensive check to ensure allAuditors is an array
             if (!Array.isArray(allAuditors)) {
                 console.error('Se esperaba un array de auditores, pero se recibió:', allAuditors);
                 throw new Error('La respuesta de la API de auditores no es válida.');
@@ -390,13 +390,11 @@ function setupAuditViewListeners() {
 
             const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
             const currentCollaboratorIds = (state.currentAudit.collaborators || []).map(c => c.id);
-
             const listContainer = document.getElementById('collaborative-auditors-list');
             listContainer.innerHTML = '';
 
             allAuditors.forEach(auditor => {
                 if (auditor.id === currentUserId) return;
-
                 const isChecked = currentCollaboratorIds.includes(auditor.id);
                 const item = document.createElement('label');
                 item.className = 'list-group-item d-flex justify-content-between align-items-center';
@@ -407,25 +405,21 @@ function setupAuditViewListeners() {
                 listContainer.appendChild(item);
             });
 
-            panel.classList.remove('d-none');
+            modal.show();
         } catch (error) {
             showToast(`Error al cargar auditores: ${error.message}`, 'error');
         }
     });
 
-    document.getElementById('cancel-collaborative-audit')?.addEventListener('click', () => {
-        document.getElementById('collaborative-panel').classList.add('d-none');
-    });
-
-    document.getElementById('collaborative-audit-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('confirm-collaborative-audit')?.addEventListener('click', async () => {
         const selectedCheckboxes = document.querySelectorAll('#collaborative-auditors-list .form-check-input:checked');
         const collaboratorIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value, 10));
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('collaborativeAuditModal'));
 
         try {
             await api.addCollaborators(state.currentAudit.id, collaboratorIds);
             showToast('Colaboradores actualizados con éxito.', 'success');
-            document.getElementById('collaborative-panel').classList.add('d-none');
+            modalInstance?.hide();
             await verAuditoria(state.currentAudit.id);
         } catch (error) {
             showToast(`Error al asignar colaboradores: ${error.message}`, 'error');
