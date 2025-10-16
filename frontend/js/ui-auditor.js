@@ -66,6 +66,7 @@ async function handleSkuScan(scannedSku) {
     if (isCollaborative) {
         speak("Procesando SKU");
         const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
+
         if (!productRow) {
             speak("Producto no encontrado en la lista.");
             handleCollaborativeScanNotFound(scannedSku);

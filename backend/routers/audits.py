@@ -271,6 +271,48 @@ def add_collaborators(audit_id: int, collaborators: schemas.CollaboratorUpdate, 
     crud.add_collaborators_to_audit(db, audit_id=audit_id, collaborator_ids=collaborators.collaborator_ids)
     return {"message": "Colaboradores añadidos exitosamente"}
 
+@router.post("/{audit_id}/products", response_model=schemas.Product, status_code=status.HTTP_201_CREATED)
+async def add_surplus_product_to_audit(
+    audit_id: int,
+    product_data: schemas.SurplusProductCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Añade un nuevo producto 'sobrante' a una auditoría existente.
+    Accesible por el auditor principal o los colaboradores.
+    """
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para añadir productos a esta auditoría")
+
+    new_product = crud.create_surplus_product(db, audit_id=audit_id, product_data=product_data)
+    if not new_product:
+        raise HTTPException(status_code=500, detail="No se pudo crear el producto sobrante.")
+
+    # Notificar a través de WebSocket que se añadió un producto
+    try:
+        product_for_broadcast = schemas.Product.from_orm(new_product).dict()
+        payload = {
+            "type": "product_added",
+            "product": product_for_broadcast
+        }
+        await manager.broadcast(json.dumps(payload, default=str), audit_id=audit_id)
+    except Exception as e:
+        print(f"Error broadcasting new surplus product for audit {audit_id}: {e}")
+
+    # Recalcular y notificar la actualización general de la auditoría
+    updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
+    if updated_audit:
+        try:
+            audit_response = schemas.AuditResponse.from_orm(updated_audit)
+            payload = {"type": "audit_updated", "data": audit_response.dict()}
+            await manager.broadcast_to_all(json.dumps(payload, default=str))
+        except Exception as e:
+            print(f"Error broadcasting audit update after adding surplus: {e}")
+
+    return new_product
+
 @router.get("/report/details", response_model=List[schemas.AuditDetails])
 async def get_report_details(
     status: Optional[str] = None,
