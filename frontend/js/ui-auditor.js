@@ -238,7 +238,7 @@ async function updateProductAndClose(row, quantity, novelty, observation) {
 
 async function saveProductData(row) {
     const productId = row.getAttribute('data-product-id');
-    if (!productId) return; // Skip rows without a product id
+    if (!productId) return true; // Not an error, just nothing to save.
 
     const updateData = {
         cantidad_fisica: row.querySelector('.physical-count').value,
@@ -251,9 +251,11 @@ async function saveProductData(row) {
         row.classList.add('is-saved');
         setTimeout(() => row.classList.remove('is-saved'), 1200);
         updateCompliancePercentage(state.currentAudit.id);
+        return true; // Indicate success
     } catch (error) {
         showToast(`Error al guardar producto ${productId}: ${error.message}`, 'error');
         console.error(`Failed to save product ${productId}:`, error);
+        return false; // Indicate failure
     }
 }
 

@@ -14,6 +14,19 @@ async function fetchApi(url, options = {}) {
     const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
+        // Si el token ha expirado o no es válido, el servidor devolverá un 401.
+        // En ese caso, limpiamos el estado de la sesión y recargamos la página
+        // para forzar al usuario a iniciar sesión de nuevo.
+        if (response.status === 401) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_name');
+            localStorage.removeItem('user_role');
+            localStorage.removeItem('user_id');
+            window.location.reload();
+            // Arrojamos un error para detener la ejecución del script actual
+            throw new Error('Sesión expirada. Por favor, inicie sesión de nuevo.');
+        }
+
         let errorDetail = 'API request failed';
         try {
             const error = await response.json();
