@@ -302,31 +302,6 @@
                                         <i class="bi bi-people"></i> Auditoría Colaborativa
                                     </button>
                                 </div>
-        <!-- Modal para Auditoría Colaborativa -->
-        <div class="modal fade" id="collaborativeAuditModal" tabindex="-1" aria-labelledby="collaborativeAuditModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered" style="max-width: 350px;">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="collaborativeAuditModalLabel">Asignar Colaboradores</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="collaborative-audit-form">
-                            <div class="mb-3">
-                                <label class="form-label">Selecciona uno o más auditores:</label>
-                                <div id="collaborative-auditors-list" class="list-group" style="max-height: 200px; overflow-y: auto;">
-                                    <!-- Los auditores se renderizarán aquí dinámicamente -->
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" id="confirm-collaborative-audit">Asignar</button>
-                    </div>
-                </div>
-            </div>
-        </div>
                             </div>
                         </div>
                     </div>
@@ -466,6 +441,32 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para Auditoría Colaborativa -->
+        <div class="modal fade" id="collaborativeAuditModal" tabindex="-1" aria-labelledby="collaborativeAuditModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 350px;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="collaborativeAuditModalLabel">Asignar Colaboradores</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="collaborative-audit-form">
+                            <div class="mb-3">
+                                <label class="form-label">Selecciona uno o más auditores:</label>
+                                <div id="collaborative-auditors-list" class="list-group" style="max-height: 200px; overflow-y: auto;">
+                                    <!-- Los auditores se renderizarán aquí dinámicamente -->
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" id="confirm-collaborative-audit">Asignar</button>
                     </div>
                 </div>
             </div>
