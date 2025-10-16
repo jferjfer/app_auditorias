@@ -66,7 +66,6 @@ async function handleSkuScan(scannedSku) {
     if (isCollaborative) {
         speak("Procesando SKU");
         const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
-
         if (!productRow) {
             speak("Producto no encontrado en la lista.");
             handleCollaborativeScanNotFound(scannedSku);
@@ -473,7 +472,12 @@ function setupAuditorDashboardListeners() {
     });
 
     const scanInput = document.getElementById('scan-input');
-    scanInput?.addEventListener('change', (e) => handleSkuScan(e.target.value));
+    scanInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Evita cualquier comportamiento por defecto del Enter
+            handleSkuScan(e.target.value);
+        }
+    });
 
     const startCameraScanBtn = document.getElementById('start-camera-scan-btn');
     startCameraScanBtn?.addEventListener('click', () => {
