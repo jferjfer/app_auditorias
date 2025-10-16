@@ -1,4 +1,3 @@
-body { background-color: red !important; }
 /* --- Dark Themes --- */
 body[data-theme="dark-default"] {
     --bg-color: #1a1a1a;
