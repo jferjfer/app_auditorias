@@ -54,57 +54,70 @@ export async function verAuditoria(auditId) {
     }
 }
 
-async function handleSkuScan(scannedSku) {
-    const scanInput = document.getElementById('scan-input');
-    if (!scannedSku) return;
+function filterProducts(searchText) {
+    const tableBody = document.getElementById('auditor-products-table-body');
+    if (!tableBody) return;
 
-    scannedSku = scannedSku.trim().toUpperCase().replace(/^0+/, '');
+    const lowerSearchText = searchText.trim().toLowerCase();
+    const searchWords = lowerSearchText.split(' ').filter(w => w);
+    const rows = tableBody.querySelectorAll('tr');
+
+    if (!lowerSearchText) {
+        rows.forEach(row => {
+            if (row.style.display === 'none') {
+                 row.style.display = '';
+            }
+        });
+        return;
+    }
+
+    rows.forEach(row => {
+        const sku = row.dataset.sku?.toLowerCase() || '';
+        const description = row.cells[2]?.textContent.toLowerCase() || '';
+
+        let isMatch = false;
+
+        // 1. Exact SKU match
+        if (sku === lowerSearchText) {
+            isMatch = true;
+        }
+
+        // 2. Last 4 digits of SKU match
+        if (!isMatch && /^\d{4}$/.test(lowerSearchText) && sku.endsWith(lowerSearchText)) {
+            isMatch = true;
+        }
+
+        // 3. All search words in description
+        if (!isMatch && searchWords.length > 0) {
+            const allWordsMatch = searchWords.every(word => description.includes(word));
+            if (allWordsMatch) {
+                isMatch = true;
+            }
+        }
+        
+        row.style.display = isMatch ? '' : 'none';
+    });
+}
+
+async function processSingleProduct(productRow) {
+    const scanInput = document.getElementById('scan-input');
+    const scannedSku = productRow.dataset.sku;
+
     if (scanInput) scanInput.value = '';
+    filterProducts(''); // Reset the filter to show all rows
 
     const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
 
     if (isCollaborative) {
         speak("Procesando SKU");
-        const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
-        if (!productRow) {
-            speak("Producto no encontrado en la lista.");
-            handleCollaborativeScanNotFound(scannedSku);
-        } else {
-            if (productRow.style.display === 'none') {
-                productRow.style.display = '';
-                speak('Producto re-escaneado, registrando novedad.');
-            } else {
-                const novelty = productRow.querySelector('.novelty-select').value;
-                const docQuantity = parseInt(productRow.querySelector('.doc-quantity').textContent, 10);
-                const physicalCount = parseInt(productRow.querySelector('.physical-count').value, 10) || 0;
-
-                switch (novelty) {
-                    case 'faltante':
-                        speak(`Faltaban ${docQuantity - physicalCount}`);
-                        break;
-                    case 'sobrante':
-                        speak(`Sobraban ${physicalCount - docQuantity}`);
-                        break;
-                    case 'averia':
-                        speak(`Producto registrado con avería`);
-                        break;
-                    default:
-                        speak("");
-                        break;
-                }
-            }
-            handleCollaborativeScanFound(productRow);
+        if (productRow.style.display === 'none') {
+            productRow.style.display = '';
+            speak('Producto re-escaneado, registrando novedad.');
         }
+        handleCollaborativeScanFound(productRow);
     } else {
-        const productRow = document.querySelector(`tr[data-sku="${scannedSku}"]`);
-        if (!productRow) {
-            speak(`Producto no encontrado.`);
-            setLastScanned(null);
-            return;
-        }
-
-        const lastScanned = state.lastScanned;
         const productId = productRow.getAttribute('data-product-id');
+        const lastScanned = state.lastScanned;
 
         if (lastScanned && lastScanned.sku === scannedSku) {
             const physicalCountInput = productRow.querySelector('.physical-count');
@@ -143,6 +156,57 @@ async function handleSkuScan(scannedSku) {
         speak(`Cantidad: ${currentDocQuantity}`);
         setLastScanned({ sku: scannedSku, productId: productId });
         if (scanInput) scanInput.focus();
+    }
+}
+
+async function handleSkuScan(searchText) {
+    const tableBody = document.getElementById('auditor-products-table-body');
+    if (!tableBody) return;
+
+    const visibleRows = Array.from(tableBody.querySelectorAll('tr')).filter(row => row.style.display !== 'none' && !row.querySelector('td[colspan="8"]'));
+    const scanInput = document.getElementById('scan-input');
+
+    // Case 1: Exactly one product matches the filter
+    if (visibleRows.length === 1) {
+        processSingleProduct(visibleRows[0]);
+
+    // Case 2: No products match -> Surplus
+    } else if (visibleRows.length === 0 && searchText.trim() !== '') {
+        const isCollaborative = state.currentAudit && state.currentAudit.colaboradores && state.currentAudit.colaboradores.length > 0;
+        if (isCollaborative) {
+            speak("Producto no encontrado en la lista.");
+            handleCollaborativeScanNotFound(searchText); // Use the original search text
+        } else {
+            speak("Producto no encontrado.");
+        }
+        if (scanInput) scanInput.value = '';
+        filterProducts(''); // Reset filter
+
+    // Case 3: Multiple products match -> Show selection modal
+    } else if (visibleRows.length > 1) {
+        const modalEl = document.getElementById('product-selection-modal');
+        const selectionModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        const listContainer = document.getElementById('product-selection-list');
+        listContainer.innerHTML = ''; // Clear previous items
+
+        visibleRows.forEach(row => {
+            const sku = row.dataset.sku;
+            const name = row.cells[2].textContent;
+            
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'list-group-item list-group-item-action';
+            button.innerHTML = `<strong>${sku}</strong> - ${name}`;
+            
+            button.addEventListener('click', () => {
+                processSingleProduct(row);
+                selectionModal.hide();
+            });
+            
+            listContainer.appendChild(button);
+        });
+
+        selectionModal.show();
     }
 }
 
@@ -472,6 +536,8 @@ function setupAuditorDashboardListeners() {
     });
 
     const scanInput = document.getElementById('scan-input');
+    scanInput?.addEventListener('input', (e) => filterProducts(e.target.value));
+
     scanInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault(); // Evita cualquier comportamiento por defecto del Enter
