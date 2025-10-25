@@ -2,8 +2,118 @@ import * as api from './api.js';
 import { showToast, renderAuditorAuditsTable, renderProductsTable, speak, updateCompliancePercentage, playBeep } from './ui-helpers.js';
 import { state, setAuditorAuditsList, setCurrentAudit, setLastScanned, setHtml5QrCode } from './state.js';
 import { initWebSocket } from './websockets.js';
+import { ensureModal } from './ui-modals.js';
+
+const auditorListHTML = `
+<div id="auditor-dashboard" class="dashboard-section">
+    <h1 class="h2">Dashboard del Auditor</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0"><i class="bi bi-upload"></i> Cargar Nuevas Órdenes de Traslado</h5>
+        </div>
+        <div class="card-body">
+            <form id="uploadForm">
+                <div class="input-group">
+                    <input type="file" class="form-control" id="audit-file-input" multiple accept=".xlsx, .xls">
+                    <button class="btn btn-primary" type="submit">Subir Archivos</button>
+                </div>
+                <div class="form-text">Selecciona uno o más archivos de Excel para crear las auditorías.</div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0"><i class="bi bi-list-check"></i> Mis Auditorías</h5>
+            <div class="btn-group mt-2">
+                <button id="show-finished-audits-btn" class="btn btn-sm btn-outline-secondary">Ver Finalizadas</button>
+                <button id="hide-finished-audits-btn" class="btn btn-sm btn-secondary d-none">Ocultar Finalizadas</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-dark">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Ubicación</th>
+                            <th>Fecha Creación</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditor-audits-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+`;
+
+const auditorDetailHTML = `
+<div id="auditor-detail-view" class="dashboard-section">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+        <button id="back-to-audits-list" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver a la lista</button>
+        <div id="compliance-percentage-container" class="d-flex align-items-center">
+            <span class="me-2">Cumplimiento:</span>
+            <div id="compliance-percentage" class="compliance-circle">--%</div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col">
+                    <input type="text" id="scan-input" class="form-control form-control-lg" placeholder="Escanear SKU o buscar producto...">
+                </div>
+                <div class="col-auto">
+                    <button id="start-camera-scan-btn" class="btn btn-lg btn-outline-primary"><i class="bi bi-camera"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Productos de la Auditoría</h5>
+            <div id="toggle-correct-products-container" class="form-check form-switch d-none">
+                <input class="form-check-input" type="checkbox" id="toggle-correct-products-checkbox">
+                <label class="form-check-label" for="toggle-correct-products-checkbox">Ocultar correctos</label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>OT</th>
+                            <th>Nombre</th>
+                            <th>Cant. Doc.</th>
+                            <th>Cant. Física</th>
+                            <th>Novedad</th>
+                            <th>Observaciones</th>
+                            <th>Guardar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditor-products-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-end">
+            <button id="collaborative-audit-btn" class="btn btn-outline-info me-2"><i class="bi bi-people"></i> Colaborar</button>
+            <button id="save-all-btn" class="btn btn-primary me-2"><i class="bi bi-save-all"></i> Guardar Todo</button>
+            <button id="finish-audit-btn" class="btn btn-success"><i class="bi bi-check-circle"></i> Finalizar Auditoría</button>
+        </div>
+    </div>
+</div>
+`;
 
 export async function loadAuditorDashboard(token) {
+    document.querySelector('.main-content').innerHTML = auditorListHTML;
     try {
         const audits = await api.fetchAudits();
         setAuditorAuditsList(audits);
@@ -16,6 +126,10 @@ export async function loadAuditorDashboard(token) {
 }
 
 export async function verAuditoria(auditId) {
+    document.querySelector('.main-content').innerHTML = auditorDetailHTML;
+    document.getElementById('back-to-audits-list')?.addEventListener('click', () => {
+        loadAuditorDashboard();
+    });
     try {
         const audit = await api.fetchAuditDetails(auditId);
         setCurrentAudit(audit);
@@ -115,6 +229,7 @@ async function handleSkuScan(searchText) {
 
     // Case 2: Multiple products match -> Show selection modal
     } else if (visibleRows.length > 1) {
+        ensureModal('product-selection-modal');
         const modalEl = document.getElementById('product-selection-modal');
         const selectionModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         const listContainer = document.getElementById('product-selection-list');
@@ -221,6 +336,7 @@ async function processFoundProduct(productRow) {
 
 
 function showDynamicDiscrepancyModal(productRow, productState, mode) {
+    ensureModal('discrepancy-modal');
     const modalEl = document.getElementById('discrepancy-modal');
     const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
     const titleEl = document.getElementById('discrepancyModalLabel');
@@ -352,6 +468,7 @@ function showDynamicDiscrepancyModal(productRow, productState, mode) {
 
 
 function handleCollaborativeScanNotFound(scannedSku) {
+    ensureModal('surplus-modal');
     const surplusModalEl = document.getElementById('surplus-modal');
     const surplusModal = bootstrap.Modal.getInstance(surplusModalEl) || new bootstrap.Modal(surplusModalEl);
     
@@ -547,6 +664,7 @@ function setupAuditViewListeners() {
     });
 
     document.getElementById('collaborative-audit-btn')?.addEventListener('click', async () => {
+        ensureModal('collaborativeAuditModal');
         const modalEl = document.getElementById('collaborativeAuditModal');
         if (!modalEl || !state.currentAudit) return;
 

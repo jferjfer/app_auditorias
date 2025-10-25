@@ -2,6 +2,7 @@ import { checkAuth, handleAuthFormSubmit, clearSession, getToken } from './auth.
 import { state, setEditingUserId } from './state.js';
 import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
+import { ensureModal } from './ui-modals.js';
 
 // Import shared UI functions
 import { showDashboard } from './ui.js';
@@ -30,7 +31,6 @@ function initUserDashboard(user, token) {
     }
 
     const role = user.rol;
-    // The function to reload data, passed to websockets
     const reloader = () => loadDashboardData(role, token);
 
     loadDashboardData(role, token);
@@ -89,17 +89,18 @@ function setupGlobalListeners() {
         }
     });
 
-    const analystForm = document.querySelector('#analyst-dashboard form');
-    analystForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const filters = {
-            status: document.getElementById('filterStatus').value,
-            auditor_id: document.getElementById('filterAuditor').value,
-            start_date: document.getElementById('filterStartDate').value,
-            end_date: document.getElementById('filterEndDate').value
-        };
-        const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos'));
-        loadDashboardData('analista', getToken(), cleanFilters);
+    document.body.addEventListener('submit', (e) => {
+        if (e.target.closest('#analyst-dashboard form')) {
+            e.preventDefault();
+            const filters = {
+                status: document.getElementById('filterStatus').value,
+                auditor_id: document.getElementById('filterAuditor').value,
+                start_date: document.getElementById('filterStartDate').value,
+                end_date: document.getElementById('filterEndDate').value
+            };
+            const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos'));
+            loadDashboardData('analista', getToken(), cleanFilters);
+        }
     });
 
     document.body.addEventListener('click', async function (e) {
@@ -114,8 +115,9 @@ function setupGlobalListeners() {
             }
         } else if (target.closest('.ver-auditoria-btn') || target.closest('.view-audit-btn')) {
             const auditId = target.closest('[data-audit-id]').dataset.auditId;
-            verAuditoriaAuditor(auditId); // This function is now in ui-auditor
+            verAuditoriaAuditor(auditId);
         } else if (target.closest('.edit-user-btn')) {
+            ensureModal('addUserModal');
             const userId = target.closest('.edit-user-btn').dataset.userId;
             setEditingUserId(userId);
             const user = await api.fetchUser(userId);
@@ -137,6 +139,40 @@ function setupGlobalListeners() {
                     showToast(`Error al eliminar usuario: ${error.message}`, 'error');
                 }
             }
+        } else if (target.id === 'confirm-add-user') {
+            const isEditing = state.editingUserId;
+            const userData = {
+                nombre: document.getElementById('new-user-name').value,
+                correo: document.getElementById('new-user-email').value,
+                rol: document.getElementById('new-user-role').value,
+            };
+            const password = document.getElementById('new-user-password').value;
+            if (password) {
+                userData.contrasena = password;
+            }
+
+            try {
+                if (isEditing) {
+                    await api.updateUser(isEditing, userData);
+                    showToast('Usuario actualizado con éxito.', 'success');
+                } else {
+                    await api.createUser(userData);
+                    showToast('Usuario creado con éxito.', 'success');
+                }
+                
+                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+                modalInstance?.hide();
+                
+                document.getElementById('add-user-form').reset();
+                setEditingUserId(null);
+                document.getElementById('addUserModalLabel').textContent = 'Agregar Nuevo Usuario';
+                target.textContent = 'Agregar Usuario';
+
+                loadDashboardData('administrador', getToken());
+
+            } catch (error) {
+                showToast(`Error: ${error.message}`, 'error');
+            }
         }
     });
 
@@ -157,43 +193,6 @@ function setupGlobalListeners() {
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
-        }
-    });
-
-    const confirmAddUserBtn = document.getElementById('confirm-add-user');
-    confirmAddUserBtn?.addEventListener('click', async () => {
-        const isEditing = state.editingUserId;
-        const userData = {
-            nombre: document.getElementById('new-user-name').value,
-            correo: document.getElementById('new-user-email').value,
-            rol: document.getElementById('new-user-role').value,
-        };
-        const password = document.getElementById('new-user-password').value;
-        if (password) {
-            userData.contrasena = password;
-        }
-
-        try {
-            if (isEditing) {
-                await api.updateUser(isEditing, userData);
-                showToast('Usuario actualizado con éxito.', 'success');
-            } else {
-                await api.createUser(userData);
-                showToast('Usuario creado con éxito.', 'success');
-            }
-            
-            const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
-            modalInstance?.hide();
-            
-            document.getElementById('add-user-form').reset();
-            setEditingUserId(null);
-            document.getElementById('addUserModalLabel').textContent = 'Agregar Nuevo Usuario';
-            confirmAddUserBtn.textContent = 'Agregar Usuario';
-
-            loadDashboardData('administrador', getToken());
-
-        } catch (error) {
-            showToast(`Error: ${error.message}`, 'error');
         }
     });
 }
