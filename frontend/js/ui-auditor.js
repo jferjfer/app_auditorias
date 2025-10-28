@@ -771,3 +771,4 @@ function setupAuditorDashboardListeners() {
         btnHide.classList.add('d-none');
         btnShow.classList.remove('d-none');
     });
+}
