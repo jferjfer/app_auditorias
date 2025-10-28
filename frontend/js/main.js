@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initApp() {
     initTheme();
-    initAnalystEventListeners(); // For report downloads, initialized once
     checkAuth(initUserDashboard);
     setupGlobalListeners();
 }

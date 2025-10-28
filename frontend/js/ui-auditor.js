@@ -58,7 +58,7 @@ const auditorDetailHTML = `
         <button id="back-to-audits-list" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver a la lista</button>
         <div id="compliance-percentage-container" class="d-flex align-items-center">
             <span class="me-2">Cumplimiento:</span>
-            <div id="compliance-percentage" class="compliance-circle">--%</div>
+            <div id="compliance-percentage" class="progress-circle">--%</div>
         </div>
     </div>
 
@@ -289,7 +289,7 @@ async function processFoundProduct(productRow) {
     // --- Smart Modal Logic (applies to ALL audits) ---
     if (productInState) {
         // SCENARIO A: Product already marked as CORRECT
-        if (productInState.novedad === 'sin_novedad') {
+        if (productInState.novedad === 'sin_novedad' && productInState.cantidad_fisica !== null) {
             speak("Este producto ya fue verificado. Indica si encontraste un sobrante o una avería.");
             showDynamicDiscrepancyModal(productRow, productInState, 'conflict');
             return;
