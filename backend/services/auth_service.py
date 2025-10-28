@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from backend import models, crud
-from backend.database import get_db
+from backend.dependencies import get_db
 
 # Contexto de encriptación para contraseñas.
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

@@ -24,18 +24,18 @@ def test_create_audit(test_client: TestClient, db_session: Session, test_user: s
                 "nombre_articulo": "Test Product",
                 "cantidad_documento": 10,
                 "cantidad_enviada": 10,
-                "orden_traslado_original": "OT-123"
+                "orden_traslado_original": "OT-123",
+                "novedad": "sin_novedad"
             }
         ]
     }
     
     response = test_client.post("/api/audits/", headers=headers, json=audit_in)
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["ubicacion_destino"] == audit_in["ubicacion_destino"]
     assert data["auditor_id"] == test_user.id
-    assert len(data["productos"]) == 1
-    assert data["productos"][0]["sku"] == audit_in["productos"][0]["sku"]
+    assert data["productos_count"] == 1
 
 def test_get_audits(test_client: TestClient, db_session: Session, test_user: schemas.User):
     """
@@ -54,9 +54,19 @@ def test_get_audits(test_client: TestClient, db_session: Session, test_user: sch
     # Create an audit first
     audit_in = {
         "ubicacion_destino": "Test Location",
-        "productos": []
+        "productos": [
+            {
+                "sku": "12345",
+                "nombre_articulo": "Test Product",
+                "cantidad_documento": 10,
+                "cantidad_enviada": 10,
+                "orden_traslado_original": "OT-123",
+                "novedad": "sin_novedad"
+            }
+        ]
     }
-    test_client.post("/api/audits/", headers=headers, json=audit_in)
+    response = test_client.post("/api/audits/", headers=headers, json=audit_in)
+    assert response.status_code == 201
     
     response = test_client.get("/api/audits/", headers=headers)
     assert response.status_code == 200
@@ -82,10 +92,19 @@ def test_get_audit_by_id(test_client: TestClient, db_session: Session, test_user
     # Create an audit first
     audit_in = {
         "ubicacion_destino": "Specific Test Location",
-        "productos": []
+        "productos": [
+            {
+                "sku": "12345",
+                "nombre_articulo": "Test Product",
+                "cantidad_documento": 10,
+                "cantidad_enviada": 10,
+                "orden_traslado_original": "OT-123",
+                "novedad": "sin_novedad"
+            }
+        ]
     }
     response = test_client.post("/api/audits/", headers=headers, json=audit_in)
-    assert response.status_code == 200
+    assert response.status_code == 201
     audit_id = response.json()["id"]
     
     response = test_client.get(f"/api/audits/{audit_id}", headers=headers)
@@ -93,7 +112,6 @@ def test_get_audit_by_id(test_client: TestClient, db_session: Session, test_user
     data = response.json()
     assert data["id"] == audit_id
     assert data["ubicacion_destino"] == audit_in["ubicacion_destino"]
-
 
 def test_iniciar_auditoria(test_client: TestClient, db_session: Session, test_user: schemas.User):
     """
@@ -112,10 +130,19 @@ def test_iniciar_auditoria(test_client: TestClient, db_session: Session, test_us
     # Create an audit first
     audit_in = {
         "ubicacion_destino": "Test Location for Starting",
-        "productos": []
+        "productos": [
+            {
+                "sku": "12345",
+                "nombre_articulo": "Test Product",
+                "cantidad_documento": 10,
+                "cantidad_enviada": 10,
+                "orden_traslado_original": "OT-123",
+                "novedad": "sin_novedad"
+            }
+        ]
     }
     response = test_client.post("/api/audits/", headers=headers, json=audit_in)
-    assert response.status_code == 200
+    assert response.status_code == 201
     audit_id = response.json()["id"]
     
     response = test_client.put(f"/api/audits/{audit_id}/iniciar", headers=headers)

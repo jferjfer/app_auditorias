@@ -58,7 +58,7 @@ const auditorDetailHTML = `
         <button id="back-to-audits-list" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver a la lista</button>
         <div id="compliance-percentage-container" class="d-flex align-items-center">
             <span class="me-2">Cumplimiento:</span>
-            <div id="compliance-percentage" class="progress-circle">--%</div>
+            <div id="compliance-percentage" class="compliance-circle">--%</div>
         </div>
     </div>
 
@@ -289,7 +289,7 @@ async function processFoundProduct(productRow) {
     // --- Smart Modal Logic (applies to ALL audits) ---
     if (productInState) {
         // SCENARIO A: Product already marked as CORRECT
-        if (productInState.novedad === 'sin_novedad' && productInState.cantidad_fisica !== null) {
+        if (productInState.novedad === 'sin_novedad') {
             speak("Este producto ya fue verificado. Indica si encontraste un sobrante o una avería.");
             showDynamicDiscrepancyModal(productRow, productInState, 'conflict');
             return;
@@ -714,43 +714,6 @@ function setupAuditViewListeners() {
             showToast(`Error al asignar colaboradores: ${error.message}`, 'error');
         }
     });
-}
-
-function setupAuditorDashboardListeners() {
-    const uploadForm = document.getElementById('uploadForm');
-    uploadForm?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fileInput = document.getElementById('audit-file-input');
-        const submitBtn = uploadForm.querySelector('button[type="submit"]');
-        if (!fileInput.files || fileInput.files.length === 0) return showToast("Selecciona al menos un archivo.", 'info');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
-        try {
-            const result = await api.uploadAuditFiles(fileInput.files);
-            showToast(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`, 'success');
-            loadAuditorDashboard(); // Recarga el dashboard del auditor
-        } catch (error) {
-            showToast(`❌ Error: ${error.message}`, 'error');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
-        }
-    });
-
-    const btnShow = document.getElementById('show-finished-audits-btn');
-    const btnHide = document.getElementById('hide-finished-audits-btn');
-    
-    btnShow?.addEventListener('click', () => {
-        renderAuditorAuditsTable(state.auditorAuditsList, '#auditor-audits-table-body', true);
-        btnShow.classList.add('d-none');
-        btnHide.classList.remove('d-none');
-    });
-
-    btnHide?.addEventListener('click', () => {
-        renderAuditorAuditsTable(state.auditorAuditsList, '#auditor-audits-table-body', false);
-        btnHide.classList.add('d-none');
-        btnShow.classList.remove('d-none');
-    });
 
     const scanInput = document.getElementById('scan-input');
     scanInput?.addEventListener('input', (e) => filterProducts(e.target.value));
@@ -792,3 +755,19 @@ function setupAuditorDashboardListeners() {
         }
     });
 }
+
+function setupAuditorDashboardListeners() {
+    const btnShow = document.getElementById('show-finished-audits-btn');
+    const btnHide = document.getElementById('hide-finished-audits-btn');
+    
+    btnShow?.addEventListener('click', () => {
+        renderAuditorAuditsTable(state.auditorAuditsList, '#auditor-audits-table-body', true);
+        btnShow.classList.add('d-none');
+        btnHide.classList.remove('d-none');
+    });
+
+    btnHide?.addEventListener('click', () => {
+        renderAuditorAuditsTable(state.auditorAuditsList, '#auditor-audits-table-body', false);
+        btnHide.classList.add('d-none');
+        btnShow.classList.remove('d-none');
+    });

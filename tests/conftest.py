@@ -10,7 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.main import app
-from backend.database import Base, get_db
+from backend.database import Base
+from backend.dependencies import get_db
 from backend import crud, schemas
 from backend.services.auth_service import get_password_hash
 

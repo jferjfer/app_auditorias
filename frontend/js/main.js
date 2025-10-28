@@ -1,17 +1,12 @@
 import { checkAuth, handleAuthFormSubmit, clearSession, getToken } from './auth.js';
-import { state, setEditingUserId } from './state.js';
+import { state, setEditingUserId, setCurrentAudit, setHtml5QrCode } from './state.js';
+import * as ui from './ui.js';
 import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
+import { loadAuditorDashboard, verAuditoria } from './ui-auditor.js';
 import { ensureModal } from './ui-modals.js';
-
-// Importar funciones de UI compartidas
-import { showDashboard } from './ui.js';
-import { showToast } from './ui-helpers.js';
-
-// Importar módulos de UI específicos para cada rol
 import { loadAdminDashboard } from './ui-admin.js';
-import { loadAnalystDashboard, initAnalystEventListeners } from './ui-analyst.js';
-import { loadAuditorDashboard, verAuditoria as verAuditoriaAuditor } from './ui-auditor.js';
+import { loadAnalystDashboard } from './ui-analyst.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
@@ -19,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initApp() {
     initTheme();
+    // Se pasa la función para inicializar el dashboard al verificar la autenticación
     checkAuth(initUserDashboard);
     setupGlobalListeners();
 }
@@ -65,31 +61,35 @@ function initTheme() {
 
 function setupGlobalListeners() {
     const sidebarToggleBtn = document.querySelector('.sidebar-toggle-btn');
-    sidebarToggleBtn?.addEventListener('click', () => {
-        document.querySelector('.sidebar').classList.toggle('active');
-        document.body.classList.toggle('sidebar-active');
-    });
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', () => {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.body.classList.toggle('sidebar-active');
+        });
+    }
 
-    document.getElementById('auth-form')?.addEventListener('submit', (event) => {
+    // Se pasa la función de inicialización al manejar el envío del formulario de autenticación
+    document.getElementById('auth-form').addEventListener('submit', (event) => {
         handleAuthFormSubmit(event, initUserDashboard);
     });
 
-    document.querySelector('[data-target="logout"]')?.addEventListener('click', (e) => {
+    document.querySelector('[data-target="logout"]').addEventListener('click', (e) => {
         e.preventDefault();
         clearSession();
     });
 
-    document.querySelector('.sidebar')?.addEventListener('click', (e) => {
+    document.querySelector('.sidebar').addEventListener('click', (e) => {
         const link = e.target.closest('.dashboard-link');
         if (link) {
             e.preventDefault();
             const targetDashboard = link.getAttribute('data-target');
-            showDashboard(targetDashboard);
+            ui.showDashboard(targetDashboard);
         }
     });
 
-    document.body.addEventListener('submit', (e) => {
-        if (e.target.closest('#analyst-dashboard form')) {
+    const analystForm = document.querySelector('#analyst-dashboard form');
+    if(analystForm) {
+        analystForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const filters = {
                 status: document.getElementById('filterStatus').value,
@@ -98,47 +98,67 @@ function setupGlobalListeners() {
                 end_date: document.getElementById('filterEndDate').value
             };
             const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos'));
-            loadDashboardData('analista', getToken(), cleanFilters);
+            ui.loadDashboardData('analista', getToken(), cleanFilters);
+        });
+    }
+
+    document.body.addEventListener('click', async function (e) {
+        if (e.target.closest('.iniciar-auditoria-btn')) {
+            const auditId = e.target.closest('.iniciar-auditoria-btn').getAttribute('data-audit-id');
+            try {
+                await api.iniciarAuditoria(auditId);
+                ui.loadDashboardData('auditor', getToken());
+            } catch (error) {
+                alert(`Error al iniciar auditoría: ${error.message}`);
+            }
+        } else if (e.target.closest('.ver-auditoria-btn')) {
+            const auditId = e.target.closest('.ver-auditoria-btn').getAttribute('data-audit-id');
+            verAuditoria(auditId);
+        } else if (e.target.closest('.view-audit-btn')) {
+            const auditId = e.target.closest('.view-audit-btn').getAttribute('data-audit-id');
+            // This is for the analyst view, we can create a separate function if needed
+            verAuditoria(auditId); 
+        } else if (e.target.closest('.edit-user-btn')) {
+            ensureModal('addUserModal');
+        } else if (e.target.closest('.delete-user-btn')) {
+            const userId = e.target.closest('.delete-user-btn').getAttribute('data-user-id');
+            if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
+                try {
+                    await api.deleteUser(userId);
+                    alert('Usuario eliminado.');
+                    ui.loadDashboardData('administrador', getToken());
+                } catch (error) {
+                    alert(`Error al eliminar usuario: ${error.message}`);
+                }
+            }
         }
     });
 
-    document.body.addEventListener('click', async function (e) {
-        const target = e.target;
-        if (target.closest('.iniciar-auditoria-btn')) {
-            const auditId = target.closest('.iniciar-auditoria-btn').dataset.auditId;
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('audit-file-input');
+            const submitBtn = uploadForm.querySelector('button[type="submit"]');
+            if (!fileInput.files || fileInput.files.length === 0) return alert("Selecciona al menos un archivo.");
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
             try {
-                await api.iniciarAuditoria(auditId);
-                loadDashboardData('auditor', getToken());
+                const result = await api.uploadAuditFiles(fileInput.files);
+                alert(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`);
+                ui.loadDashboardData('auditor', getToken());
             } catch (error) {
-                showToast(`Error al iniciar auditoría: ${error.message}`, 'error');
+                alert(`❌ Error: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
             }
-        } else if (target.closest('.ver-auditoria-btn') || target.closest('.view-audit-btn')) {
-            const auditId = target.closest('[data-audit-id]').dataset.auditId;
-            verAuditoriaAuditor(auditId);
-        } else if (target.closest('.edit-user-btn')) {
-            ensureModal('addUserModal');
-            const userId = target.closest('.edit-user-btn').dataset.userId;
-            setEditingUserId(userId);
-            const user = await api.fetchUser(userId);
-            document.getElementById('new-user-name').value = user.nombre;
-            document.getElementById('new-user-email').value = user.correo;
-            document.getElementById('new-user-role').value = user.rol;
-            document.getElementById('new-user-password').value = '';
-            document.getElementById('addUserModalLabel').textContent = 'Editar Usuario';
-            document.getElementById('confirm-add-user').textContent = 'Actualizar Usuario';
-            new bootstrap.Modal(document.getElementById('addUserModal')).show();
-        } else if (target.closest('.delete-user-btn')) {
-            const userId = target.closest('.delete-user-btn').dataset.userId;
-            if (confirm('¿Estás seguro de que quieres eliminar este usuario?')) {
-                try {
-                    await api.deleteUser(userId);
-                    showToast('Usuario eliminado.', 'success');
-                    loadDashboardData('administrador', getToken());
-                } catch (error) {
-                    showToast(`Error al eliminar usuario: ${error.message}`, 'error');
-                }
-            }
-        } else if (target.id === 'confirm-add-user') {
+        });
+    }
+
+    const confirmAddUserBtn = document.getElementById('confirm-add-user');
+    if (confirmAddUserBtn) {
+        confirmAddUserBtn.addEventListener('click', async () => {
             const isEditing = state.editingUserId;
             const userData = {
                 nombre: document.getElementById('new-user-name').value,
@@ -153,27 +173,26 @@ function setupGlobalListeners() {
             try {
                 if (isEditing) {
                     await api.updateUser(isEditing, userData);
-                    showToast('Usuario actualizado con éxito.', 'success');
+                    alert('Usuario actualizado con éxito.');
                 } else {
                     await api.createUser(userData);
-                    showToast('Usuario creado con éxito.', 'success');
+                    alert('Usuario creado con éxito.');
                 }
                 
                 const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
-                modalInstance?.hide();
+                modalInstance.hide();
                 
+                // Reset form y state
                 document.getElementById('add-user-form').reset();
                 setEditingUserId(null);
                 document.getElementById('addUserModalLabel').textContent = 'Agregar Nuevo Usuario';
-                target.textContent = 'Agregar Usuario';
+                confirmAddUserBtn.textContent = 'Agregar Usuario';
 
-                loadDashboardData('administrador', getToken());
+                ui.loadDashboardData('administrador', getToken());
 
             } catch (error) {
-                showToast(`Error: ${error.message}`, 'error');
+                alert(`Error: ${error.message}`);
             }
-        }
-    });
-
-
+        });
+    }
 }

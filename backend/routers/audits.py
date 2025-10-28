@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 import io
 
 from backend import models, schemas, crud
-from backend.database import get_db
+from backend.dependencies import get_db
 from backend.services.auth_service import get_current_user
 from .websockets import manager
 
@@ -20,7 +20,7 @@ router = APIRouter(
     tags=["Auditorías"],
 )
 
-@router.post("/", response_model=schemas.AuditResponse)
+@router.post("/", response_model=schemas.AuditResponse, status_code=status.HTTP_201_CREATED)
 async def create_audit(
     audit: schemas.AuditCreate,
     db: Session = Depends(get_db),
@@ -32,6 +32,7 @@ async def create_audit(
     db_audit = crud.create_audit(db, audit, auditor_id=current_user.id)
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
+    audit_response.productos_count = len(db_audit.productos)
     payload = {"type": "new_audit", "data": audit_response.dict()}
     try:
         await manager.broadcast_to_all(json.dumps(payload, default=str))

@@ -5,7 +5,7 @@ from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
 
 from backend import crud, schemas, models
-from backend.database import get_db
+from backend.dependencies import get_db
 from backend.services.auth_service import get_password_hash, verify_password, create_access_token
 
 # Define el router de la API
