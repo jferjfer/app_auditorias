@@ -20,6 +20,26 @@ router = APIRouter(
     tags=["Auditorías"],
 )
 
+@router.post("/", response_model=schemas.AuditResponse)
+async def create_audit(
+    audit: schemas.AuditCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Crea una nueva auditoría a partir de un payload JSON.
+    """
+    db_audit = crud.create_audit(db, audit, auditor_id=current_user.id)
+    db.refresh(db_audit)
+    audit_response = schemas.AuditResponse.from_orm(db_audit)
+    payload = {"type": "new_audit", "data": audit_response.dict()}
+    try:
+        await manager.broadcast_to_all(json.dumps(payload, default=str))
+    except Exception as e:
+        print(f"Error broadcasting new audit: {e}")
+    return audit_response
+
+
 @router.post("/upload-multiple-files")
 async def upload_multiple_audit_files(
     files: List[UploadFile] = File(...),

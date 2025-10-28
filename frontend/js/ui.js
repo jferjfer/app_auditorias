@@ -22,19 +22,23 @@ export function updateSidebar(role) {
     const analystLink = document.getElementById('link-analyst');
     const auditorLink = document.getElementById('link-auditor');
     const adminLink = document.getElementById('link-admin');
+    const reporteriaMenu = document.getElementById('menu-reporteria');
 
     if (analystLink) analystLink.parentElement.classList.add('d-none');
     if (auditorLink) auditorLink.parentElement.classList.add('d-none');
     if (adminLink) adminLink.parentElement.classList.add('d-none');
+    if (reporteriaMenu) reporteriaMenu.classList.add('d-none');
 
     switch (role) {
         case 'administrador':
             if (analystLink) analystLink.parentElement.classList.remove('d-none');
             if (auditorLink) auditorLink.parentElement.classList.remove('d-none');
             if (adminLink) adminLink.parentElement.classList.remove('d-none');
+            if (reporteriaMenu) reporteriaMenu.classList.remove('d-none');
             break;
         case 'analista':
             if (analystLink) analystLink.parentElement.classList.remove('d-none');
+            if (reporteriaMenu) reporteriaMenu.classList.remove('d-none');
             break;
         case 'auditor':
             if (auditorLink) auditorLink.parentElement.classList.remove('d-none');

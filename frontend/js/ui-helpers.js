@@ -250,9 +250,9 @@ export function populateAuditorFilter(users) {
     const filter = document.getElementById('filterAuditor');
     if (!filter) return;
 
-    filter.innerHTML = ''; // Clear existing options
+    filter.innerHTML = ''; // Limpiar opciones existentes
 
-    // Add "Todos" option
+    // Añadir opción "Todos"
     const todosOption = document.createElement('option');
     todosOption.value = '';
     todosOption.textContent = 'Todos';

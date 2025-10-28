@@ -38,12 +38,12 @@ async function fetchApi(url, options = {}) {
                 errorDetail = JSON.stringify(error);
             }
         } catch (e) {
-            // Not a JSON response
+            // No es una respuesta JSON
             errorDetail = response.statusText;
         }
         throw new Error(errorDetail);
     }
-    // Handle responses with no content
+    // Manejar respuestas sin contenido
     if (response.status === 204) {
         return null;
     }

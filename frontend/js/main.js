@@ -4,11 +4,11 @@ import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
 import { ensureModal } from './ui-modals.js';
 
-// Import shared UI functions
+// Importar funciones de UI compartidas
 import { showDashboard } from './ui.js';
 import { showToast } from './ui-helpers.js';
 
-// Import role-specific UI modules
+// Importar módulos de UI específicos para cada rol
 import { loadAdminDashboard } from './ui-admin.js';
 import { loadAnalystDashboard, initAnalystEventListeners } from './ui-analyst.js';
 import { loadAuditorDashboard, verAuditoria as verAuditoriaAuditor } from './ui-auditor.js';
