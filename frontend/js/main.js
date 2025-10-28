@@ -176,23 +176,5 @@ function setupGlobalListeners() {
         }
     });
 
-    const uploadForm = document.getElementById('uploadForm');
-    uploadForm?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fileInput = document.getElementById('audit-file-input');
-        const submitBtn = uploadForm.querySelector('button[type="submit"]');
-        if (!fileInput.files || fileInput.files.length === 0) return showToast("Selecciona al menos un archivo.", 'info');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
-        try {
-            const result = await api.uploadAuditFiles(fileInput.files);
-            showToast(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`, 'success');
-            loadDashboardData('auditor', getToken());
-        } catch (error) {
-            showToast(`❌ Error: ${error.message}`, 'error');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
-        }
-    });
+
 }
