@@ -273,7 +273,7 @@ export function renderComplianceChart(audits) {
 
     setChartInstance('complianceChart', new Chart(ctx, {
         type: 'bar',
-        data: {
+        data: { 
             labels: audits.map(a => `Audit #${a.id}`),
             datasets: [{
                 label: '% Cumplimiento',
@@ -376,3 +376,20 @@ export function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Fetches HTML content from a given path. (Helper function)
+ * @param {string} path - The path to the HTML file.
+ * @returns {Promise<string>} A promise that resolves with the HTML content.
+ */
+export async function fetchHtml(path) {
+    try {
+        const response = await fetch(path);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.text();
+    } catch (error) {
+        console.error(`Error fetching HTML from ${path}:`, error);
+        return ''; // Return empty string on error
+    }
+}

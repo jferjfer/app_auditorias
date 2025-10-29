@@ -1,0 +1,188 @@
+<div id="auditor-dashboard" class="dashboard-section">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4">
+                <h1 class="h2 fw-bold">Dashboard del Auditor</h1>
+            </div>
+            
+            <!-- Panel Superior -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title">Porcentaje de Auditoría</h5>
+                            <div class="progress-circle">75%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Cargar Archivos de Auditoría</h5>
+                            <form class="mb-3">
+                                <div class="input-group">
+                                    <input type="file" class="form-control" accept=".xlsx,.xls" multiple>
+                                    <button class="btn btn-primary" type="submit">
+                                        <i class="bi bi-upload"></i> Subir Archivos
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">
+                                    <b>Selecciona tus archivos</b> Cada archivo debe ser una orden de traslado.
+                                </small>
+                            </form>
+                            <hr class="border-secondary">
+                            <h5 class="card-title">Escaneo de Productos</h5>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
+                                <input type="text" class="form-control" placeholder="Escanea el SKU del producto...">
+                                <button class="btn btn-outline-secondary" type="button" title="Escanear con cámara">
+                                    <i class="bi bi-camera-video"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabla de Auditorías -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="card-title">Mis Auditorías</h5>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-outline-secondary" type="button">
+                                        <i class="bi bi-archive"></i> Ver auditorías finalizadas
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover table-dark">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Orden de traslado</th>
+                                            <th>Fecha</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>#AUD-001</td>
+                                            <td>OT-2024-001</td>
+                                            <td>15/05/2024</td>
+                                            <td><span class="badge bg-warning">En Progreso</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-pencil"></i> Editar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>#AUD-002</td>
+                                            <td>OT-2024-002</td>
+                                            <td>14/05/2024</td>
+                                            <td><span class="badge bg-success">Finalizada</span></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-eye"></i> Ver
+                                                </button>
+                                            </td>
+                                        </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabla de Productos -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Productos de la Auditoría</h5>
+                            <div class="table-responsive">
+                                <table class="table table-hover table-dark">
+                                    <thead>
+                                        <tr>
+                                            <th>SKU</th>
+                                            <th>Orden de Traslado</th>
+                                            <th>Nombre</th>
+                                            <th>Cantidad Documento</th>
+                                            <th>Cantidad Física</th>
+                                            <th>Novedad</th>
+                                            <th>Observaciones</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>SKU-001</td>
+                                            <td>OT-2024-001</td>
+                                            <td>Producto A</td>
+                                            <td>100</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm" value="95">
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm">
+                                                    <option>Sin novedad</option>
+                                                    <option selected>Faltante</option>
+                                                    <option>Sobrante</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm" placeholder="Observaciones...">
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-success">
+                                                    <i class="bi bi-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>SKU-002</td>
+                                            <td>OT-2024-001</td>
+                                            <td>Producto B</td>
+                                            <td>50</td>
+                                            <td>
+                                                <input type="number" class="form-control form-control-sm" value="50">
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm">
+                                                    <option selected>Sin novedad</option>
+                                                    <option>Faltante</option>
+                                                    <option>Sobrante</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm" placeholder="Observaciones...">
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-success">
+                                                    <i class="bi bi-check"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                                <button class="btn btn-success">
+                                    <i class="bi bi-save"></i> Guardar Auditoría
+                                </button>
+                                <button class="btn btn-info text-white">
+                                    <i class="bi bi-check-circle"></i> Finalizar Auditoría
+                                </button>
+                                <button class="btn btn-outline-primary" type="button">
+                                    <i class="bi bi-people"></i> Auditoría Colaborativa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>

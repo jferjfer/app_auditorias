@@ -1,26 +1,19 @@
 :root {
-    --bg-color: #1a1a1a;
-    --bg-secondary-color: #2a2a2a;
-    --text-color: #f0f0f0;
+    --bg-color: #0c0a1a;
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --text-light: #e0e6ed;
+    --text-muted: #a0a4b0;
     --primary-color: #00c6ff;
-    --border-color: #444;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --info-color: #17a2b8;
-    --table-hover-color: #3a3a3a;
-    --text-light: #e0e6ed; /* Mantener si se usa en otros lugares */
-    --text-muted: #a0a4b0; /* Mantener si se usa en otros lugares */
+    --secondary-color: #ff0077;
     --primary-glow: 0 0 8px rgba(var(--primary-color-rgb, 0, 198, 255), 0.5);
+    --secondary-glow: 0 0 8px rgba(var(--accent-color-rgb, 255, 0, 119), 0.5);
     --font-family: 'Poppins', sans-serif;
     --font-family-mono: 'Roboto Mono', monospace;
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
     font-family: var(--font-family);
-    margin: 0;
-    padding: 0;
     position: relative;
     overflow-x: hidden;
 }
@@ -48,14 +41,20 @@ body::before {
 }
 
 .sidebar {
-    background-color: var(--bg-secondary-color);
-    height: 100vh;
-    width: 250px;
-    position: fixed;
-    padding-top: 20px;
+    background-color: var(--bg-color); /* Añadido para asegurar visibilidad */
+    backdrop-filter: blur(20px);
     border-right: 1px solid var(--border-color);
-    z-index: 1050;
+    height: 100vh;
+    position: fixed;
+    width: 250px;
+    padding-top: 20px;
+    z-index: 1050; /* Aumentado para asegurar que esté por encima de otros elementos */
     transition: transform 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
+}
+
+.sidebar .h3 {
+    font-weight: 700;
+    letter-spacing: 2px;
 }
 
 .sidebar a {
@@ -72,7 +71,7 @@ body::before {
 
 .sidebar a:hover {
     color: var(--primary-color);
-    background-color: rgba(0, 198, 255, 0.1);
+    background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
 }
 
 .sidebar .active {
@@ -87,10 +86,10 @@ body::before {
 
 /* Estilo de las tarjetas (cards) */
 .card, .modal-content {
-    background-color: var(--bg-secondary-color);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    color: var(--text-color);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -167,14 +166,15 @@ body::before {
 }
 
 .table-dark {
-    background-color: var(--bg-secondary-color);
-    color: var(--text-color);
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: transparent;
     border-radius: 16px;
     overflow: hidden;
+    backdrop-filter: blur(10px);
 }
 
 .table-dark th, .table-dark td {
-    background-color: var(--bg-secondary-color);
+    background-color: rgba(255, 255, 255, 0.05);
     border-color: var(--border-color) !important;
     vertical-align: middle;
 }
@@ -191,17 +191,20 @@ body::before {
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    background: conic-gradient(var(--primary-color) 75%, transparent 75%);
+    background: conic-gradient(#00c6ff 75%, transparent 75%);
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    font-size: 1.5rem;
-    margin: 0 auto;
+    font-size: 2.2rem;
+    box-shadow: var(--primary-glow);
+    border: 4px solid var(--bg-secondary-color);
+    outline: 1px solid var(--border-color);
 }
 
 .input-group-text {
-    background-color: var(--bg-secondary-color);
+    background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
     border-right: none;
 }
@@ -318,22 +321,47 @@ body::before {
 
 /* --- Responsive Design --- */
 .sidebar-toggle-btn {
-    display: none;
+    display: none; /* Oculto en escritorio */
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1051; /* Encima del sidebar abierto */
+    background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
+    border: 1px solid var(--border-color);
+    color: var(--text-light);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 1.5rem;
 }
 
 @media (max-width: 992px) {
     .sidebar {
         transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        box-shadow: 0 0 40px rgba(0,0,0,0.5);
     }
+
+    .sidebar.active {
+        transform: translateX(0);
+    }
+
     .main-content {
         margin-left: 0;
+        padding: 20px;
+        transition: transform 0.3s ease-in-out; /* Añadido para una transición suave */
     }
+
+    body.sidebar-active .main-content {
+        transform: translateX(250px); /* Mueve el contenido principal para dejar espacio al sidebar */
+    }
+    
     .sidebar-toggle-btn {
-        display: block;
-        position: fixed;
-        top: 15px;
-        left: 15px;
-        z-index: 1051;
+        display: block; /* Visible en móvil */
+    }
+
+    body.sidebar-active .main-content {
+        /* Opcional: oscurecer el contenido principal cuando el sidebar está abierto */
+        filter: brightness(0.5);
     }
 }
 
