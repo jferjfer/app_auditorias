@@ -1,7 +1,7 @@
+
 import { loginUser, fetchCurrentUser } from './api.js';
 import { state } from './state.js';
-import { showDashboard, updateSidebar } from './ui.js';
-import { showToast } from './ui-helpers.js';
+import { showDashboard, loadDashboardData, updateSidebar } from './ui.js';
 
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');
@@ -66,8 +66,7 @@ export async function checkAuth(initUserDashboard) {
         const sessionUser = setupUserSession(user);
         initUserDashboard(sessionUser, token);
     } catch (error) {
-        console.error('Error detailed in checkAuth:', error);
-        showToast(`Error de autenticación: ${error.message}. Intenta iniciar sesión de nuevo.`, 'error');
+        console.error('Error in checkAuth:', error);
         clearSession();
     }
 }
@@ -91,6 +90,6 @@ export async function handleAuthFormSubmit(event, initUserDashboard) {
         initUserDashboard(sessionUser, result.access_token);
     } catch (error) {
         console.error('Auth Error:', error);
-        showToast(`Error: ${error.message}`, 'error');
+        alert(`Error: ${error.message}`);
     }
 }

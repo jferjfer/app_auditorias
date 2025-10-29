@@ -14,36 +14,17 @@ async function fetchApi(url, options = {}) {
     const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
-        // Si el token ha expirado o no es válido, el servidor devolverá un 401.
-        // En ese caso, limpiamos el estado de la sesión y recargamos la página
-        // para forzar al usuario a iniciar sesión de nuevo.
-        if (response.status === 401) {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('user_name');
-            localStorage.removeItem('user_role');
-            localStorage.removeItem('user_id');
-            window.location.reload();
-            // Arrojamos un error para detener la ejecución del script actual
-            throw new Error('Sesión expirada. Por favor, inicie sesión de nuevo.');
-        }
-
         let errorDetail = 'API request failed';
         try {
             const error = await response.json();
-            if (typeof error.detail === 'string') {
-                errorDetail = error.detail;
-            } else if (error.detail && typeof error.detail.msg === 'string') {
-                errorDetail = error.detail.msg;
-            } else {
-                errorDetail = JSON.stringify(error);
-            }
+            errorDetail = error.detail || JSON.stringify(error);
         } catch (e) {
-            // No es una respuesta JSON
+            // Not a JSON response
             errorDetail = response.statusText;
         }
         throw new Error(errorDetail);
     }
-    // Manejar respuestas sin contenido
+    // Handle responses with no content
     if (response.status === 204) {
         return null;
     }
@@ -81,6 +62,9 @@ export async function fetchAuditors() {
     return fetchApi(`${API_URL}/api/users/auditors/`);
 }
 
+export async function fetchAuditsByAuditor(auditorId) {
+    return fetchApi(`${API_URL}/api/audits/auditor/${auditorId}`);
+}
 
 export async function fetchAllUsers() {
     return fetchApi(`${API_URL}/api/users/`);
@@ -111,11 +95,6 @@ export async function finishAudit(auditId) {
 export async function addCollaborators(auditId, collaborator_ids) {
     const body = JSON.stringify({ collaborator_ids });
     return fetchApi(`${API_URL}/api/audits/${auditId}/collaborators`, { method: 'POST', body });
-}
-
-export async function addSurplusProduct(auditId, productData) {
-    const body = JSON.stringify(productData);
-    return fetchApi(`${API_URL}/api/audits/${auditId}/products`, { method: 'POST', body });
 }
 
 export async function downloadReport(filters = {}) {

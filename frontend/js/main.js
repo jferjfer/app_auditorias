@@ -1,12 +1,9 @@
+
 import { checkAuth, handleAuthFormSubmit, clearSession, getToken } from './auth.js';
 import { state, setEditingUserId, setCurrentAudit, setHtml5QrCode } from './state.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
-import { loadAuditorDashboard, verAuditoria } from './ui-auditor.js';
-import { ensureModal } from './ui-modals.js';
-import { loadAdminDashboard } from './ui-admin.js';
-import { loadAnalystDashboard } from './ui-analyst.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
@@ -14,37 +11,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initApp() {
     initTheme();
+    ui.initAnalystEventListeners(); // Se inicializa una sola vez
     // Se pasa la función para inicializar el dashboard al verificar la autenticación
     checkAuth(initUserDashboard);
     setupGlobalListeners();
 }
 
+/**
+ * Inicializa el dashboard del usuario, carga sus datos y establece la conexión WebSocket.
+ * @param {object} user - El objeto de usuario que contiene el rol.
+ * @param {string} token - El token de autenticación.
+ */
 function initUserDashboard(user, token) {
-    if (!user || !user.rol || !token) {
-        console.error("Cannot init dashboard: invalid user, role, or token.", { user, token });
-        return;
-    }
-
-    const role = user.rol;
-    const reloader = () => loadDashboardData(role, token);
-
-    loadDashboardData(role, token);
-    initGeneralWebSocket(reloader);
-}
-
-function loadDashboardData(role, token, filters = {}) {
-    switch (role) {
-        case 'administrador':
-            loadAdminDashboard(token, filters);
-            break;
-        case 'analista':
-            loadAnalystDashboard(token, filters);
-            break;
-        case 'auditor':
-            loadAuditorDashboard(token);
-            break;
-        default:
-            console.error(`Dashboard for role '${role}' not found.`);
+    if (user && user.rol && token) {
+        ui.loadDashboardData(user.rol, token);
+        // Inicializa la conexión WebSocket general para notificaciones
+        initGeneralWebSocket(ui.loadDashboardData); 
+    } else {
+        console.error("No se pudo inicializar el dashboard: usuario, rol o token no válidos.", { user, token });
     }
 }
 
@@ -113,13 +97,22 @@ function setupGlobalListeners() {
             }
         } else if (e.target.closest('.ver-auditoria-btn')) {
             const auditId = e.target.closest('.ver-auditoria-btn').getAttribute('data-audit-id');
-            verAuditoria(auditId);
+            ui.verAuditoria(auditId);
         } else if (e.target.closest('.view-audit-btn')) {
             const auditId = e.target.closest('.view-audit-btn').getAttribute('data-audit-id');
             // This is for the analyst view, we can create a separate function if needed
-            verAuditoria(auditId); 
+            ui.verAuditoria(auditId); 
         } else if (e.target.closest('.edit-user-btn')) {
-            ensureModal('addUserModal');
+            const userId = e.target.closest('.edit-user-btn').getAttribute('data-user-id');
+            setEditingUserId(userId);
+            const user = await api.fetchUser(userId);
+            document.getElementById('new-user-name').value = user.nombre;
+            document.getElementById('new-user-email').value = user.correo;
+            document.getElementById('new-user-role').value = user.rol;
+            document.getElementById('new-user-password').value = '';
+            document.getElementById('addUserModalLabel').textContent = 'Editar Usuario';
+            document.getElementById('confirm-add-user').textContent = 'Actualizar Usuario';
+            new bootstrap.Modal(document.getElementById('addUserModal')).show();
         } else if (e.target.closest('.delete-user-btn')) {
             const userId = e.target.closest('.delete-user-btn').getAttribute('data-user-id');
             if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
