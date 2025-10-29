@@ -864,21 +864,26 @@ function generateExcelReport(reportData, reportType, filters) {
     const summaryData = [
         [reportTitle],
         [],
-        ['Filtros Aplicados'],
+        ['Filtros Aplicados', ''],
         ['Fecha Inicio:', filters.start_date || 'N/A'],
         ['Fecha Fin:', filters.end_date || 'N/A'],
         [],
-        ['Resumen General'],
+        ['Resumen General', ''],
         ['Total de Pedidos (líneas de producto):', totalPedidos],
         ['Total de Productos (unidades físicas):', totalProductos],
         [],
-        ['Resumen de Novedades'],
+        ['Resumen de Novedades', ''],
         ...Object.entries(noveltyCounts).map(([key, value]) => [key, value])
     ];
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+    // Ajustar anchos de columna en el resumen
+    wsSummary['!cols'] = [{ wch: 40 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
     // --- Crear Hoja de Datos ---
+    // Nota: La librería estándar de xlsx no soporta estilos complejos como colores.
+    // Para ello, se necesitaría una librería diferente como xlsx-style.
+    // Aquí nos centramos en la estructura y los datos.
     const tableHeader = ['Item', 'Orden de Traslado', 'SKU', 'Descripción', 'Novedad', 'Cant. Documento', 'Cant. Física', 'Diferencia', 'Observaciones'];
     const tableBody = products.map((p, index) => ({
         Item: index + 1,
@@ -893,6 +898,18 @@ function generateExcelReport(reportData, reportType, filters) {
     }));
 
     const wsData = XLSX.utils.json_to_sheet(tableBody, { header: tableHeader });
+    // Ajustar anchos de columna en los datos
+    wsData['!cols'] = [
+        { wch: 5 }, // Item
+        { wch: 20 }, // Orden de Traslado
+        { wch: 15 }, // SKU
+        { wch: 40 }, // Descripción
+        { wch: 15 }, // Novedad
+        { wch: 15 }, // Cant. Documento
+        { wch: 15 }, // Cant. Física
+        { wch: 10 }, // Diferencia
+        { wch: 40 }  // Observaciones
+    ];
     XLSX.utils.book_append_sheet(wb, wsData, 'Detalle de Productos');
 
     XLSX.writeFile(wb, fileName);
@@ -903,21 +920,49 @@ async function generatePdfReport(reportData, reportType, filters) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
+    // --- Paleta de Colores ---
+    const primaryColor = '#6a11cb'; // Morado principal
+    const secondaryColor = '#2575fc'; // Azul secundario
+    const headerColor = '#f2eafa'; // Fondo de encabezado morado muy claro
+    const textColor = '#333333';
+    const headerTextColor = '#ffffff';
+    const tableHeaderColor = '#6a11cb';
+
     const reportTitle = reportType === 'general' ? 'Informe General de Auditoría' : 'Informe de Novedades';
     const fileName = `${reportTitle.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
     const today = new Date().toLocaleDateString('es-ES');
 
-    // Título
-    doc.setFontSize(18);
-    doc.text(reportTitle, 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Fecha de Generación: ${today}`, 14, 28);
+    // --- Encabezado Personalizado ---
+    const addHeader = () => {
+        doc.setFillColor(primaryColor);
+        doc.rect(0, 0, doc.internal.pageSize.getWidth(), 20, 'F');
+        doc.setFontSize(16);
+        doc.setTextColor(headerTextColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text(reportTitle, 14, 13);
+    };
 
-    // Resumen y Filtros
+    // --- Pie de Página Personalizado ---
+    const addFooter = () => {
+        const pageCount = doc.internal.getNumberOfPages();
+        doc.setFontSize(8);
+        doc.setTextColor('#888888');
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            const text = `Página ${i} de ${pageCount} | Generado el ${today}`;
+            doc.text(text, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        }
+    };
+
+    addHeader();
+
+    // --- Resumen y Filtros ---
     doc.setFontSize(12);
-    doc.text('Resumen y Filtros Aplicados', 14, 40);
+    doc.setTextColor(textColor);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumen y Filtros Aplicados', 14, 35);
     doc.autoTable({
-        startY: 42,
+        startY: 38,
         head: [['Concepto', 'Valor']],
         body: [
             ['Fecha Inicio Filtro', filters.start_date || 'N/A'],
@@ -926,13 +971,13 @@ async function generatePdfReport(reportData, reportType, filters) {
             ['Total de Productos (unidades)', totalProductos],
         ],
         theme: 'grid',
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [41, 128, 185] },
+        styles: { fontSize: 9, textColor: textColor },
+        headStyles: { fillColor: tableHeaderColor, textColor: headerTextColor },
     });
 
     let finalY = doc.lastAutoTable.finalY || 80;
 
-    // Gráfico de Novedades (generado off-screen)
+    // --- Gráfico de Novedades ---
     if (Object.keys(noveltyCounts).length > 0) {
         finalY += 10;
         doc.setFontSize(12);
@@ -949,7 +994,7 @@ async function generatePdfReport(reportData, reportType, filters) {
                     labels: Object.keys(noveltyCounts),
                     datasets: [{
                         data: Object.values(noveltyCounts),
-                        backgroundColor: ['#ffc107', '#fd7e14', '#dc3545', '#6f42c1', '#20c997', '#0dcaf0'],
+                        backgroundColor: ['#a855f7', '#d8b4fe', '#c084fc', '#9333ea', '#7e22ce', '#581c87'],
                     }]
                 },
                 options: {
@@ -970,7 +1015,7 @@ async function generatePdfReport(reportData, reportType, filters) {
         finalY += 70; // Incrementar espacio para el gráfico
     }
 
-    // Tabla de Productos
+    // --- Tabla de Productos ---
     doc.setFontSize(12);
     doc.text('Detalle de Productos', 14, finalY + 10);
     const tableHeader = ['#', 'Orden T.', 'SKU', 'Descripción', 'Novedad', 'Cant. Doc', 'Cant. Fís', 'Dif.'];
@@ -989,29 +1034,13 @@ async function generatePdfReport(reportData, reportType, filters) {
         startY: finalY + 12,
         head: [tableHeader],
         body: tableBody,
-        theme: 'grid',
-        styles: { fontSize: 7, cellPadding: 1.5 },
-        headStyles: { fillColor: [41, 128, 185], fontSize: 7 },
-        didParseCell: function (data) {
-            if (data.column.dataKey === 3 && data.cell.section === 'body') { // Columna 'Descripción'
-                data.cell.text = data.cell.text[0].substring(0, 25) + (data.cell.text[0].length > 25 ? '...' : '');
-            }
-        }
+        theme: 'striped',
+        styles: { fontSize: 7, cellPadding: 1.5, textColor: textColor },
+        headStyles: { fillColor: tableHeaderColor, textColor: headerTextColor, fontSize: 7 },
+        didDrawPage: addHeader, // Añadir encabezado en cada nueva página
     });
-    finalY = doc.lastAutoTable.finalY;
 
-    // Conclusiones
-    doc.setFontSize(12);
-    doc.text('Conclusiones', 14, finalY + 5);
-    let conclusionText = `El informe de tipo '${reportType}' generó un total de ${totalPedidos} líneas de producto. `;
-    if(Object.keys(noveltyCounts).length > 0) {
-        const mainNovelty = Object.entries(noveltyCounts).sort((a, b) => b[1] - a[1])[0];
-        conclusionText += `Se encontraron ${Object.keys(noveltyCounts).length} tipos de novedades, siendo la más común '${mainNovelty[0]}' con ${mainNovelty[1]} ocurrencias.`;
-    } else {
-        conclusionText += 'No se encontraron novedades significativas en los productos analizados.';
-    }
-    const splitText = doc.splitTextToSize(conclusionText, 180);
-    doc.text(splitText, 14, finalY + 10);
+    addFooter(); // Añadir pie de página al final
 
     doc.save(fileName);
 }
