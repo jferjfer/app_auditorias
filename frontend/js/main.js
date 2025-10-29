@@ -4,6 +4,7 @@ import { state, setEditingUserId, setCurrentAudit, setHtml5QrCode } from './stat
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
@@ -93,7 +94,7 @@ function setupGlobalListeners() {
                 await api.iniciarAuditoria(auditId);
                 ui.loadDashboardData('auditor', getToken());
             } catch (error) {
-                alert(`Error al iniciar auditoría: ${error.message}`);
+                showToast(`Error al iniciar auditoría: ${error.message}`, 'error');
             }
         } else if (e.target.closest('.ver-auditoria-btn')) {
             const auditId = e.target.closest('.ver-auditoria-btn').getAttribute('data-audit-id');
@@ -118,10 +119,10 @@ function setupGlobalListeners() {
             if (confirm(`¿Estás seguro de que quieres eliminar al usuario ${userId}?`)) {
                 try {
                     await api.deleteUser(userId);
-                    alert('Usuario eliminado.');
+                    showToast('Usuario eliminado.', 'success');
                     ui.loadDashboardData('administrador', getToken());
                 } catch (error) {
-                    alert(`Error al eliminar usuario: ${error.message}`);
+                    showToast(`Error al eliminar usuario: ${error.message}`, 'error');
                 }
             }
         }
@@ -133,15 +134,15 @@ function setupGlobalListeners() {
             e.preventDefault();
             const fileInput = document.getElementById('audit-file-input');
             const submitBtn = uploadForm.querySelector('button[type="submit"]');
-            if (!fileInput.files || fileInput.files.length === 0) return alert("Selecciona al menos un archivo.");
+            if (!fileInput.files || fileInput.files.length === 0) return showToast("Selecciona al menos un archivo.", 'info');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
             try {
                 const result = await api.uploadAuditFiles(fileInput.files);
-                alert(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`);
+                showToast(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`, 'success');
                 ui.loadDashboardData('auditor', getToken());
             } catch (error) {
-                alert(`❌ Error: ${error.message}`);
+                showToast(`❌ Error: ${error.message}`, 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-upload"></i> Subir Archivos';
@@ -166,10 +167,10 @@ function setupGlobalListeners() {
             try {
                 if (isEditing) {
                     await api.updateUser(isEditing, userData);
-                    alert('Usuario actualizado con éxito.');
+                    showToast('Usuario actualizado con éxito.', 'success');
                 } else {
                     await api.createUser(userData);
-                    alert('Usuario creado con éxito.');
+                    showToast('Usuario creado con éxito.', 'success');
                 }
                 
                 const modalInstance = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
@@ -184,7 +185,7 @@ function setupGlobalListeners() {
                 ui.loadDashboardData('administrador', getToken());
 
             } catch (error) {
-                alert(`Error: ${error.message}`);
+                showToast(`Error: ${error.message}`, 'error');
             }
         });
     }

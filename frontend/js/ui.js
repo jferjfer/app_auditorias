@@ -2,6 +2,7 @@ import { state, setChartInstance, setCurrentAudit, setAuditorAuditsList, setAnal
 import * as api from './api.js';
 import { getToken } from './auth.js';
 import { initWebSocket } from './websockets.js';
+import { showToast } from './ui-helpers.js';
 
 const roleMap = {
     analista: 'analyst-dashboard',
@@ -362,7 +363,7 @@ export async function verAuditoria(auditId) {
         updateCompliancePercentage(auditId);
 
     } catch (error) {
-        alert("Error de red.");
+        showToast("Error de red.", 'error');
     }
 }
 
@@ -468,7 +469,7 @@ function setupAuditViewListeners() {
                     setTimeout(() => row.classList.remove('is-saved'), 1200);
                     updateCompliancePercentage(state.currentAudit.id);
                 } catch (error) {
-                    alert(`Error al guardar el producto: ${error.message}`);
+                    showToast(`Error al guardar el producto: ${error.message}`, 'error');
                 }
             }
         });
@@ -523,7 +524,7 @@ function setupAuditViewListeners() {
                         scanInput.focus();
                     }
                 } catch (error) {
-                    alert(`Error al guardar el producto: ${error.message}`);
+                    showToast(`Error al guardar el producto: ${error.message}`, 'error');
                     speak("Error al guardar.");
                 }
             }
@@ -550,7 +551,7 @@ function setupAuditViewListeners() {
             }
 
             if (productsToUpdate.length === 0) {
-                alert("No hay cambios para guardar.");
+                showToast("No hay cambios para guardar.", 'info');
                 return;
             }
 
@@ -559,7 +560,7 @@ function setupAuditViewListeners() {
 
             try {
                 await api.bulkUpdateProducts(state.currentAudit.id, productsToUpdate);
-                alert(`Guardado completado. ${productsToUpdate.length} productos actualizados.`);
+                showToast(`Guardado completado. ${productsToUpdate.length} productos actualizados.`, 'success');
                 
                 rows.forEach(row => {
                     const productId = parseInt(row.getAttribute('data-product-id'));
@@ -574,7 +575,7 @@ function setupAuditViewListeners() {
                 }
 
             } catch (error) {
-                alert(`Error al guardar los cambios: ${error.message}`);
+                showToast(`Error al guardar los cambios: ${error.message}`, 'error');
             } finally {
                 saveAllBtn.disabled = false;
                 saveAllBtn.innerHTML = '<i class="bi bi-save"></i> Guardar Auditoría';
@@ -588,11 +589,11 @@ function setupAuditViewListeners() {
             if (confirm('¿Estás seguro de que quieres finalizar esta auditoría?')) {
                 try {
                     await api.finishAudit(state.currentAudit.id);
-                    alert('Auditoría finalizada con éxito.');
+                    showToast('Auditoría finalizada con éxito.', 'success');
                     loadDashboardData('auditor', getToken());
                     showDashboard('auditor-dashboard'); 
                 } catch (error) {
-                    alert(`Error al finalizar la auditoría: ${error.message}`);
+                    showToast(`Error al finalizar la auditoría: ${error.message}`, 'error');
                 }
             }
         });
@@ -624,7 +625,7 @@ function setupAuditViewListeners() {
 
                 panel.classList.remove('d-none');
             } catch (error) {
-                alert(`Error al cargar auditores: ${error.message}`);
+                showToast(`Error al cargar auditores: ${error.message}`, 'error');
             }
         });
     }
@@ -636,17 +637,17 @@ function setupAuditViewListeners() {
             const selectedIds = Array.from(select.selectedOptions).map(opt => opt.value);
 
             if (selectedIds.length === 0) {
-                alert('Por favor, selecciona al menos un auditor.');
+                showToast('Por favor, selecciona al menos un auditor.', 'info');
                 return;
             }
 
             try {
                 await api.addCollaborators(state.currentAudit.id, selectedIds);
-                alert('Colaboradores agregados con éxito.');
+                showToast('Colaboradores agregados con éxito.', 'success');
                 document.getElementById('collaborative-panel').classList.add('d-none');
                 verAuditoria(state.currentAudit.id); // Refresh view
             } catch (error) {
-                alert(`Error al agregar colaboradores: ${error.message}`);
+                showToast(`Error al agregar colaboradores: ${error.message}`, 'error');
             }
         });
     }
@@ -698,7 +699,7 @@ function setupAuditViewListeners() {
             html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback)
                 .catch(err => {
                     console.error("Unable to start scanning.", err);
-                    alert("No se pudo iniciar el escáner. Asegúrate de dar permiso para usar la cámara.");
+                    showToast("No se pudo iniciar el escáner. Asegúrate de dar permiso para usar la cámara.", 'error');
                     scannerContainer.classList.add('d-none');
                 });
         });
@@ -834,7 +835,7 @@ export function initAnalystEventListeners() {
             const reportData = await prepareReportData(reportConfig.type, currentFilters);
 
             if (!reportData || reportData.products.length === 0) {
-                alert('No hay datos para generar el informe con los filtros seleccionados.');
+                showToast('No hay datos para generar el informe con los filtros seleccionados.', 'info');
                 return;
             }
 
@@ -845,7 +846,7 @@ export function initAnalystEventListeners() {
             }
         } catch (error) {
             console.error('Error generating report:', error);
-            alert(`Error al generar el informe: ${error.message}`);
+            showToast(`Error al generar el informe: ${error.message}`, 'error');
         } finally {
             target.innerHTML = originalText;
             target.classList.remove('disabled');

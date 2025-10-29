@@ -84,6 +84,21 @@ body::before {
     padding: 40px;
 }
 
+.dashboard-section {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Estilo de las tarjetas (cards) */
 .card, .modal-content {
     border: 1px solid var(--border-color);
@@ -410,4 +425,80 @@ body::before {
 #analyst-dashboard .btn-group {
     position: relative;
     z-index: 2;
+}
+
+/* --- Sistema de Notificaciones Toast --- */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.toast-notification {
+    min-width: 300px;
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-family: var(--font-family);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    transform: translateX(120%);
+    transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.5s ease;
+    opacity: 0;
+}
+
+.toast-notification.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-notification i {
+    font-size: 1.5rem;
+}
+
+.toast-notification.success {
+    background-color: rgba(40, 167, 69, 0.7); /* Verde con transparencia */
+    border-left: 5px solid #28a745;
+}
+
+.toast-notification.error {
+    background-color: rgba(220, 53, 69, 0.7); /* Rojo con transparencia */
+    border-left: 5px solid #dc3545;
+}
+
+.toast-notification.info {
+    background-color: rgba(23, 162, 184, 0.7); /* Azul info con transparencia */
+    border-left: 5px solid #17a2b8;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
 }

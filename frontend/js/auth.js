@@ -2,6 +2,7 @@
 import { loginUser, fetchCurrentUser } from './api.js';
 import { state } from './state.js';
 import { showDashboard, loadDashboardData, updateSidebar } from './ui.js';
+import { showToast } from './ui-helpers.js';
 
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');
@@ -90,6 +91,6 @@ export async function handleAuthFormSubmit(event, initUserDashboard) {
         initUserDashboard(sessionUser, result.access_token);
     } catch (error) {
         console.error('Auth Error:', error);
-        alert(`Error: ${error.message}`);
+        showToast(`Error: ${error.message}`, 'error');
     }
 }
