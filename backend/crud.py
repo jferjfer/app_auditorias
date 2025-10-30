@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
 from backend import models, schemas
 from passlib.context import CryptContext
 from typing import List, Optional
@@ -239,14 +239,14 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     if start_date:
         try:
             filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            query = query.filter(func.date(models.Audit.creada_en) >= filter_start_date)
+            query = query.filter(cast(models.Audit.creada_en, Date) >= filter_start_date)
         except ValueError:
             pass # Ignorar formato de fecha inválido
 
     if end_date:
         try:
             filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-            query = query.filter(func.date(models.Audit.creada_en) <= filter_end_date)
+            query = query.filter(cast(models.Audit.creada_en, Date) <= filter_end_date)
         except ValueError:
             pass # Ignorar formato de fecha inválido
 
@@ -260,7 +260,7 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
     today = datetime.now().date()
     return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
         models.Audit.auditor_id.isnot(None),
-        func.date(models.Audit.creada_en) == today
+        cast(models.Audit.creada_en, Date) == today
     ).all()
 
 
@@ -299,16 +299,16 @@ def get_compliance_by_auditor(db: Session):
 def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Obtiene el número de auditorías creadas por día dentro de un período dado."""
     query = db.query(
-        func.date(models.Audit.creada_en).label('fecha'),
+        cast(models.Audit.creada_en, Date).label('fecha'),
         func.count(models.Audit.id).label('total_auditorias')
     )
 
     if start_date:
         filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        query = query.filter(func.date(models.Audit.creada_en) >= filter_start_date)
+        query = query.filter(cast(models.Audit.creada_en, Date) >= filter_start_date)
     if end_date:
         filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        query = query.filter(func.date(models.Audit.creada_en) <= filter_end_date)
+        query = query.filter(cast(models.Audit.creada_en, Date) <= filter_end_date)
 
     return query.group_by('fecha').order_by('fecha').all()
 
@@ -328,6 +328,6 @@ def get_top_novelty_skus(db: Session, limit: int = 10):
 def get_average_audit_duration(db: Session):
     """Obtiene la duración promedio de las auditorías finalizadas en horas."""
     result = db.query(
-        func.avg(func.julianday(models.Audit.finalizada_en) - func.julianday(models.Audit.creada_en)) * 24
+        func.avg(func.extract('epoch', models.Audit.finalizada_en - models.Audit.creada_en)) / 3600
     ).filter(models.Audit.estado == "finalizada", models.Audit.finalizada_en.isnot(None)).scalar()
     return round(result, 2) if result else 0.0
