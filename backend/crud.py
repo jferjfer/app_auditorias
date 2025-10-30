@@ -291,8 +291,7 @@ def get_compliance_by_auditor(db: Session):
     return db.query(
         models.User.nombre,
         func.avg(models.Audit.porcentaje_cumplimiento)
-    ).join(models.Audit, models.User.id == models.Audit.auditor_id)
-    .filter(models.Audit.estado == "finalizada")
+    ).join(models.Audit, models.User.id == models.Audit.auditor_id).filter(models.Audit.estado == "finalizada")
     .group_by(models.User.nombre).all()
 
 
