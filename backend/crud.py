@@ -288,11 +288,12 @@ def get_novelty_distribution(db: Session):
 
 def get_compliance_by_auditor(db: Session):
     """Obtiene el cumplimiento promedio por cada auditor."""
-    return db.query(
+    return (db.query(
         models.User.nombre,
         func.avg(models.Audit.porcentaje_cumplimiento)
-    ).join(models.Audit, models.User.id == models.Audit.auditor_id).filter(models.Audit.estado == "finalizada")
-    .group_by(models.User.nombre).all()
+    ).join(models.Audit, models.User.id == models.Audit.auditor_id)
+    .filter(models.Audit.estado == "finalizada")
+    .group_by(models.User.nombre).all())
 
 
 def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None):
