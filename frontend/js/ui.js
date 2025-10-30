@@ -761,6 +761,25 @@ export function setupAuditorDashboard(audits) {
 
 // --- Funciones para Generación de Informes (Analista) ---
 
+async function getImageBase64(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error(`Failed to fetch or process image from ${url}:`, error);
+        return null; // Devuelve null para que el resto del código pueda manejarlo
+    }
+}
+
 async function prepareReportData(reportType, filters) {
     const detailedAudits = await api.fetchReportData(filters);
 
@@ -920,6 +939,9 @@ async function generatePdfReport(reportData, reportType, filters) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
+    // Cargar el logo
+    const logoBase64 = await getImageBase64('images/marca_deagua.png');
+
     // --- Paleta de Colores ---
     const primaryColor = '#6a11cb'; // Morado principal
     const secondaryColor = '#2575fc'; // Azul secundario
@@ -932,14 +954,36 @@ async function generatePdfReport(reportData, reportType, filters) {
     const fileName = `${reportTitle.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
     const today = new Date().toLocaleDateString('es-ES');
 
+    // --- Marca de Agua ---
+    const addWatermark = () => {
+        if (logoBase64) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const logoWidth = 150;
+            const logoHeight = 150;
+            const x = (pageWidth - logoWidth) / 2;
+            const y = (pageHeight - logoHeight) / 2;
+
+            doc.saveGraphicsState();
+            doc.setGState(new doc.GState({ opacity: 0.1 }));
+            doc.addImage(logoBase64, 'PNG', x, y, logoWidth, logoHeight);
+            doc.restoreGraphicsState();
+        }
+    };
+
     // --- Encabezado Personalizado ---
     const addHeader = () => {
         doc.setFillColor(primaryColor);
         doc.rect(0, 0, doc.internal.pageSize.getWidth(), 20, 'F');
+        
+        if (logoBase64) {
+            doc.addImage(logoBase64, 'PNG', 5, 3, 14, 14);
+        }
+
         doc.setFontSize(16);
         doc.setTextColor(headerTextColor);
         doc.setFont('helvetica', 'bold');
-        doc.text(reportTitle, 14, 13);
+        doc.text(reportTitle, 25, 13);
     };
 
     // --- Pie de Página Personalizado ---
@@ -949,12 +993,14 @@ async function generatePdfReport(reportData, reportType, filters) {
         doc.setTextColor('#888888');
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
+            addWatermark(); // Añadir marca de agua en cada página
             const text = `Página ${i} de ${pageCount} | Generado el ${today}`;
             doc.text(text, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
         }
     };
 
     addHeader();
+    // La marca de agua se añade en el footer para asegurar que esté en todas las páginas
 
     // --- Resumen y Filtros ---
     doc.setFontSize(12);
@@ -973,6 +1019,7 @@ async function generatePdfReport(reportData, reportType, filters) {
         theme: 'grid',
         styles: { fontSize: 9, textColor: textColor },
         headStyles: { fillColor: tableHeaderColor, textColor: headerTextColor },
+        didDrawPage: addHeader,
     });
 
     let finalY = doc.lastAutoTable.finalY || 80;
@@ -1040,7 +1087,7 @@ async function generatePdfReport(reportData, reportType, filters) {
         didDrawPage: addHeader, // Añadir encabezado en cada nueva página
     });
 
-    addFooter(); // Añadir pie de página al final
+    addFooter(); // Añadir pie de página y marca de agua al final
 
     doc.save(fileName);
 }
