@@ -5,6 +5,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { initGeneralWebSocket } from './websockets.js';
 import { showToast } from './ui-helpers.js';
+import { initAnalystDashboard } from './ui-analyst.js';
 
 document.addEventListener('DOMContentLoaded', function() {
     initApp();
@@ -13,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function initApp() {
     initTheme();
     ui.initAnalystEventListeners(); // Se inicializa una sola vez
+    initAnalystDashboard();
     // Se pasa la función para inicializar el dashboard al verificar la autenticación
     checkAuth(initUserDashboard);
     setupGlobalListeners();

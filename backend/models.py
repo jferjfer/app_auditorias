@@ -47,6 +47,7 @@ class Audit(Base):
     estado = Column(String, default="en_progreso")
     porcentaje_cumplimiento = Column(Integer)
     creada_en = Column(DateTime, default=datetime.utcnow)
+    finalizada_en = Column(DateTime, nullable=True)
 
     # Auditor principal
     auditor = relationship("User", back_populates="auditorias", foreign_keys=[auditor_id])

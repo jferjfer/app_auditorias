@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
 import io
+from datetime import date, timedelta
 
 from backend import models, schemas, crud
 from backend.dependencies import get_db
@@ -273,6 +274,7 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     
     db_audit.estado = "finalizada"
     db_audit.porcentaje_cumplimiento = cumplimiento
+    db_audit.finalizada_en = datetime.utcnow() # Establecer la fecha de finalización
     db.commit()
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
@@ -392,3 +394,111 @@ async def download_audit_report(
     response.headers["Content-Disposition"] = "attachment; filename=reporte_auditorias.xlsx"
     
     return response
+
+@router.get("/statistics/status", response_model=List[schemas.AuditStatusStatistic])
+async def get_audit_status_statistics(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene el recuento de auditorías por estado.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    stats = crud.get_audit_statistics_by_status(db)
+    return [{"estado": s[0], "count": s[1]} for s in stats]
+
+@router.get("/statistics/average-compliance", response_model=schemas.AverageComplianceStatistic)
+async def get_average_compliance_statistic(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene el porcentaje de cumplimiento promedio de todas las auditorías finalizadas.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    average_compliance = crud.get_average_compliance(db)
+    return {"average_compliance": average_compliance}
+
+@router.get("/statistics/novelty-distribution", response_model=List[schemas.NoveltyDistributionStatistic])
+async def get_novelty_distribution_statistic(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene el recuento de cada tipo de novedad en todos los productos.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    stats = crud.get_novelty_distribution(db)
+    return [{"novedad": s[0], "count": s[1]} for s in stats]
+
+@router.get("/statistics/compliance-by-auditor", response_model=List[schemas.ComplianceByAuditorStatistic])
+async def get_compliance_by_auditor_statistic(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene el cumplimiento promedio por cada auditor.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    stats = crud.get_compliance_by_auditor(db)
+    return [{"auditor_nombre": s[0], "average_compliance": round(s[1], 2) if s[1] else 0.0} for s in stats]
+
+@router.get("/statistics/audits-by-period", response_model=List[schemas.AuditsByPeriodStatistic])
+async def get_audits_by_period_statistic(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene el número de auditorías creadas por día dentro de un período dado.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    stats = crud.get_audits_by_period(db, start_date, end_date)
+    return [{"fecha": s[0], "total_auditorias": s[1]} for s in stats]
+
+@router.get("/statistics/top-novelty-skus", response_model=List[schemas.TopNoveltySkuStatistic])
+async def get_top_novelty_skus_statistic(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene los N SKUs con más novedades (excluyendo 'sin_novedad').
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    stats = crud.get_top_novelty_skus(db, limit)
+    return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in stats]
+
+@router.get("/statistics/average-audit-duration", response_model=schemas.AverageAuditDurationStatistic)
+async def get_average_audit_duration_statistic(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Obtiene la duración promedio de las auditorías finalizadas en horas.
+    Accesible solo para analistas y administradores.
+    """
+    if current_user.rol not in ["analista", "administrador"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
+    
+    average_duration = crud.get_average_audit_duration(db)
+    return {"average_duration_hours": average_duration}

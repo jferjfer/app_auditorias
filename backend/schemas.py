@@ -197,3 +197,31 @@ class ProductBulkUpdate(BaseModel):
 
 class ProductBulkUpdateRequest(BaseModel):
     products: List[ProductBulkUpdate]
+
+# --- Esquemas para Estadísticas ---
+class AuditStatusStatistic(BaseModel):
+    estado: str
+    count: int
+
+class AverageComplianceStatistic(BaseModel):
+    average_compliance: float
+
+class NoveltyDistributionStatistic(BaseModel):
+    novedad: str
+    count: int
+
+class ComplianceByAuditorStatistic(BaseModel):
+    auditor_nombre: str
+    average_compliance: float
+
+class AuditsByPeriodStatistic(BaseModel):
+    fecha: datetime
+    total_auditorias: int
+
+class TopNoveltySkuStatistic(BaseModel):
+    sku: str
+    nombre_articulo: str
+    total_novedades: int
+
+class AverageAuditDurationStatistic(BaseModel):
+    average_duration_hours: float

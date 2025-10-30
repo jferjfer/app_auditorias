@@ -151,3 +151,44 @@ export async function uploadAuditFiles(files) {
     }
     return response.json();
 }
+
+// --- Statistics API Calls ---
+
+export async function getAuditStatusStatistics() {
+    return fetchApi(`${API_URL}/api/audits/statistics/status`);
+}
+
+export async function getAverageComplianceStatistic() {
+    return fetchApi(`${API_URL}/api/audits/statistics/average-compliance`);
+}
+
+export async function getNoveltyDistributionStatistic() {
+    return fetchApi(`${API_URL}/api/audits/statistics/novelty-distribution`);
+}
+
+export async function getComplianceByAuditorStatistic() {
+    return fetchApi(`${API_URL}/api/audits/statistics/compliance-by-auditor`);
+}
+
+export async function getAuditsByPeriodStatistic(startDate, endDate) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    return fetchApi(`${API_URL}/api/audits/statistics/audits-by-period?${params.toString()}`);
+}
+
+export async function getTopNoveltySkusStatistic(limit = 10) {
+    return fetchApi(`${API_URL}/api/audits/statistics/top-novelty-skus?limit=${limit}`);
+}
+
+export async function getAverageAuditDurationStatistic() {
+    return fetchApi(`${API_URL}/api/audits/statistics/average-audit-duration`);
+}
+
+export async function getAuditsWithFilters(filters = {}) {
+    const cleanFilters = Object.fromEntries(
+        Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')
+    );
+    const params = new URLSearchParams(cleanFilters);
+    return fetchApi(`${API_URL}/api/audits/report/details?${params.toString()}`);
+}

@@ -262,3 +262,72 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
         models.Audit.auditor_id.isnot(None),
         func.date(models.Audit.creada_en) == today
     ).all()
+
+
+def get_audit_statistics_by_status(db: Session):
+    """Obtiene el recuento de auditorías por estado."""
+    return db.query(
+        models.Audit.estado,
+        func.count(models.Audit.id)
+    ).group_by(models.Audit.estado).all()
+
+
+def get_average_compliance(db: Session):
+    """Obtiene el porcentaje de cumplimiento promedio de todas las auditorías finalizadas."""
+    result = db.query(func.avg(models.Audit.porcentaje_cumplimiento)).filter(models.Audit.estado == "finalizada").scalar()
+    return round(result) if result else 0
+
+
+def get_novelty_distribution(db: Session):
+    """Obtiene el recuento de cada tipo de novedad en todos los productos."""
+    return db.query(
+        models.Product.novedad,
+        func.count(models.Product.id)
+    ).group_by(models.Product.novedad).all()
+
+
+def get_compliance_by_auditor(db: Session):
+    """Obtiene el cumplimiento promedio por cada auditor."""
+    return db.query(
+        models.User.nombre,
+        func.avg(models.Audit.porcentaje_cumplimiento)
+    ).join(models.Audit, models.User.id == models.Audit.auditor_id)
+    .filter(models.Audit.estado == "finalizada")
+    .group_by(models.User.nombre).all()
+
+
+def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Obtiene el número de auditorías creadas por día dentro de un período dado."""
+    query = db.query(
+        func.date(models.Audit.creada_en).label('fecha'),
+        func.count(models.Audit.id).label('total_auditorias')
+    )
+
+    if start_date:
+        filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        query = query.filter(func.date(models.Audit.creada_en) >= filter_start_date)
+    if end_date:
+        filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        query = query.filter(func.date(models.Audit.creada_en) <= filter_end_date)
+
+    return query.group_by('fecha').order_by('fecha').all()
+
+
+def get_top_novelty_skus(db: Session, limit: int = 10):
+    """Obtiene los N SKUs con más novedades (excluyendo 'sin_novedad')."""
+    return db.query(
+        models.Product.sku,
+        models.Product.nombre_articulo,
+        func.count(models.Product.id).label('total_novedades')
+    ).filter(models.Product.novedad != "sin_novedad")
+    .group_by(models.Product.sku, models.Product.nombre_articulo)
+    .order_by(func.count(models.Product.id).desc())
+    .limit(limit).all()
+
+
+def get_average_audit_duration(db: Session):
+    """Obtiene la duración promedio de las auditorías finalizadas en horas."""
+    result = db.query(
+        func.avg(func.julianday(models.Audit.finalizada_en) - func.julianday(models.Audit.creada_en)) * 24
+    ).filter(models.Audit.estado == "finalizada", models.Audit.finalizada_en.isnot(None)).scalar()
+    return round(result, 2) if result else 0.0
