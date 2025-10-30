@@ -92,8 +92,15 @@ def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     return db_audit
 
 def get_audits(db: Session) -> List[models.Audit]:
-    """Obtiene todas las auditorías."""
-    return db.query(models.Audit).filter(models.Audit.auditor_id.isnot(None)).all()
+    """
+    Obtiene todas las auditorías creadas en el día actual.
+    No se carga la lista de productos para mayor eficiencia.
+    """
+    today = datetime.now().date()
+    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+        models.Audit.auditor_id.isnot(None),
+        cast(models.Audit.creada_en, Date) == today
+    ).all()
 
 def get_audit_by_id(db: Session, audit_id: int):
     """Obtiene una auditoría por su ID, incluyendo sus productos y colaboradores."""

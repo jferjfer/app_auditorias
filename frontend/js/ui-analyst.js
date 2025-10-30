@@ -52,6 +52,12 @@ function createChart(ctx, type, data, options = {}) {
 }
 
 async function loadDashboardData(startDate, endDate) {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        console.warn("No auth token found, skipping analyst dashboard data load.");
+        return;
+    }
+
     try {
         const [
             statusData,
