@@ -556,7 +556,7 @@ function setupAuditViewListeners() {
             }
 
             saveAllBtn.disabled = true;
-            saveAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+            saveAllBtn.innerHTML = '<div class="loader"></div> Guardando...';
 
             try {
                 await api.bulkUpdateProducts(state.currentAudit.id, productsToUpdate);
@@ -829,7 +829,7 @@ export function initAnalystEventListeners() {
 
         const originalText = target.innerHTML;
         try {
-            target.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando...';
+            target.innerHTML = '<div class="loader"></div> Generando...';
             target.classList.add('disabled');
 
             const reportData = await prepareReportData(reportConfig.type, currentFilters);

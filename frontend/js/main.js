@@ -136,7 +136,7 @@ function setupGlobalListeners() {
             const submitBtn = uploadForm.querySelector('button[type="submit"]');
             if (!fileInput.files || fileInput.files.length === 0) return showToast("Selecciona al menos un archivo.", 'info');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Subiendo...';
+            submitBtn.innerHTML = '<div class="loader"></div> Subiendo...';
             try {
                 const result = await api.uploadAuditFiles(fileInput.files);
                 showToast(`✅ Auditoría creada con éxito! ID: ${result.audit_id}`, 'success');

@@ -86,6 +86,7 @@ body::before {
 
 .dashboard-section {
     animation: fadeIn 0.5s ease-in-out;
+    perspective: 1000px;
 }
 
 @keyframes fadeIn {
@@ -105,12 +106,13 @@ body::before {
     border-radius: 16px;
     backdrop-filter: blur(20px);
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+    transform-style: preserve-3d;
 }
 
 .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2), var(--primary-glow);
+    transform: translateY(-5px) rotateX(5deg) rotateY(5deg);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3), var(--primary-glow);
     border-color: var(--primary-color);
 }
 
@@ -122,16 +124,25 @@ body::before {
 
 .form-control:focus, .form-select:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb, 0, 198, 255), 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb, 0, 198, 255), 0.25), 0 0 10px rgba(var(--primary-color-rgb, 0, 198, 255), 0.5);
+}
+
+.btn {
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.btn:active {
+    transform: scale(0.98);
+    box-shadow: none;
 }
 
 .btn-primary {
     background-color: var(--primary-color);
     border: none;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .btn-primary:hover {
+    background-color: #00d8ff; /* Lighter shade for hover */
     transform: translateY(-2px);
     box-shadow: var(--primary-glow);
 }
@@ -139,10 +150,10 @@ body::before {
 .btn-success {
     background-color: var(--success-color);
     border: none;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .btn-success:hover {
+    background-color: #34c759; /* Lighter shade for hover */
     transform: translateY(-2px);
     box-shadow: 0 0 8px var(--success-color);
 }
@@ -150,10 +161,10 @@ body::before {
 .btn-info {
     background-color: var(--info-color);
     border: none;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .btn-info:hover {
+    background-color: #5ac8fa; /* Lighter shade for hover */
     transform: translateY(-2px);
     box-shadow: 0 0 8px var(--info-color);
 }
@@ -162,7 +173,6 @@ body::before {
     background-color: transparent;
     border: 1px solid var(--danger-color);
     color: var(--danger-color);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 
 .btn-danger:hover {
@@ -501,4 +511,40 @@ body::before {
         transform: translateX(120%);
         opacity: 0;
     }
+}
+
+/* --- Animación de Carga (Spinner) --- */
+.loader {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 5px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- Scrollbar Personalizado --- */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 10px;
+    border: 2px solid var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #00d8ff;
 }
