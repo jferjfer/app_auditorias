@@ -315,14 +315,14 @@ def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date
 
 def get_top_novelty_skus(db: Session, limit: int = 10):
     """Obtiene los N SKUs con más novedades (excluyendo 'sin_novedad')."""
-    return db.query(
+    return (db.query(
         models.Product.sku,
         models.Product.nombre_articulo,
         func.count(models.Product.id).label('total_novedades')
     ).filter(models.Product.novedad != "sin_novedad")
     .group_by(models.Product.sku, models.Product.nombre_articulo)
     .order_by(func.count(models.Product.id).desc())
-    .limit(limit).all()
+    .limit(limit).all())
 
 
 def get_average_audit_duration(db: Session):
