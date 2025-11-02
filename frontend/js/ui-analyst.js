@@ -210,6 +210,12 @@ export function initAnalystDashboard() {
     const filtersForm = document.getElementById('analyst-filters-form');
     const clearFiltersBtn = document.getElementById('clear-filters-btn');
 
+    // Evitar añadir múltiples listeners si ya fue inicializado anteriormente
+    if (!filtersForm) return;
+    if (filtersForm.dataset.initialized === 'true') return;
+
+    filtersForm.dataset.initialized = 'true';
+
     filtersForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const startDate = document.getElementById('filter-start-date').value;

@@ -26,13 +26,15 @@ function initApp() {
  */
 function initUserDashboard(user, token) {
     if (user && user.rol && token) {
-        ui.loadDashboardData(user.rol, token);
-        // Inicializa la conexión WebSocket general para notificaciones
-        initGeneralWebSocket(ui.loadDashboardData); 
-        // Si es analista, inicializar los listeners y carga específica del dashboard del analista
+        // Para evitar cargas duplicadas: el dashboard del analista tiene su propio loader
         if (user.rol === 'analista') {
             initAnalystDashboard();
+        } else {
+            ui.loadDashboardData(user.rol, token);
         }
+
+        // Inicializa la conexión WebSocket general para notificaciones
+        initGeneralWebSocket(ui.loadDashboardData);
     } else {
         console.error("No se pudo inicializar el dashboard: usuario, rol o token no válidos.", { user, token });
     }
