@@ -92,7 +92,6 @@ export async function loadDashboardData(role, token, filters = {}) {
             renderComplianceChart(audits);
             renderNoveltiesChart(audits);
             populateAuditorFilter(users);
-            setupAnalystDashboardListeners(filters); // Activar listeners
         } else if (role === 'auditor') {
             const auditorId = localStorage.getItem('user_id');
             const audits = await api.fetchAuditsByAuditor(auditorId);

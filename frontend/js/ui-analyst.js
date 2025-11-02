@@ -190,7 +190,7 @@ function updateRecentAuditsTable(audits) {
             <tr>
                 <td>${audit.id}</td>
                 <td>${audit.ubicacion_destino}</td>
-                <td>${audit.auditor.nombre}</td>
+                <td>${audit.auditor?.nombre || 'N/A'}</td>
                 <td>${new Date(audit.creada_en).toLocaleDateString()}</td>
                 <td><span class="badge bg-primary">${audit.estado}</span></td>
                 <td class="text-end">${audit.porcentaje_cumplimiento || 0}%</td>
