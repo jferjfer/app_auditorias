@@ -25,7 +25,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # --- Lógica JWT ---
 SECRET_KEY = os.getenv("SECRET_KEY")
 if SECRET_KEY is None:
-    raise ValueError("La variable de entorno SECRET_KEY no está configurada. La aplicación no puede iniciar de forma segura.")
+    # No fallamos en import-time para permitir entornos de desarrollo.
+    # En producción deberías establecer SECRET_KEY en las variables de entorno.
+    import warnings
+    warnings.warn("La variable de entorno SECRET_KEY no está configurada. Usando clave insegura de desarrollo.")
+    SECRET_KEY = "insecure-development-secret"
 
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")

@@ -48,7 +48,6 @@ class Audit(Base):
     porcentaje_cumplimiento = Column(Integer)
     creada_en = Column(DateTime, default=datetime.utcnow)
     finalizada_en = Column(DateTime, nullable=True)
-    finalizada_en = Column(DateTime, nullable=True)
 
     # Auditor principal
     auditor = relationship("User", back_populates="auditorias", foreign_keys=[auditor_id])

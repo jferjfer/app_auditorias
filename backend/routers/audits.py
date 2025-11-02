@@ -361,7 +361,8 @@ async def get_report_details(
 async def download_audit_report(
     audit_status: Optional[str] = None,
     auditor_id: Optional[int] = None,
-    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -371,7 +372,10 @@ async def download_audit_report(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para descargar informes")
 
-    audits = crud.get_audits_with_filters(db, status=status, auditor_id=auditor_id, date=date)
+    # Normalizar el estado si viene como texto legible
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
 
     data = []
     for audit in audits:
