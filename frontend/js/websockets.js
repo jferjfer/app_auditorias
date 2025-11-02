@@ -29,7 +29,7 @@ export function initWebSocket(auditId) {
     setWebSocket(ws);
 }
 
-export function initGeneralWebSocket(loadDashboardData) {
+export function initGeneralWebSocket(loadDashboardDataCb, refreshAnalystCb) {
     const token = getToken();
     if (!token) return;
     const wsUrl = API_URL.replace(/^http/, 'ws');
@@ -37,7 +37,9 @@ export function initGeneralWebSocket(loadDashboardData) {
 
     general_ws.onmessage = function (event) {
         const data = JSON.parse(event.data);
-        console.log('General WebSocket message received:', data);
+    // Ignore keepalive pings from the server to avoid console spam
+    if (data && data.type === 'ping') return;
+    console.debug('General WebSocket message received:', data);
         const userRole = localStorage.getItem('user_role');
 
         if (data.type === 'audit_updated' && userRole === 'administrador' && data.audit) {
@@ -53,8 +55,16 @@ export function initGeneralWebSocket(loadDashboardData) {
                 }
             }
         } else if (data.type === 'new_audit' && (userRole === 'analista' || userRole === 'administrador')) {
-            console.log('New audit detected, reloading dashboard data.');
-            loadDashboardData(userRole, getToken());
+            console.debug('New audit detected, reloading dashboard data.');
+            try {
+                if (userRole === 'analista') {
+                    if (typeof refreshAnalystCb === 'function') refreshAnalystCb();
+                } else {
+                    if (typeof loadDashboardDataCb === 'function') loadDashboardDataCb(userRole, getToken());
+                }
+            } catch (err) {
+                console.error('Error handling new_audit websocket message:', err);
+            }
         }
     };
 }

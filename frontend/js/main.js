@@ -33,8 +33,9 @@ function initUserDashboard(user, token) {
             ui.loadDashboardData(user.rol, token);
         }
 
-        // Inicializa la conexión WebSocket general para notificaciones
-        initGeneralWebSocket(ui.loadDashboardData);
+    // Inicializa la conexión WebSocket general para notificaciones
+    // Pasamos las funciones específicas para recargar cada tipo de dashboard
+    initGeneralWebSocket(ui.loadDashboardData, initAnalystDashboard);
     } else {
         console.error("No se pudo inicializar el dashboard: usuario, rol o token no válidos.", { user, token });
     }
