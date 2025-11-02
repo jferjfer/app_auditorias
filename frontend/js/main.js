@@ -73,20 +73,7 @@ function setupGlobalListeners() {
         }
     });
 
-    const analystForm = document.querySelector('#analyst-dashboard form');
-    if(analystForm) {
-        analystForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const filters = {
-                status: document.getElementById('filterStatus').value,
-                auditor_id: document.getElementById('filterAuditor').value,
-                start_date: document.getElementById('filterStartDate').value,
-                end_date: document.getElementById('filterEndDate').value
-            };
-            const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos'));
-            ui.loadDashboardData('analista', getToken(), cleanFilters);
-        });
-    }
+
 
     document.body.addEventListener('click', async function (e) {
         if (e.target.closest('.iniciar-auditoria-btn')) {

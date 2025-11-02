@@ -247,7 +247,8 @@ export function renderUsersTable(users, tableSelector) {
 }
 
 function populateAuditorFilter(users) {
-    const filter = document.getElementById('filterAuditor');
+    // Compatibilidad: puede existir con guiones (filter-auditor) o camelCase (filterAuditor)
+    const filter = document.getElementById('filterAuditor') || document.getElementById('filter-auditor');
     if (!filter) return;
     const auditors = users.filter(u => u.rol === 'auditor');
     filter.innerHTML = '<option value="">Todos</option>'; // Reset
@@ -838,11 +839,20 @@ export function initAnalystEventListeners() {
         const reportConfig = reportMap[target.id];
         if (!reportConfig) return;
 
+        // Obtener valores soportando tanto IDs en camelCase como con guiones
+        const getValue = (...ids) => {
+            for (const id of ids) {
+                const el = document.getElementById(id);
+                if (el) return el.value;
+            }
+            return '';
+        };
+
         const currentFilters = {
-            status: document.getElementById('filterStatus').value,
-            auditor_id: document.getElementById('filterAuditor').value,
-            start_date: document.getElementById('filterStartDate').value,
-            end_date: document.getElementById('filterEndDate').value,
+            status: getValue('filterStatus', 'filter-status'),
+            auditor_id: getValue('filterAuditor', 'filter-auditor'),
+            start_date: getValue('filterStartDate', 'filter-start-date'),
+            end_date: getValue('filterEndDate', 'filter-end-date'),
         };
 
         const originalText = target.innerHTML;
