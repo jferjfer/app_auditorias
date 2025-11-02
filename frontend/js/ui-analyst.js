@@ -1,4 +1,3 @@
-
 import {
     getAuditStatusStatistics,
     getAverageComplianceStatistic,
@@ -12,114 +11,157 @@ import {
 import { showToast } from './ui-helpers.js';
 
 let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDistributionChart;
+let isLoadingAnalystDashboard = false; // evita recargas concurrentes
 
 const chartColors = {
-    primary: 'rgba(54, 162, 235, 0.6)',
-    secondary: 'rgba(255, 99, 132, 0.6)',
-    success: 'rgba(75, 192, 192, 0.6)',
-    warning: 'rgba(255, 206, 86, 0.6)',
-    info: 'rgba(153, 102, 255, 0.6)',
-    danger: 'rgba(255, 159, 64, 0.6)'
-};
+        primary: 'rgba(54, 162, 235, 0.6)',
+        secondary: 'rgba(255, 99, 132, 0.6)',
+        success: 'rgba(75, 192, 192, 0.6)',
+        warning: 'rgba(255, 206, 86, 0.6)',
+        info: 'rgba(153, 102, 255, 0.6)',
+        danger: 'rgba(255, 159, 64, 0.6)'
+    };
 
-const CHART_DEFAULTS = {
-    type: 'bar',
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: false
-            }
-        },
-        scales: {
-            x: {
-                ticks: { color: '#ccc' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+    const CHART_DEFAULTS = {
+        type: 'bar',
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
             },
-            y: {
-                beginAtZero: true,
-                ticks: { color: '#ccc' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            scales: {
+                x: { ticks: { color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                y: { beginAtZero: true, ticks: { color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
             }
         }
-    }
-};
+    };
 
-function createChart(ctx, type, data, options = {}) {
-    const config = { ...CHART_DEFAULTS, type, data, options: { ...CHART_DEFAULTS.options, ...options } };
-    return new Chart(ctx, config);
-}
-
-async function loadDashboardData(startDate, endDate) {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-        console.warn("No auth token found, skipping analyst dashboard data load.");
-        return;
+    function createChart(ctx, type, data, options = {}) {
+        const config = { ...CHART_DEFAULTS, type, data, options: { ...CHART_DEFAULTS.options, ...options } };
+        return new Chart(ctx, config);
     }
 
-    try {
-        const [
-            statusData,
-            avgComplianceData,
-            noveltyDistData,
-            complianceByAuditorData,
-            auditsByPeriodData,
-            topSkusData,
-            avgDurationData,
-            recentAudits
-        ] = await Promise.all([
-            getAuditStatusStatistics(),
-            getAverageComplianceStatistic(),
-            getNoveltyDistributionStatistic(),
-            getComplianceByAuditorStatistic(),
-            getAuditsByPeriodStatistic(startDate, endDate),
-            getTopNoveltySkusStatistic(10),
-            getAverageAuditDurationStatistic(),
-            getAuditsWithFilters({ start_date: startDate, end_date: endDate, limit: 10 })
-        ]);
+    async function loadDashboardData(startDate, endDate) {
+        if (isLoadingAnalystDashboard) {
+            console.debug('Analyst dashboard load already in progress — skipping duplicate call.');
+            return;
+        }
+        isLoadingAnalystDashboard = true;
 
-        updateKPIs(statusData, avgComplianceData, avgDurationData, noveltyDistData);
-        updateAuditStatusChart(statusData);
-        updateComplianceByAuditorChart(complianceByAuditorData);
-        updateAuditsByPeriodChart(auditsByPeriodData);
-        updateNoveltyDistributionChart(noveltyDistData);
-        updateTopNoveltySkusTable(topSkusData);
-        updateRecentAuditsTable(recentAudits);
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            console.warn('No auth token found, skipping analyst dashboard data load.');
+            isLoadingAnalystDashboard = false;
+            return;
+        }
 
-    } catch (error) {
-        console.error('Error loading analyst dashboard data:', error);
-        showToast('Error al cargar los datos del dashboard.', 'error');
+        const startedAt = Date.now();
+        console.debug(`Analyst dashboard load START at ${new Date(startedAt).toISOString()} startDate=${startDate} endDate=${endDate}`);
+
+        try {
+            const [
+                statusData,
+                avgComplianceData,
+                noveltyDistData,
+                complianceByAuditorData,
+                auditsByPeriodData,
+                topSkusData,
+                avgDurationData,
+                recentAudits
+            ] = await Promise.all([
+                getAuditStatusStatistics(),
+                getAverageComplianceStatistic(),
+                getNoveltyDistributionStatistic(),
+                getComplianceByAuditorStatistic(),
+                getAuditsByPeriodStatistic(startDate, endDate),
+                getTopNoveltySkusStatistic(10),
+                getAverageAuditDurationStatistic(),
+                getAuditsWithFilters({ start_date: startDate, end_date: endDate, limit: 10 })
+            ]);
+
+            if (!Array.isArray(statusData) || !Array.isArray(noveltyDistData) || !Array.isArray(complianceByAuditorData)) {
+                console.warn('Analyst dashboard received unexpected data shapes', { statusData, noveltyDistData, complianceByAuditorData });
+                showToast('Datos del dashboard incompletos o inconsistentes.', 'warning');
+                return;
+            }
+
+            updateKPIs(statusData, avgComplianceData, avgDurationData, noveltyDistData);
+            updateAuditStatusChart(statusData);
+            updateComplianceByAuditorChart(complianceByAuditorData);
+            updateAuditsByPeriodChart(auditsByPeriodData);
+            updateNoveltyDistributionChart(noveltyDistData);
+            updateTopNoveltySkusTable(topSkusData);
+            updateRecentAuditsTable(recentAudits);
+
+        } catch (error) {
+            console.error('Error loading analyst dashboard data:', error);
+            showToast('Error al cargar los datos del dashboard.', 'error');
+        } finally {
+            const finishedAt = Date.now();
+            console.debug(`Analyst dashboard load END at ${new Date(finishedAt).toISOString()} duration_ms=${finishedAt - startedAt}`);
+            isLoadingAnalystDashboard = false;
+        }
     }
-}
-
-function updateKPIs(statusData, avgCompliance, avgDuration, noveltyData) {
-    const finishedAudits = statusData.find(s => s.estado === 'finalizada')?.count || 0;
-    document.getElementById('stats-total-audits').textContent = finishedAudits;
-    document.getElementById('stats-avg-compliance').textContent = `${avgCompliance.average_compliance.toFixed(1)}%`;
-    document.getElementById('stats-avg-duration').textContent = avgDuration.average_duration_hours.toFixed(2);
-    const totalNovelties = noveltyData.filter(n => n.novedad !== 'sin_novedad').reduce((sum, item) => sum + item.count, 0);
-    document.getElementById('stats-total-novelties').textContent = totalNovelties;
-}
-
-function updateAuditStatusChart(data) {
-    const ctx = document.getElementById('chart-audit-status').getContext('2d');
-    const labels = data.map(d => d.estado);
-    const counts = data.map(d => d.count);
-
-    if (auditStatusChart) auditStatusChart.destroy();
-    auditStatusChart = createChart(ctx, 'doughnut', {
-        labels,
-        datasets: [{
-            data: counts,
-            backgroundColor: [chartColors.success, chartColors.warning, chartColors.primary, chartColors.danger]
-        }]
-    }, { plugins: { legend: { display: true, position: 'bottom', labels: { color: '#ccc' } } } });
 }
 
 function updateComplianceByAuditorChart(data) {
     const ctx = document.getElementById('chart-compliance-by-auditor').getContext('2d');
     const labels = data.map(d => d.auditor_nombre);
+                // Evitar recargas concurrentes
+                if (isLoadingAnalystDashboard) {
+                    console.debug('Analyst dashboard load already in progress — skipping duplicate call.');
+                    return;
+                }
+                isLoadingAnalystDashboard = true;
+
+                const startedAt = Date.now();
+                console.debug(`Analyst dashboard load START at ${new Date(startedAt).toISOString()} startDate=${startDate} endDate=${endDate}`);
+
+                try {
+                    const [
+                        statusData,
+                        avgComplianceData,
+                        noveltyDistData,
+                        complianceByAuditorData,
+                        auditsByPeriodData,
+                        topSkusData,
+                        avgDurationData,
+                        recentAudits
+                    ] = await Promise.all([
+                        getAuditStatusStatistics(),
+                        getAverageComplianceStatistic(),
+                        getNoveltyDistributionStatistic(),
+                        getComplianceByAuditorStatistic(),
+                        getAuditsByPeriodStatistic(startDate, endDate),
+                        getTopNoveltySkusStatistic(10),
+                        getAverageAuditDurationStatistic(),
+                        getAuditsWithFilters({ start_date: startDate, end_date: endDate, limit: 10 })
+                    ]);
+
+                    // Validaciones básicas de los datos para evitar errores de renderizado
+                    if (!Array.isArray(statusData) || !Array.isArray(noveltyDistData) || !Array.isArray(complianceByAuditorData)) {
+                        console.warn('Analyst dashboard received unexpected data shapes', { statusData, noveltyDistData, complianceByAuditorData });
+                        showToast('Datos del dashboard incompletos o inconsistentes.', 'warning');
+                        return;
+                    }
+
+                    updateKPIs(statusData, avgComplianceData, avgDurationData, noveltyDistData);
+                    updateAuditStatusChart(statusData);
+                    updateComplianceByAuditorChart(complianceByAuditorData);
+                    updateAuditsByPeriodChart(auditsByPeriodData);
+                    updateNoveltyDistributionChart(noveltyDistData);
+                    updateTopNoveltySkusTable(topSkusData);
+                    updateRecentAuditsTable(recentAudits);
+
+                } catch (error) {
+                    console.error('Error loading analyst dashboard data:', error);
+                    showToast('Error al cargar los datos del dashboard.', 'error');
+                } finally {
+                    const finishedAt = Date.now();
+                    console.debug(`Analyst dashboard load END at ${new Date(finishedAt).toISOString()} duration_ms=${finishedAt - startedAt}`);
+                    isLoadingAnalystDashboard = false;
+                }
     const compliance = data.map(d => d.average_compliance);
 
     if (complianceByAuditorChart) complianceByAuditorChart.destroy();
