@@ -1,4 +1,69 @@
 {
     "CodeGPT.apiKey": "OpenAI",
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "mi_bd",
+            "group": "proyecto_aud",
+            "connectString": "postgresql://app_auditorias_32pn_user:JmX7uwKJo1JzD8e82vC1XKQcTsOmNiNl@dpg-d3a865e3jp1c73cr1efg-a/app_auditorias_32pn"
+        },
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "dpg-d3a865e3jp1c73cr1efg-a",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "conexion bd",
+            "group": "proyecto",
+            "database": "app_auditorias_32pn",
+            "username": "app_auditorias_32pn_user",
+            "password": "JmX7uwKJo1JzD8e82vC1XKQcTsOmNiNl"
+        },
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "dpg-d3a865e3jp1c73cr1efg-a.oregon-postgres.render.com",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "mi_bd",
+            "group": "mi_proyecto",
+            "database": "app_auditorias_32pn",
+            "username": "app_auditorias_32pn_user",
+            "password": "JmX7uwKJo1JzD8e82vC1XKQcTsOmNiNl"
+        },
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "coenxion render",
+            "group": "render",
+            "connectString": "postgresql://app_auditorias_32pn_user:JmX7uwKJo1JzD8e82vC1XKQcTsOmNiNl@dpg-d3a865e3jp1c73cr1efg-a.oregon-postgres.render.com/app_auditorias_32pn"
+        },
+        {
+            "pgOptions": {
+                "ssl": {
+                    "rejectUnauthorized": true
+                }
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "driver": "PostgreSQL",
+            "name": "mi_bd",
+            "group": "audi",
+            "connectString": "postgresql://app_auditorias_32pn_user:JmX7uwKJo1JzD8e82vC1XKQcTsOmNiNl@dpg-d3a865e3jp1c73cr1efg-a.oregon-postgres.render.com/app_auditorias_32pn"
+        },
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "name": "segunda conexion",
+            "connectString": "postgresql://app_auditorias_b5oy_user:24c3KQxW7f9YHsnRlLqyhI9QHKjoblvu@dpg-d3ueo88dl3ps73f3k96g-a.oregon-postgres.render.com/app_auditorias_b5oy"
+        }
+    ]
 }

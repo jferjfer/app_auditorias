@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 # Esquema base para los usuarios
 class UserBase(BaseModel):
@@ -215,7 +215,7 @@ class ComplianceByAuditorStatistic(BaseModel):
     average_compliance: float
 
 class AuditsByPeriodStatistic(BaseModel):
-    fecha: datetime
+    fecha: date
     total_auditorias: int
 
 class TopNoveltySkuStatistic(BaseModel):
