@@ -243,20 +243,38 @@ let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDist
 
         filtersForm.dataset.initialized = 'true';
 
+        const safeGetValue = (...ids) => {
+            for (const id of ids) {
+                const el = document.getElementById(id);
+                if (el && typeof el.value !== 'undefined') return el.value;
+            }
+            return '';
+        };
+
         filtersForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const startDate = document.getElementById('filter-start-date')?.value;
-            const endDate = document.getElementById('filter-end-date')?.value;
-            loadDashboardData(startDate, endDate);
+            try {
+                const startDate = safeGetValue('filter-start-date', 'filterStartDate');
+                const endDate = safeGetValue('filter-end-date', 'filterEndDate');
+                loadDashboardData(startDate || undefined, endDate || undefined);
+            } catch (err) {
+                console.error('Error en submit de filtros (analyst):', err);
+                showToast('Error al aplicar filtros. Revisa la consola para más detalles.', 'error');
+            }
         });
 
         if (clearFiltersBtn) {
             clearFiltersBtn.addEventListener('click', () => {
-                const s = document.getElementById('filter-start-date');
-                const e = document.getElementById('filter-end-date');
-                if (s) s.value = '';
-                if (e) e.value = '';
-                loadDashboardData();
+                try {
+                    const s = document.getElementById('filter-start-date') || document.getElementById('filterStartDate');
+                    const e = document.getElementById('filter-end-date') || document.getElementById('filterEndDate');
+                    if (s) s.value = '';
+                    if (e) e.value = '';
+                    loadDashboardData();
+                } catch (err) {
+                    console.error('Error al limpiar filtros (analyst):', err);
+                    showToast('Error al limpiar filtros. Revisa la consola.', 'error');
+                }
             });
         }
 
