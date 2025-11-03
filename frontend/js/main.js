@@ -78,10 +78,48 @@ function setupGlobalListeners() {
     // Small theme toggle (icon) should open the full theme menu
     const smallThemeToggle = document.getElementById('theme-toggle-small');
     const fullThemeBtn = document.getElementById('theme-switcher-btn');
-    if (smallThemeToggle && fullThemeBtn) {
+    if (smallThemeToggle) {
         smallThemeToggle.addEventListener('click', (e) => {
             e.preventDefault();
-            fullThemeBtn.click();
+            try {
+                // Try to locate the correct full theme toggle in the DOM (there may be duplicates)
+                let fullBtn = fullThemeBtn;
+                if (!fullBtn || !(fullBtn instanceof Element)) {
+                    const candidates = Array.from(document.querySelectorAll('#theme-switcher-btn'));
+                    fullBtn = candidates.find(b => b.closest('.dropdown') || document.getElementById('theme-menu')?.getAttribute('aria-labelledby') === b.id) || candidates[0];
+                }
+
+                if (!fullBtn) {
+                    console.debug('No full theme toggle found to open theme menu.');
+                    return;
+                }
+
+                // Ensure its parent has .dropdown so Bootstrap internals can find the menu
+                const parent = fullBtn.closest('li');
+                if (parent && !parent.classList.contains('dropdown')) {
+                    parent.classList.add('dropdown');
+                }
+
+                // Use Bootstrap API to toggle
+                const dd = bootstrap.Dropdown.getOrCreateInstance(fullBtn);
+                // If internal menu reference missing, try to resolve by id
+                if (!dd._menu) {
+                    const menu = document.getElementById('theme-menu');
+                    if (menu) {
+                        // toggle show classes manually
+                        menu.classList.toggle('show');
+                        const expanded = fullBtn.getAttribute('aria-expanded') === 'true';
+                        fullBtn.setAttribute('aria-expanded', (!expanded).toString());
+                        fullBtn.classList.toggle('show');
+                    } else {
+                        dd.toggle();
+                    }
+                } else {
+                    dd.toggle();
+                }
+            } catch (err) {
+                console.debug('Theme small-toggle failed:', err);
+            }
         });
     }
 
