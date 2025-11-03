@@ -52,6 +52,24 @@ body::before {
     transition: transform 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
 }
 
+/* Compact sidebar mode: icon-only, smaller width */
+.sidebar.compact {
+    width: 80px;
+    padding-top: 10px;
+}
+.sidebar.compact .nav .nav-item:not(.session-item) {
+    display: none; /* hide non-session items */
+}
+.sidebar.compact .nav .session-item .nav-link {
+    display: flex;
+    justify-content: center;
+    padding: 8px 6px;
+}
+.sidebar.compact h3 { display:none; }
+.main-content {
+    margin-left: 80px; /* adjust to compact sidebar */
+}
+
 .sidebar .h3 {
     font-weight: 700;
     letter-spacing: 2px;

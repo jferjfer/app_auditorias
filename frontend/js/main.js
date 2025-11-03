@@ -66,10 +66,24 @@ function setupGlobalListeners() {
         handleAuthFormSubmit(event, initUserDashboard);
     });
 
-    document.querySelector('[data-target="logout"]').addEventListener('click', (e) => {
-        e.preventDefault();
-        clearSession();
-    });
+    const logoutLink = document.querySelector('[data-target="logout"]');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            clearSession();
+        });
+    } else {
+        console.debug('Logout link not found during setupGlobalListeners; skipping attach.');
+    }
+    // Small theme toggle (icon) should open the full theme menu
+    const smallThemeToggle = document.getElementById('theme-toggle-small');
+    const fullThemeBtn = document.getElementById('theme-switcher-btn');
+    if (smallThemeToggle && fullThemeBtn) {
+        smallThemeToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            fullThemeBtn.click();
+        });
+    }
 
     document.querySelector('.sidebar').addEventListener('click', (e) => {
         const link = e.target.closest('.dashboard-link');
