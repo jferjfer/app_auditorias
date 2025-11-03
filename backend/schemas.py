@@ -1,6 +1,17 @@
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
+
+
+def datetime_to_bogota(dt: datetime):
+    if dt is None:
+        return None
+    # If naive, assume it's stored as UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    bog = dt.astimezone(ZoneInfo("America/Bogota"))
+    return bog.strftime("%Y-%m-%d %H:%M:%S")
 
 # Esquema base para los usuarios
 class UserBase(BaseModel):
@@ -15,6 +26,7 @@ class User(UserBase):  # ✅ Hereda nombre, correo, rol de UserBase
 
     class Config:
         orm_mode = True
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para crear un nuevo usuario
 class UserCreate(UserBase):
@@ -72,6 +84,7 @@ class Audit(AuditBase):
     
     class Config:
         orm_mode = True
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para mostrar los detalles de la auditoría con productos
 class AuditDetails(Audit):
@@ -80,6 +93,7 @@ class AuditDetails(Audit):
 
     class Config:
         orm_mode = True
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para la carga de archivos
 class FileUpload(BaseModel):
@@ -96,6 +110,7 @@ class File(FileUpload):
 
     class Config:
         orm_mode = True
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema de token JWT
 class Token(BaseModel):
@@ -135,6 +150,7 @@ class AuditResponse(BaseModel):
 
     class Config:
         orm_mode = True # Ya estaba correcto, pero lo confirmo
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para respuesta de login exitoso
 class LoginResponse(BaseModel):

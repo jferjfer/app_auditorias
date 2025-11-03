@@ -3,7 +3,8 @@ from sqlalchemy import func, cast, Date
 from backend import models, schemas
 from passlib.context import CryptContext
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 # Configuración de password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -70,10 +71,11 @@ def delete_user(db: Session, user_id: int):
 # --- Funciones para Auditorías ---
 def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     """Crea una nueva auditoría y sus productos asociados."""
+    # Keep database timestamps in UTC (models.Audit.creada_en default uses datetime.utcnow)
     db_audit = models.Audit(
         auditor_id=auditor_id,
         ubicacion_destino=audit_data.ubicacion_destino,
-        estado="pendiente"  # Estado inicial correcto
+        estado="pendiente"
     )
 
     # Crear los productos en memoria y asignarlos a la relación.
@@ -96,10 +98,17 @@ def get_audits(db: Session) -> List[models.Audit]:
     Obtiene todas las auditorías creadas en el día actual.
     No se carga la lista de productos para mayor eficiencia.
     """
-    today = datetime.now().date()
+    # Calculate today's date in Bogotá and convert to UTC range to compare against UTC timestamps in DB
+    bogota_tz = ZoneInfo("America/Bogota")
+    bogota_today = datetime.now(bogota_tz).date()
+    start_local = datetime.combine(bogota_today, time.min).replace(tzinfo=bogota_tz)
+    end_local = datetime.combine(bogota_today, time.max).replace(tzinfo=bogota_tz)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = end_local.astimezone(timezone.utc)
     return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
         models.Audit.auditor_id.isnot(None),
-        cast(models.Audit.creada_en, Date) == today
+        models.Audit.creada_en >= start_utc,
+        models.Audit.creada_en <= end_utc
     ).all()
 
 def get_audit_by_id(db: Session, audit_id: int):
@@ -111,6 +120,7 @@ def get_audit_by_id(db: Session, audit_id: int):
 
 def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
     """Crea un nuevo registro de archivo asociado a una auditoría."""
+    # Keep database timestamps in UTC (models.File.subido_en default uses datetime.utcnow)
     db_file = models.File(
         auditoria_id=audit_id,
         nombre_archivo=file_name,
@@ -243,19 +253,25 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     if auditor_id:
         query = query.filter(models.Audit.auditor_id == auditor_id)
 
+    # Interpret provided dates as local dates in America/Bogota and convert to UTC range
+    bogota_tz = ZoneInfo("America/Bogota")
     if start_date:
         try:
-            filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            query = query.filter(cast(models.Audit.creada_en, Date) >= filter_start_date)
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
         except ValueError:
-            pass # Ignorar formato de fecha inválido
+            pass
 
     if end_date:
         try:
-            filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-            query = query.filter(cast(models.Audit.creada_en, Date) <= filter_end_date)
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
         except ValueError:
-            pass # Ignorar formato de fecha inválido
+            pass
 
     return query.all()
 
@@ -264,10 +280,17 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
     Obtiene todas las auditorías creadas en el día actual para el dashboard del admin.
     No se carga la lista de productos para mayor eficiencia.
     """
-    today = datetime.now().date()
+    # Same behavior as get_audits: use Bogotá local day converted to UTC range
+    bogota_tz = ZoneInfo("America/Bogota")
+    bogota_today = datetime.now(bogota_tz).date()
+    start_local = datetime.combine(bogota_today, time.min).replace(tzinfo=bogota_tz)
+    end_local = datetime.combine(bogota_today, time.max).replace(tzinfo=bogota_tz)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = end_local.astimezone(timezone.utc)
     return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
         models.Audit.auditor_id.isnot(None),
-        cast(models.Audit.creada_en, Date) == today
+        models.Audit.creada_en >= start_utc,
+        models.Audit.creada_en <= end_utc
     ).all()
 
 
@@ -309,19 +332,40 @@ def get_compliance_by_auditor(db: Session):
 
 def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Obtiene el número de auditorías creadas por día dentro de un período dado."""
-    query = db.query(
-        cast(models.Audit.creada_en, Date).label('fecha'),
-        func.count(models.Audit.id).label('total_auditorias')
-    )
-
+    # We'll fetch audits within the requested period (interpreted in Bogotá local dates) and aggregate by Bogotá date in Python
+    query = db.query(models.Audit).filter(models.Audit.auditor_id.isnot(None))
+    bogota_tz = ZoneInfo("America/Bogota")
     if start_date:
-        filter_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        query = query.filter(cast(models.Audit.creada_en, Date) >= filter_start_date)
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
     if end_date:
-        filter_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        query = query.filter(cast(models.Audit.creada_en, Date) <= filter_end_date)
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
 
-    return query.group_by('fecha').order_by('fecha').all()
+    audits = query.all()
+    counter = {}
+    for a in audits:
+        # convert audit.created_en (assumed UTC or naive UTC) to Bogotá local date
+        dt = a.creada_en
+        if dt is None:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        bog_dt = dt.astimezone(bogota_tz).date()
+        counter[bog_dt] = counter.get(bog_dt, 0) + 1
+
+    items = sorted(counter.items())
+    return items
 
 
 def get_top_novelty_skus(db: Session, limit: int = 10):

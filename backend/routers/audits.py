@@ -137,7 +137,8 @@ async def upload_multiple_audit_files(
     processed_orders_list = list(ordenes_procesadas)
     num_orders = len(processed_orders_list)
     ubicacion_destino = f"Auditoría OT {processed_orders_list[0]}" if num_orders == 1 else f"Auditoría Múltiple ({', '.join(processed_orders_list)})"
-    ubicacion_destino += f" - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    # append UTC timestamp to ubicacion_destino to keep stored values in UTC
+    ubicacion_destino += f" - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
 
     audit_data = schemas.AuditCreate(ubicacion_destino=ubicacion_destino, productos=all_productos_data)
     db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
@@ -274,7 +275,9 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     
     db_audit.estado = "finalizada"
     db_audit.porcentaje_cumplimiento = cumplimiento
-    db_audit.finalizada_en = datetime.utcnow() # Establecer la fecha de finalización
+    # Establecer la fecha de finalización en la zona horaria de Colombia
+    # Store finalization time in UTC
+    db_audit.finalizada_en = datetime.utcnow()
     db.commit()
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)

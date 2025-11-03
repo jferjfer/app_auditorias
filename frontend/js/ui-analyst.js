@@ -252,6 +252,7 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         const select = document.getElementById('filter-status') || document.getElementById('filterStatus');
         if (!select) return;
         if (select.options && select.options.length > 1) return; // already populated
+        // Los valores enviados al backend deben coincidir con lo que espera el servidor
         const options = [
             { v: '', t: 'Todos' },
             { v: 'pendiente', t: 'Pendiente' },
@@ -261,7 +262,7 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         select.innerHTML = '';
         options.forEach(o => {
             const opt = document.createElement('option');
-            opt.value = o.v === '' ? 'Todos' : o.t;
+            opt.value = o.v; // usar el valor real ('' para todos)
             opt.textContent = o.t;
             select.appendChild(opt);
         });
@@ -323,6 +324,22 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         // Ensure basic UI options are present
         ensureStatusOptions();
 
+        // Inicializar datepickers (flatpickr) si está disponible para forzar un calendario desplegable
+        const startEl = document.getElementById('filter-start-date') || document.getElementById('filterStartDate');
+        const endEl = document.getElementById('filter-end-date') || document.getElementById('filterEndDate');
+        if (typeof flatpickr !== 'undefined') {
+            try {
+                // altInput shows local-friendly format while value remains YYYY-MM-DD (dateFormat)
+                const opts = { dateFormat: 'Y-m-d', altInput: true, altFormat: 'd/m/Y', allowInput: true, disableMobile: true };
+                if (startEl) flatpickr(startEl, opts);
+                if (endEl) flatpickr(endEl, opts);
+            } catch (err) {
+                console.debug('flatpickr init failed for analyst filters:', err);
+            }
+        } else {
+            console.debug('flatpickr not loaded; using native date inputs.');
+        }
+
         filtersForm.addEventListener('submit', (e) => {
             e.preventDefault();
             // Instrumentación: registrar stack trace para saber quién disparó el submit
@@ -333,8 +350,14 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
                 const auditor = safeGetValue('filter-auditor', 'filterAuditor');
                 const startDate = safeGetValue('filter-start-date', 'filterStartDate');
                 const endDate = safeGetValue('filter-end-date', 'filterEndDate');
-                // Pasamos filtros opcionales (analyst loader usa start/end)
-                loadDashboardData(startDate || undefined, endDate || undefined);
+                // Construir objeto de filtros con las keys que espera el backend
+                const filters = {};
+                if (status) filters.audit_status = status;
+                if (auditor) filters.auditor_id = auditor;
+                if (startDate) filters.start_date = startDate;
+                if (endDate) filters.end_date = endDate;
+                // Pasamos filtros opcionales (loadDashboardData espera un objeto)
+                loadDashboardData(filters);
             } catch (err) {
                 console.error('Error en submit de filtros (analyst):', err);
                 showToast('Error al aplicar filtros. Revisa la consola para más detalles.', 'error');
