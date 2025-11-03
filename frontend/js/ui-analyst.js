@@ -44,7 +44,7 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         return new Chart(ctx, config);
     }
 
-    async function loadDashboardData(startDate, endDate) {
+    async function loadDashboardData(filters = {}) {
         const now = Date.now();
         // debounce: ignore calls within 700ms of the last load
         if (now - lastLoadTsAnalyst < 700) {
@@ -66,10 +66,13 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
             return;
         }
 
-        const startedAt = Date.now();
-        console.debug(`Analyst dashboard load START at ${new Date(startedAt).toISOString()} startDate=${startDate} endDate=${endDate}`);
+    const startedAt = Date.now();
+    console.debug(`Analyst dashboard load START at ${new Date(startedAt).toISOString()} filters=${JSON.stringify(filters)}`);
 
         try {
+            // Normalize filters keys expected by backend
+            const filtersToSend = { ...(filters || {}) };
+
             const [
                 statusData,
                 avgComplianceData,
@@ -80,14 +83,14 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
                 avgDurationData,
                 recentAudits
             ] = await Promise.all([
-                getAuditStatusStatistics(),
-                getAverageComplianceStatistic(),
-                getNoveltyDistributionStatistic(),
-                getComplianceByAuditorStatistic(),
-                getAuditsByPeriodStatistic(startDate, endDate),
-                getTopNoveltySkusStatistic(10),
-                getAverageAuditDurationStatistic(),
-                getAuditsWithFilters({ start_date: startDate, end_date: endDate, limit: 10 })
+                getAuditStatusStatistics(filtersToSend),
+                getAverageComplianceStatistic(filtersToSend),
+                getNoveltyDistributionStatistic(filtersToSend),
+                getComplianceByAuditorStatistic(filtersToSend),
+                getAuditsByPeriodStatistic(filtersToSend),
+                getTopNoveltySkusStatistic(filtersToSend),
+                getAverageAuditDurationStatistic(filtersToSend),
+                getAuditsWithFilters({ ...(filtersToSend || {}), limit: 10 })
             ]);
 
             // Basic shape validation

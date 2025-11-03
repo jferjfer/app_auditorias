@@ -401,6 +401,10 @@ async def download_audit_report(
 
 @router.get("/statistics/status", response_model=List[schemas.AuditStatusStatistic])
 async def get_audit_status_statistics(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -411,11 +415,26 @@ async def get_audit_status_statistics(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    stats = crud.get_audit_statistics_by_status(db)
-    return [{"estado": s[0], "count": s[1]} for s in stats]
+    # If no filters provided, use the optimized DB aggregation
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        stats = crud.get_audit_statistics_by_status(db)
+        return [{"estado": s[0], "count": s[1]} for s in stats]
+
+    # Otherwise, fetch filtered audits and compute counts in-memory
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    counter = {}
+    for a in audits:
+        key = a.estado
+        counter[key] = counter.get(key, 0) + 1
+    return [{"estado": k, "count": v} for k, v in counter.items()]
 
 @router.get("/statistics/average-compliance", response_model=schemas.AverageComplianceStatistic)
 async def get_average_compliance_statistic(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -426,11 +445,26 @@ async def get_average_compliance_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    average_compliance = crud.get_average_compliance(db)
-    return {"average_compliance": average_compliance}
+    # If no filters, use existing function
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        average_compliance = crud.get_average_compliance(db)
+        return {"average_compliance": average_compliance}
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    # compute avg over finalized audits (same logic as before)
+    values = [a.porcentaje_cumplimiento for a in audits if a.estado == 'finalizada' and a.porcentaje_cumplimiento is not None]
+    if not values:
+        return {"average_compliance": 0}
+    avg = sum(values) / len(values)
+    return {"average_compliance": round(avg)}
 
 @router.get("/statistics/novelty-distribution", response_model=List[schemas.NoveltyDistributionStatistic])
 async def get_novelty_distribution_statistic(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -441,11 +475,28 @@ async def get_novelty_distribution_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    stats = crud.get_novelty_distribution(db)
-    return [{"novedad": s[0], "count": s[1]} for s in stats]
+    # If no filters use optimized query
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        stats = crud.get_novelty_distribution(db)
+        return [{"novedad": s[0], "count": s[1]} for s in stats]
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    counter = {}
+    for a in audits:
+        if not a.productos:
+            continue
+        for p in a.productos:
+            key = p.novedad or 'sin_novedad'
+            counter[key] = counter.get(key, 0) + 1
+    return [{"novedad": k, "count": v} for k, v in counter.items()]
 
 @router.get("/statistics/compliance-by-auditor", response_model=List[schemas.ComplianceByAuditorStatistic])
 async def get_compliance_by_auditor_statistic(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -456,11 +507,30 @@ async def get_compliance_by_auditor_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    stats = crud.get_compliance_by_auditor(db)
-    return [{"auditor_nombre": s[0], "average_compliance": round(s[1], 2) if s[1] else 0.0} for s in stats]
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        stats = crud.get_compliance_by_auditor(db)
+        return [{"auditor_nombre": s[0], "average_compliance": round(s[1], 2) if s[1] else 0.0} for s in stats]
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    # compute average per auditor
+    sums = {}
+    counts = {}
+    for a in audits:
+        if a.auditor and a.porcentaje_cumplimiento is not None:
+            name = a.auditor.nombre
+            sums[name] = sums.get(name, 0) + a.porcentaje_cumplimiento
+            counts[name] = counts.get(name, 0) + 1
+    result = []
+    for name in sums:
+        avg = sums[name] / counts[name]
+        result.append({"auditor_nombre": name, "average_compliance": round(avg, 2)})
+    return result
 
 @router.get("/statistics/audits-by-period", response_model=List[schemas.AuditsByPeriodStatistic])
 async def get_audits_by_period_statistic(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -473,12 +543,27 @@ async def get_audits_by_period_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    stats = crud.get_audits_by_period(db, start_date, end_date)
-    return [{"fecha": s[0], "total_auditorias": s[1]} for s in stats]
+    # If no filters, use optimized DB aggregation
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        stats = crud.get_audits_by_period(db, start_date, end_date)
+        return [{"fecha": s[0], "total_auditorias": s[1]} for s in stats]
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    counter = {}
+    for a in audits:
+        fecha = a.creada_en.date()
+        counter[fecha] = counter.get(fecha, 0) + 1
+    items = sorted(counter.items())
+    return [{"fecha": s[0], "total_auditorias": s[1]} for s in items]
 
 @router.get("/statistics/top-novelty-skus", response_model=List[schemas.TopNoveltySkuStatistic])
 async def get_top_novelty_skus_statistic(
     limit: int = 10,
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -489,11 +574,31 @@ async def get_top_novelty_skus_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    stats = crud.get_top_novelty_skus(db, limit)
-    return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in stats]
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        stats = crud.get_top_novelty_skus(db, limit)
+        return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in stats]
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    counter = {}
+    names = {}
+    for a in audits:
+        if not a.productos:
+            continue
+        for p in a.productos:
+            if p.novedad == 'sin_novedad':
+                continue
+            counter[p.sku] = counter.get(p.sku, 0) + 1
+            names[p.sku] = p.nombre_articulo
+    items = sorted(counter.items(), key=lambda x: x[1], reverse=True)[:limit]
+    return [{"sku": sku, "nombre_articulo": names.get(sku, ''), "total_novedades": count} for sku, count in items]
 
 @router.get("/statistics/average-audit-duration", response_model=schemas.AverageAuditDurationStatistic)
 async def get_average_audit_duration_statistic(
+    audit_status: Optional[str] = None,
+    auditor_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -504,5 +609,18 @@ async def get_average_audit_duration_statistic(
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
     
-    average_duration = crud.get_average_audit_duration(db)
-    return {"average_duration_hours": average_duration}
+    if not any([audit_status, auditor_id, start_date, end_date]):
+        average_duration = crud.get_average_audit_duration(db)
+        return {"average_duration_hours": average_duration}
+
+    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
+    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    durations = []
+    for a in audits:
+        if a.estado == 'finalizada' and a.finalizada_en and a.creada_en:
+            delta = (a.finalizada_en - a.creada_en).total_seconds() / 3600.0
+            durations.append(delta)
+    if not durations:
+        return {"average_duration_hours": 0.0}
+    avg = sum(durations) / len(durations)
+    return {"average_duration_hours": round(avg, 2)}

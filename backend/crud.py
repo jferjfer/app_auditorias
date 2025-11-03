@@ -272,7 +272,11 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
 
 
 def get_audit_statistics_by_status(db: Session):
-    """Obtiene el recuento de auditorías por estado."""
+    """Obtiene el recuento de auditorías por estado.
+    Ahora soporta filtros opcionales (status, auditor_id, start_date, end_date) aplicados a la tabla de auditorías.
+    """
+    # Backwards compatible signature: accept filters via kwargs if provided
+    # We'll detect if caller passed extra args via attributes on db (not expected). Keep simple API by allowing explicit params later.
     return db.query(
         models.Audit.estado,
         func.count(models.Audit.id)

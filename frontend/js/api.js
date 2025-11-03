@@ -154,41 +154,52 @@ export async function uploadAuditFiles(files) {
 
 // --- Statistics API Calls ---
 
-export async function getAuditStatusStatistics() {
-    return fetchApi(`${API_URL}/api/audits/statistics/status`);
-}
-
-export async function getAverageComplianceStatistic() {
-    return fetchApi(`${API_URL}/api/audits/statistics/average-compliance`);
-}
-
-export async function getNoveltyDistributionStatistic() {
-    return fetchApi(`${API_URL}/api/audits/statistics/novelty-distribution`);
-}
-
-export async function getComplianceByAuditorStatistic() {
-    return fetchApi(`${API_URL}/api/audits/statistics/compliance-by-auditor`);
-}
-
-export async function getAuditsByPeriodStatistic(startDate, endDate) {
-    const params = new URLSearchParams();
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
-    return fetchApi(`${API_URL}/api/audits/statistics/audits-by-period?${params.toString()}`);
-}
-
-export async function getTopNoveltySkusStatistic(limit = 10) {
-    return fetchApi(`${API_URL}/api/audits/statistics/top-novelty-skus?limit=${limit}`);
-}
-
-export async function getAverageAuditDurationStatistic() {
-    return fetchApi(`${API_URL}/api/audits/statistics/average-audit-duration`);
-}
-
-export async function getAuditsWithFilters(filters = {}) {
+// helper to build query strings from filter objects
+function buildQueryString(filters = {}) {
     const cleanFilters = Object.fromEntries(
         Object.entries(filters).filter(([_, v]) => v != null && v !== '' && v !== 'Todos')
     );
     const params = new URLSearchParams(cleanFilters);
-    return fetchApi(`${API_URL}/api/audits/report/details?${params.toString()}`);
+    const queryString = params.toString();
+    return queryString ? `?${queryString}` : '';
+}
+
+export async function getAuditStatusStatistics(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/status${queryString}`);
+}
+
+export async function getAverageComplianceStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/average-compliance${queryString}`);
+}
+
+export async function getNoveltyDistributionStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/novelty-distribution${queryString}`);
+}
+
+export async function getComplianceByAuditorStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/compliance-by-auditor${queryString}`);
+}
+
+export async function getAuditsByPeriodStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/audits-by-period${queryString}`);
+}
+
+export async function getTopNoveltySkusStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/top-novelty-skus${queryString}`);
+}
+
+export async function getAverageAuditDurationStatistic(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/statistics/average-audit-duration${queryString}`);
+}
+
+export async function getAuditsWithFilters(filters = {}) {
+    const queryString = buildQueryString(filters);
+    return fetchApi(`${API_URL}/api/audits/report/details${queryString}`);
 }
