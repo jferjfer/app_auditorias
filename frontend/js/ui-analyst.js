@@ -8,6 +8,7 @@ import {
     getAverageAuditDurationStatistic,
     getAuditsWithFilters
 } from './api.js';
+import { fetchAuditors } from './api.js';
 import { showToast } from './ui-helpers.js';
 
 let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDistributionChart;
@@ -92,6 +93,14 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
                 getAverageAuditDurationStatistic(filtersToSend),
                 getAuditsWithFilters({ ...(filtersToSend || {}), limit: 10 })
             ]);
+
+            // Populate auditor filter independently (so dropdown is filled even when other stats fail)
+            try {
+                const auditors = await fetchAuditors();
+                populateAuditorSelect(auditors);
+            } catch (err) {
+                console.debug('No se pudieron cargar auditores para el filtro:', err);
+            }
 
             // Basic shape validation
             if (!Array.isArray(statusData) || !Array.isArray(noveltyDistData) || !Array.isArray(complianceByAuditorData)) {
@@ -222,6 +231,42 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         });
     }
 
+    function populateAuditorSelect(auditors) {
+        const select = document.getElementById('filter-auditor') || document.getElementById('filterAuditor');
+        if (!select) return;
+        // clear existing options but keep the default 'Todos' if present
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Todos';
+        select.innerHTML = '';
+        select.appendChild(defaultOption);
+        auditors.filter(u => u.rol === 'auditor').forEach(auditor => {
+            const opt = document.createElement('option');
+            opt.value = auditor.id;
+            opt.textContent = auditor.nombre;
+            select.appendChild(opt);
+        });
+    }
+
+    function ensureStatusOptions() {
+        const select = document.getElementById('filter-status') || document.getElementById('filterStatus');
+        if (!select) return;
+        if (select.options && select.options.length > 1) return; // already populated
+        const options = [
+            { v: '', t: 'Todos' },
+            { v: 'pendiente', t: 'Pendiente' },
+            { v: 'en_progreso', t: 'En Progreso' },
+            { v: 'finalizada', t: 'Finalizada' }
+        ];
+        select.innerHTML = '';
+        options.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.v === '' ? 'Todos' : o.t;
+            opt.textContent = o.t;
+            select.appendChild(opt);
+        });
+    }
+
     function updateRecentAuditsTable(audits) {
         const tableBody = document.getElementById('analyst-audits-table-body');
         if (!tableBody) return;
@@ -274,6 +319,9 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
         const detectedIds = ['filter-status','filterStatus','filter-auditor','filterAuditor','filter-start-date','filterStartDate','filter-end-date','filterEndDate']
             .filter(id => document.getElementById(id));
         console.debug('initAnalystDashboard detected filter element IDs:', detectedIds);
+
+        // Ensure basic UI options are present
+        ensureStatusOptions();
 
         filtersForm.addEventListener('submit', (e) => {
             e.preventDefault();
