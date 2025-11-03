@@ -4,6 +4,9 @@ import { getToken } from './auth.js';
 import { initWebSocket } from './websockets.js';
 import { showToast } from './ui-helpers.js';
 
+// Global debounce timestamp to avoid reloading dashboards too frequently
+let lastLoadTsGlobal = 0;
+
 const roleMap = {
     analista: 'analyst-dashboard',
     auditor: 'auditor-dashboard',
@@ -79,6 +82,13 @@ export function updateSidebar(role) {
 
 
 export async function loadDashboardData(role, token, filters = {}) {
+    const now = Date.now();
+    if (now - lastLoadTsGlobal < 700) {
+        console.debug('Global loadDashboardData debounced (too-frequent).');
+        return;
+    }
+    lastLoadTsGlobal = now;
+
     const headers = { 'Authorization': `Bearer ${token}` };
     
     try {

@@ -12,6 +12,7 @@ import { showToast } from './ui-helpers.js';
 
 let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDistributionChart;
     let isLoadingAnalystDashboard = false; // evita recargas concurrentes
+let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
 
     const chartColors = {
         primary: 'rgba(54, 162, 235, 0.6)',
@@ -37,11 +38,21 @@ let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDist
     };
 
     function createChart(ctx, type, data, options = {}) {
-        const config = { type, data, options: { ...CHART_DEFAULTS.options, ...options } };
+        // disable animations by default for performance-sensitive dashboard
+        const mergedOptions = { ...CHART_DEFAULTS.options, animation: false, ...options };
+        const config = { type, data, options: mergedOptions };
         return new Chart(ctx, config);
     }
 
     async function loadDashboardData(startDate, endDate) {
+        const now = Date.now();
+        // debounce: ignore calls within 700ms of the last load
+        if (now - lastLoadTsAnalyst < 700) {
+            console.debug('Analyst dashboard load debounced (too-frequent).');
+            return;
+        }
+        lastLoadTsAnalyst = now;
+
         if (isLoadingAnalystDashboard) {
             console.debug('Analyst dashboard load already in progress — skipping duplicate call.');
             return;
@@ -253,7 +264,10 @@ let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDist
 
         filtersForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            // Instrumentación: registrar stack trace para saber quién disparó el submit
             try {
+                console.debug('Analyst filters submit TRIGGERED at', new Date().toISOString());
+                console.debug(new Error('stack').stack);
                 const startDate = safeGetValue('filter-start-date', 'filterStartDate');
                 const endDate = safeGetValue('filter-end-date', 'filterEndDate');
                 loadDashboardData(startDate || undefined, endDate || undefined);
@@ -266,6 +280,8 @@ let auditStatusChart, complianceByAuditorChart, auditsByPeriodChart, noveltyDist
         if (clearFiltersBtn) {
             clearFiltersBtn.addEventListener('click', () => {
                 try {
+                    console.debug('Analyst clear filters clicked at', new Date().toISOString());
+                    console.debug(new Error('stack').stack);
                     const s = document.getElementById('filter-start-date') || document.getElementById('filterStartDate');
                     const e = document.getElementById('filter-end-date') || document.getElementById('filterEndDate');
                     if (s) s.value = '';
