@@ -254,13 +254,23 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
 
         filtersForm.dataset.initialized = 'true';
 
+        // Devuelve el primer valor disponible entre varios posibles IDs (kebab / camelCase)
         const safeGetValue = (...ids) => {
+            const found = [];
             for (const id of ids) {
                 const el = document.getElementById(id);
+                if (el) found.push(id);
                 if (el && typeof el.value !== 'undefined') return el.value;
             }
+            // Registrar qué IDs estaban presentes (útil para diagnosticar despliegues mezclados)
+            if (found.length > 0) console.debug('Analyst safeGetValue found elements:', found);
             return '';
         };
+
+        // Debug: listar qué IDs de filtros están presentes al inicializar
+        const detectedIds = ['filter-status','filterStatus','filter-auditor','filterAuditor','filter-start-date','filterStartDate','filter-end-date','filterEndDate']
+            .filter(id => document.getElementById(id));
+        console.debug('initAnalystDashboard detected filter element IDs:', detectedIds);
 
         filtersForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -268,8 +278,11 @@ let lastLoadTsAnalyst = 0; // debounce timestamp (ms)
             try {
                 console.debug('Analyst filters submit TRIGGERED at', new Date().toISOString());
                 console.debug(new Error('stack').stack);
+                const status = safeGetValue('filter-status', 'filterStatus');
+                const auditor = safeGetValue('filter-auditor', 'filterAuditor');
                 const startDate = safeGetValue('filter-start-date', 'filterStartDate');
                 const endDate = safeGetValue('filter-end-date', 'filterEndDate');
+                // Pasamos filtros opcionales (analyst loader usa start/end)
                 loadDashboardData(startDate || undefined, endDate || undefined);
             } catch (err) {
                 console.error('Error en submit de filtros (analyst):', err);

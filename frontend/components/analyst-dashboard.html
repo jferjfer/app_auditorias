@@ -1,144 +1,179 @@
 <div id="analyst-dashboard" class="dashboard-section">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4">
-                <h1 class="h2 fw-bold">Dashboard del Analista</h1>
-            </div>
-            
-            <!-- Filtros -->
-            <div class="row mb-4">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Filtros de Auditorías</h5>
-                            <form class="row g-3">
-                                <div class="col-md-3">
-                                    <label for="filterStatus" class="form-label">Estado</label>
-                                    <select id="filterStatus" class="form-select">
-                                        <option selected>Todos</option>
-                                        <option>En Progreso</option>
-                                        <option>Finalizada</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="filterAuditor" class="form-label">Auditor</label>
-                                    <select id="filterAuditor" class="form-select">
-                                        <option selected>Todos</option>
-                                        <option>Auditor 1</option>
-                                        <option>Auditor 2</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="filterStartDate" class="form-label">Fecha de Inicio</label>
-                                    <input type="date" class="form-control" id="filterStartDate">
-                                </div>
-                                <div class="col-md-3">
-                                    <label for="filterEndDate" class="form-label">Fecha de Fin</label>
-                                    <input type="date" class="form-control" id="filterEndDate">
-                                </div>
-                                <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-primary w-100">
-                                        <i class="bi bi-funnel"></i> Filtrar
-                                    </button>
-                                </div>
-                                <div class="col-md-3 d-flex align-items-end">
-                                    <div class="btn-group w-100">
-                                        <button type="button" class="btn btn-secondary dropdown-toggle w-100" data-bs-toggle="dropdown">
-                                            <i class="bi bi-download"></i> Descargar Informe
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li><a class="dropdown-item" href="#">General (Excel)</a></li>
-                                            <li><a class="dropdown-item" href="#">General (PDF)</a></li>
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li><a class="dropdown-item" href="#">Detalle Novedades (Excel)</a></li>
-                                            <li><a class="dropdown-item" href="#">Detalle Novedades (PDF)</a></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </form>
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4">
+        <h1 id="analyst-title" class="h2 fw-bold">Dashboard del Analista</h1>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Filtros</h5>
+                    <form id="analyst-filters-form" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="filter-status" class="form-label">Estatus</label>
+                            <select id="filter-status" class="form-select">
+                                <option value="Todos" selected>Todos</option>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En Progreso">En Progreso</option>
+                                <option value="Finalizada">Finalizada</option>
+                            </select>
                         </div>
-                    </div>
+                        <div class="col-md-3">
+                            <label for="filter-auditor" class="form-label">Auditor</label>
+                            <select id="filter-auditor" class="form-select">
+                                <!-- Opciones de auditores se cargarán dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filter-start-date" class="form-label">Fecha de Inicio</label>
+                            <input type="date" class="form-control" id="filter-start-date">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filter-end-date" class="form-label">Fecha de Fin</label>
+                            <input type="date" class="form-control" id="filter-end-date">
+                        </div>
+                        <div class="col-md-6 mt-3">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Filtrar
+                            </button>
+                        </div>
+                        <div class="col-md-6 mt-3">
+                            <button type="button" id="clear-filters-btn" class="btn btn-secondary w-100">
+                                <i class="bi bi-arrow-clockwise"></i> Limpiar
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
-            
-            <!-- Gráficos -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title">Cumplimiento por Auditoría</h5>
-                            <div style="height: 300px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                <span>Gráfico de Cumplimiento</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title">Novedades Registradas</h5>
-                            <div style="height: 300px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                <span>Gráfico de Novedades</span>
-                            </div>
-                        </div>
-                    </div>
+        </div>
+    </div>
+
+    <!-- Indicadores Clave (KPIs) -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Auditorías Finalizadas</h5>
+                    <p id="stats-total-audits" class="display-4 fw-bold">0</p>
                 </div>
             </div>
-            
-            <!-- Tabla de Auditorías -->
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="card-title">Auditorías Recientes</h5>
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table table-hover table-dark">
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Ubicación</th>
-                                            <th>Auditor</th>
-                                            <th>Fecha</th>
-                                            <th>Estado</th>
-                                            <th>Productos</th>
-                                            <th>% Cumplimiento</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>#001</td>
-                                            <td>Bodega Central</td>
-                                            <td>Juan Pérez</td>
-                                            <td>15/05/2024</td>
-                                            <td><span class="badge bg-success">Finalizada</span></td>
-                                            <td>150</td>
-                                            <td>95%</td>
-                                            <td>
-                                                <button class="btn btn-sm btn-primary">
-                                                    <i class="bi bi-eye"></i> Ver
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td>#002</td>
-                                            <td>Bodega Norte</td>
-                                            <td>María García</td>
-                                            <td>16/05/2024</td>
-                                            <td><span class="badge bg-warning">En Progreso</span></td>
-                                            <td>89</td>
-                                            <td>72%</td>
-                                            <td>
-                                                <button class="btn btn-sm btn-primary">
-                                                    <i class="bi bi-eye"></i> Ver
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Cumplimiento Promedio</h5>
+                    <p id="stats-avg-compliance" class="display-4 fw-bold">0%</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Duración Promedio (Horas)</h5>
+                    <p id="stats-avg-duration" class="display-4 fw-bold">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Total Novedades</h5>
+                    <p id="stats-total-novelties" class="display-4 fw-bold">0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body chart-container">
+                    <h5 class="card-title">Auditorías por Estado</h5>
+                    <canvas id="chart-audit-status"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body chart-container">
+                    <h5 class="card-title">Cumplimiento Promedio por Auditor</h5>
+                    <canvas id="chart-compliance-by-auditor"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card h-100">
+                <div class="card-body chart-container">
+                    <h5 class="card-title">Auditorías por Período</h5>
+                    <canvas id="chart-audits-by-period"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-body chart-container">
+                    <h5 class="card-title">Distribución de Novedades</h5>
+                    <canvas id="chart-novelty-distribution"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Top 10 SKUs con Más Novedades</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Artículo</th>
+                                    <th class="text-end">Novedades</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-top-novelty-skus">
+                                <!-- Filas generadas dinámicamente -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Tabla de Auditorías Recientes -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Auditorías Recientes</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Ubicación</th>
+                                    <th>Auditor</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th class="text-end">Cumplimiento</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analyst-audits-table-body">
+                                <!-- Filas generadas dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
