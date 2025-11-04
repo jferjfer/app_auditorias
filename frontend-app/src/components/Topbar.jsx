@@ -1,5 +1,6 @@
 import React from 'react'
 import { getCurrentUser } from '../services/auth'
+import ThemeSwitcher from './ThemeSwitcher'
 
 export default function Topbar(){
   const user = getCurrentUser();
@@ -9,6 +10,7 @@ export default function Topbar(){
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
         <div style={{fontWeight:700}}>Sistema de Auditorías</div>
         <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+          <ThemeSwitcher />
           <span style={{fontSize:'14px'}}>
             <i className="bi bi-person-circle"></i> {user?.nombre || 'Usuario'}
           </span>
