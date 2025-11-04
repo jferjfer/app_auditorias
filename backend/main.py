@@ -33,8 +33,10 @@ app.include_router(users.router, prefix="/api")
 app.include_router(websockets.router, prefix="/api")
 
 
-# Servir el frontend
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+# Servir el frontend (React si existe, sino vanilla)
+import os
+frontend_dir = "frontend-react" if os.path.exists("frontend-react") else "frontend"
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,32 @@
+{
+  "name": "frontend-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "chart.js": "^4.4.0",
+    "react-chartjs-2": "^5.2.0",
+    "flatpickr": "^4.6.13",
+    "bootstrap": "^5.3.3",
+    "react-router-dom": "^6.14.1",
+    "react-flatpickr": "^4.1.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.28"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.0.0"
+  },
+  "description": "Scaffold incremental para migrar el frontend a React.",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

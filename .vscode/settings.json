@@ -65,5 +65,6 @@
             "name": "segunda conexion",
             "connectString": "postgresql://app_auditorias_b5oy_user:24c3KQxW7f9YHsnRlLqyhI9QHKjoblvu@dpg-d3ueo88dl3ps73f3k96g-a.oregon-postgres.render.com/app_auditorias_b5oy"
         }
-    ]
+    ],
+    "workbench.editor.decorations.colors": true
 }
