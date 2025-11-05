@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAllUsers, createUser, updateUser, deleteUser, fetchAudits } from '../services/api';
+import { fetchAllUsers, createUser, updateUser, deleteUser } from '../services/api';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
-  const [audits, setAudits] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({ nombre: '', correo: '', rol: 'auditor', contrasena: '' });
 
   useEffect(() => {
     loadUsers();
-    loadAudits();
   }, []);
 
   const loadUsers = async () => {
@@ -24,14 +22,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const loadAudits = async () => {
-    try {
-      const data = await fetchAudits();
-      setAudits(data);
-    } catch (err) {
-      console.error('Error cargando auditorías:', err);
-    }
-  };
+
 
   const handleOpenModal = (user = null) => {
     if (user) {
@@ -130,44 +121,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Auditorías del día */}
-      <div className="row g-3">
-        <div className="col-12">
-          <div className="card">
-            <div className="card-body">
-              <h5 className="card-title">Auditorías del Día</h5>
-              <div className="table-responsive">
-                <table className="table table-hover">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Ubicación</th>
-                      <th>Auditor</th>
-                      <th>Estado</th>
-                      <th>% Cumplimiento</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {audits.map(audit => (
-                      <tr key={audit.id}>
-                        <td>{audit.id}</td>
-                        <td>{audit.ubicacion_destino}</td>
-                        <td>{audit.auditor_nombre || 'N/A'}</td>
-                        <td>
-                          <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
-                            {audit.estado}
-                          </span>
-                        </td>
-                        <td>{audit.porcentaje_cumplimiento ? `${audit.porcentaje_cumplimiento}%` : 'N/A'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Modal para agregar/editar usuario */}
       {showModal && (
