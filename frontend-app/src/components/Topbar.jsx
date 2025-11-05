@@ -37,8 +37,8 @@ export default function Topbar(){
         </div>
         <div style={{display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
           <ThemeSwitcher />
-          <span style={{fontSize:'14px'}}>
-            <i className="bi bi-person-circle"></i> <span className="d-none d-sm-inline">{user?.nombre || 'Usuario'}</span>
+          <span style={{fontSize:'13px'}}>
+            <i className="bi bi-person-circle"></i> {user?.nombre || 'Usuario'}
           </span>
           <span className="badge bg-secondary">{user?.rol || ''}</span>
           <button className="btn btn-sm btn-outline-danger" onClick={handleLogout}>
