@@ -23,15 +23,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 # --- Lógica JWT ---
+import secrets
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 if SECRET_KEY is None:
-    # No fallamos en import-time para permitir entornos de desarrollo.
-    # En producción deberías establecer SECRET_KEY en las variables de entorno.
+    SECRET_KEY = secrets.token_urlsafe(64)
     import warnings
-    warnings.warn("La variable de entorno SECRET_KEY no está configurada. Usando clave insegura de desarrollo.")
-    SECRET_KEY = "insecure-development-secret"
+    warnings.warn(f"SECRET_KEY generada automáticamente. Para producción, establece: SECRET_KEY={SECRET_KEY}")
 
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -39,8 +40,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

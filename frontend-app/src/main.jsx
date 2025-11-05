@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './styles.css'
-import './styles/themes.css'
+import './styles/themes-new.css'
+import './styles/force-fullwidth.css'
 import 'flatpickr/dist/flatpickr.min.css'
 
 createRoot(document.getElementById('root')).render(

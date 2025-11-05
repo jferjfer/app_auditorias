@@ -207,9 +207,29 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
     
-    updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
-    if not updated_product:
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
+    
+    # Track changes
+    for field, new_value in product.dict(exclude_unset=True).items():
+        old_value = getattr(db_product, field)
+        if old_value != new_value:
+            history = models.ProductHistory(
+                product_id=product_id,
+                user_id=current_user.id,
+                field_changed=field,
+                old_value=str(old_value) if old_value else None,
+                new_value=str(new_value) if new_value else None
+            )
+            db.add(history)
+    
+    updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
+    updated_product.last_modified_by_id = current_user.id
+    updated_product.last_modified_at = datetime.utcnow()
+    updated_product.locked_by_user_id = None
+    updated_product.locked_at = None
+    db.commit()
 
     # Recalculate percentage and get updated audit
     updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
@@ -219,9 +239,10 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
         product_for_broadcast = schemas.Product.from_orm(updated_product).dict()
         payload = {
             "type": "product_updated",
-            "product": product_for_broadcast
+            "product": product_for_broadcast,
+            "user": current_user.nombre
         }
-        await manager.broadcast(json.dumps(payload), audit_id=audit_id)
+        await manager.send_to_audit(audit_id, payload)
     except Exception as e:
         print(f"Error broadcasting product update for audit {audit_id}: {e}")
 

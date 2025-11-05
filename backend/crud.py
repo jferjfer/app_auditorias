@@ -19,10 +19,19 @@ def get_user_by_id(db: Session, user_id: int):
 
 def create_user(db: Session, user: schemas.UserCreate):
     """Crea un nuevo usuario en la base de datos."""
+    # Validar longitud de contraseña (solo para nuevos usuarios)
+    if user.contrasena and len(user.contrasena) < 8:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    
+    # Sanitizar inputs
+    nombre = user.nombre.strip()[:100] if user.nombre else ""
+    correo = user.correo.strip().lower()[:255] if user.correo else ""
+    
     hashed_password = pwd_context.hash(user.contrasena)
     db_user = models.User(
-        nombre=user.nombre,
-        correo=user.correo,
+        nombre=nombre,
+        correo=correo,
         contrasena_hash=hashed_password,
         rol=user.rol
     )
@@ -93,12 +102,11 @@ def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     db.refresh(db_audit)
     return db_audit
 
-def get_audits(db: Session) -> List[models.Audit]:
+def get_audits(db: Session, limit: int = 100, offset: int = 0) -> List[models.Audit]:
     """
-    Obtiene todas las auditorías creadas en el día actual.
+    Obtiene todas las auditorías creadas en el día actual con paginación.
     No se carga la lista de productos para mayor eficiencia.
     """
-    # Calculate today's date in Bogotá and convert to UTC range to compare against UTC timestamps in DB
     bogota_tz = ZoneInfo("America/Bogota")
     bogota_today = datetime.now(bogota_tz).date()
     start_local = datetime.combine(bogota_today, time.min).replace(tzinfo=bogota_tz)
@@ -109,7 +117,7 @@ def get_audits(db: Session) -> List[models.Audit]:
         models.Audit.auditor_id.isnot(None),
         models.Audit.creada_en >= start_utc,
         models.Audit.creada_en <= end_utc
-    ).all()
+    ).limit(limit).offset(offset).all()
 
 def get_audit_by_id(db: Session, audit_id: int):
     """Obtiene una auditoría por su ID, incluyendo sus productos y colaboradores."""

@@ -79,12 +79,12 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="container-fluid py-4">
-      <h1 className="h2 mb-4">Dashboard del Administrador</h1>
+    <div className="container-fluid" style={{padding: '0', maxWidth: '100%'}}>
+      <h1 className="h3 mb-3">Dashboard del Administrador</h1>
 
       {/* Gestión de usuarios */}
-      <div className="row mb-4">
-        <div className="col-md-12">
+      <div className="row g-3 mb-3">
+        <div className="col-12">
           <div className="card">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
@@ -128,8 +128,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* Auditorías del día */}
-      <div className="row">
-        <div className="col-md-12">
+      <div className="row g-3">
+        <div className="col-12">
           <div className="card">
             <div className="card-body">
               <h5 className="card-title">Auditorías del Día</h5>

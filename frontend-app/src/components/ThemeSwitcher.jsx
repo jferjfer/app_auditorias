@@ -28,14 +28,17 @@ export default function ThemeSwitcher() {
       </button>
       <ul className="dropdown-menu" aria-labelledby="themeDropdown">
         <li><h6 className="dropdown-header">Temas Oscuros</h6></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('dark-default')}>Oscuro (Default)</button></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('dark-blue')}>Azul Oscuro</button></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('dark-green')}>Verde Oscuro</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('dark-default')}>🌙 Morado Nocturno</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('dark-blue')}>💙 Azul Medianoche</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('dark-green')}>💚 Verde Esmeralda</button></li>
         <li><hr className="dropdown-divider" /></li>
         <li><h6 className="dropdown-header">Temas Claros</h6></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('light-default')}>Claro (Default)</button></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('light-warm')}>Cálido</button></li>
-        <li><button className="dropdown-item" onClick={() => changeTheme('light-cool')}>Frío</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('light-default')}>☀️ Blanco Puro</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('light-warm')}>🔥 Beige Cálido</button></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('light-cool')}>❄️ Gris Azulado</button></li>
+        <li><hr className="dropdown-divider" /></li>
+        <li><h6 className="dropdown-header">Accesibilidad</h6></li>
+        <li><button className="dropdown-item" onClick={() => changeTheme('high-contrast')}>♿ Alto Contraste</button></li>
       </ul>
     </div>
   );

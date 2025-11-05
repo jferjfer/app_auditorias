@@ -39,8 +39,10 @@ uvicorn backend.main:app --reload
 ### 🔍 Auditor
 - Cargar archivos Excel de órdenes de traslado
 - Iniciar y gestionar auditorías
-- Escanear productos con SKU
+- Agregar colaboradores a auditorías
+- Escanear productos con SKU o cámara
 - Registrar cantidades físicas y novedades
+- Ver historial de cambios en tiempo real
 - Finalizar auditorías con cálculo de cumplimiento
 
 ### 📊 Analista
@@ -59,28 +61,32 @@ uvicorn backend.main:app --reload
 1. **Iniciar Sesión** como usuario con rol "auditor"
 2. **Cargar Archivos Excel** de órdenes de traslado
 3. **Iniciar Auditoría** desde "Mis Auditorías"
-4. **Auditar Productos**:
-   - Escanear SKU con Enter
+4. **Agregar Colaboradores** (opcional) para auditorías en equipo
+5. **Auditar Productos**:
+   - Escanear SKU con Enter o cámara 📷
    - Registrar cantidad física
-   - Seleccionar novedad (Sin Novedad, Faltante, Sobrante, Avería)
+   - Seleccionar novedad (Sin Novedad, Faltante, Sobrante, Avería, etc.)
    - Agregar observaciones
-5. **Guardar Cambios** individualmente o en lote
-6. **Finalizar Auditoría** y ver porcentaje de cumplimiento
+6. **Guardar Cambios** automáticamente con sincronización en tiempo real
+7. **Ver Historial** de cambios realizados por todos los colaboradores
+8. **Finalizar Auditoría** y ver porcentaje de cumplimiento
 
 ## 🛠️ Tecnologías
 
 ### Backend
 - **FastAPI**: Framework web moderno y rápido
 - **SQLAlchemy**: ORM para base de datos
+- **WebSockets**: Sincronización en tiempo real
 - **Pandas**: Procesamiento de archivos Excel
 - **JWT**: Autenticación segura
 - **Pydantic**: Validación de datos
 
 ### Frontend
-- **HTML5/CSS3**: Estructura y estilos
-- **JavaScript ES6**: Lógica de la aplicación
-- **Bootstrap 5**: Framework CSS
+- **React 18**: Biblioteca UI moderna
+- **React Router**: Navegación SPA
+- **Bootstrap 5**: Framework CSS responsive
 - **Chart.js**: Gráficos y visualizaciones
+- **html5-qrcode**: Escaneo con cámara
 
 ### Base de Datos
 - **PostgreSQL**: Base de datos principal
@@ -96,13 +102,21 @@ app_auditorias/
 │   ├── schemas.py          # Esquemas Pydantic
 │   ├── crud.py             # Operaciones de base de datos
 │   ├── database.py         # Configuración de BD
-│   └── services/           # Servicios de negocio
-├── frontend/               # Aplicación Web
-│   ├── index.html          # Página principal
-│   ├── script.js           # Lógica JavaScript
-│   └── style.css           # Estilos CSS
+│   └── routers/            # Endpoints API
+│       ├── auth.py         # Autenticación
+│       ├── audits.py       # Auditorías
+│       ├── users.py        # Usuarios
+│       ├── websockets.py   # WebSockets
+│       └── collaboration.py # Colaboración
+├── frontend-app/           # Aplicación React
+│   ├── src/
+│   │   ├── pages/          # Páginas principales
+│   │   ├── components/     # Componentes reutilizables
+│   │   ├── services/       # API y autenticación
+│   │   └── styles/         # CSS y temas
+│   └── package.json        # Dependencias Node
+├── alembic/                # Migraciones de BD
 ├── venv/                   # Entorno virtual Python
-├── uploads/                 # Archivos subidos
 ├── requirements.txt        # Dependencias Python
 └── README.md              # Este archivo
 ```
@@ -153,12 +167,16 @@ Si tienes problemas:
 ## 🎯 Características Principales
 
 - ✅ **Carga de Archivos Excel**: Procesamiento automático de órdenes de traslado
-- ✅ **Escaneo de Productos Flexible**: Búsqueda inteligente de SKUs que tolera diferencias de mayúsculas/minúsculas y ceros iniciales (ej. `pd123` o `000123`).
-- ✅ **Auditoría en Tiempo Real**: Cálculo de cumplimiento automático
+- ✅ **Escaneo de Productos Flexible**: Búsqueda inteligente de SKUs que tolera diferencias de mayúsculas/minúsculas y ceros iniciales (ej. `pd123` o `000123`)
+- ✅ **Escaneo con Cámara**: Lector QR/código de barras para móviles y tablets
+- ✅ **Auditoría Colaborativa**: Múltiples auditores trabajando simultáneamente con sincronización en tiempo real
+- ✅ **Lock de Productos**: Bloqueo temporal al editar para prevenir conflictos
+- ✅ **Historial de Cambios**: Tracking completo de modificaciones (quién, cuándo, qué)
+- ✅ **Notificaciones en Tiempo Real**: Alertas de ediciones y conflictos vía WebSocket
 - ✅ **Múltiples Roles**: Auditor, Analista, Administrador
-- ✅ **Interfaz Moderna**: Diseño responsive y intuitivo
-- ✅ **Base de Datos**: Persistencia de datos segura
-- ✅ **API RESTful**: Endpoints bien documentados
+- ✅ **Interfaz Moderna**: Diseño responsive con 7 temas de color y modo alto contraste
+- ✅ **Base de Datos**: PostgreSQL con persistencia segura
+- ✅ **API RESTful**: Endpoints documentados con FastAPI
 
 ---
 

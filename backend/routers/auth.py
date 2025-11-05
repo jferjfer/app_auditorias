@@ -18,6 +18,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 
 
+# Login attempt tracking
+login_attempts = {}
+
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -26,12 +29,46 @@ def login_for_access_token(
     """
     Permite a un usuario iniciar sesión y obtener un token JWT.
     """
-    user = crud.get_user_by_email(db, email=form_data.username)
-    if not user or not verify_password(form_data.password, user.contrasena_hash):
+    import time
+    from datetime import datetime
+    
+    # Rate limiting por email
+    email = form_data.username.lower()
+    now = datetime.utcnow()
+    
+    if email in login_attempts:
+        attempts, last_attempt = login_attempts[email]
+        if (now - last_attempt).seconds < 60 and attempts >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiados intentos. Intenta en 1 minuto"
+            )
+        if (now - last_attempt).seconds >= 60:
+            login_attempts[email] = [0, now]
+    else:
+        login_attempts[email] = [0, now]
+    
+    # Timing attack mitigation
+    user = crud.get_user_by_email(db, email=email)
+    password_valid = False
+    
+    if user:
+        password_valid = verify_password(form_data.password, user.contrasena_hash)
+    else:
+        # Fake hash check para timing constante
+        verify_password(form_data.password, "$2b$12$fake.hash.to.prevent.timing.attack.abcdefghijklmnopqrstuvwxy")
+    
+    if not user or not password_valid:
+        login_attempts[email][0] += 1
+        login_attempts[email][1] = now
+        time.sleep(0.5)  # Delay para prevenir fuerza bruta
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo electrónico o contraseña incorrectos"
+            detail="Credenciales inválidas"
         )
+    
+    # Reset intentos exitosos
+    login_attempts[email] = [0, now]
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

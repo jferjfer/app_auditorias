@@ -26,13 +26,13 @@ export default function AnalystDashboard(){
     }
   }
 
-  const handleDownloadExcel = async () => {
+  const handleDownloadExcel = async (type) => {
     try {
       const blob = await downloadReport(filters)
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `reporte_auditorias_${new Date().toISOString().split('T')[0]}.xlsx`
+      a.download = `reporte_${type}_${new Date().toISOString().split('T')[0]}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -42,28 +42,32 @@ export default function AnalystDashboard(){
     }
   }
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (type) => {
     try {
-      const { generatePdfReport, prepareReportData } = await import('../utils/pdfGenerator')
-      const reportData = prepareReportData(audits)
-      await generatePdfReport(reportData, 'general', filters)
+      const { generatePdfReport, prepareReportData } = await import('../../utils/pdfGenerator')
+      let reportData;
+      
+      if (type === 'novedades') {
+        // Filtrar solo productos con novedades
+        const auditsWithNovelties = audits.map(audit => ({
+          ...audit,
+          productos: audit.productos?.filter(p => p.novedad !== 'sin_novedad') || []
+        })).filter(audit => audit.productos.length > 0);
+        reportData = prepareReportData(auditsWithNovelties);
+      } else {
+        reportData = prepareReportData(audits);
+      }
+      
+      await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters)
     } catch (err) {
       alert('Error generando PDF: ' + err.message)
     }
   }
 
   return (
-    <div className="container-fluid py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h2 mb-0">Dashboard del Analista</h1>
-        <div>
-          <button className="btn btn-danger me-2" onClick={handleDownloadPDF}>
-            <i className="bi bi-file-pdf"></i> Descargar PDF
-          </button>
-          <button className="btn btn-success" onClick={handleDownloadExcel}>
-            <i className="bi bi-file-excel"></i> Descargar Excel
-          </button>
-        </div>
+    <div className="container-fluid" style={{padding: '0', maxWidth: '100%'}}>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h1 className="h3 mb-0">Dashboard del Analista</h1>
       </div>
 
       <Filters onChange={setFilters} initial={filters} />
@@ -82,11 +86,30 @@ export default function AnalystDashboard(){
           <Charts data={data} />
 
           {/* Tabla de auditorías */}
-          <div className="row">
-            <div className="col-md-12">
+          <div className="row g-3">
+            <div className="col-12">
               <div className="card">
                 <div className="card-body">
-                  <h5 className="card-title">Auditorías Recientes</h5>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="card-title mb-0">Auditorías Recientes</h5>
+                    <div className="btn-group">
+                      <button className="btn btn-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i className="bi bi-file-pdf"></i> PDF
+                      </button>
+                      <ul className="dropdown-menu">
+                        <li><button className="dropdown-item" onClick={() => handleDownloadPDF('general')}>Reporte General</button></li>
+                        <li><button className="dropdown-item" onClick={() => handleDownloadPDF('novedades')}>Reporte de Novedades</button></li>
+                      </ul>
+                      
+                      <button className="btn btn-success btn-sm dropdown-toggle ms-2" data-bs-toggle="dropdown">
+                        <i className="bi bi-file-excel"></i> Excel
+                      </button>
+                      <ul className="dropdown-menu">
+                        <li><button className="dropdown-item" onClick={() => handleDownloadExcel('general')}>Reporte General</button></li>
+                        <li><button className="dropdown-item" onClick={() => handleDownloadExcel('novedades')}>Reporte de Novedades</button></li>
+                      </ul>
+                    </div>
+                  </div>
                   {loadingAudits ? (
                     <div className="text-center py-3">
                       <div className="spinner-border spinner-border-sm" role="status"></div>

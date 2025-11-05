@@ -241,3 +241,27 @@ class TopNoveltySkuStatistic(BaseModel):
 
 class AverageAuditDurationStatistic(BaseModel):
     average_duration_hours: float
+
+class ProductHistory(BaseModel):
+    id: int
+    product_id: int
+    user_id: int
+    field_changed: str
+    old_value: Optional[str]
+    new_value: Optional[str]
+    modified_at: datetime
+    
+    @property
+    def user_name(self) -> str:
+        return getattr(self, '_user_name', 'Unknown')
+    
+    class Config:
+        orm_mode = True
+        json_encoders = {datetime: datetime_to_bogota}
+        
+    @classmethod
+    def from_orm(cls, obj):
+        instance = super().from_orm(obj)
+        if hasattr(obj, 'user') and obj.user:
+            instance._user_name = obj.user.nombre
+        return instance

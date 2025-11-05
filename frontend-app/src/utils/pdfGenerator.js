@@ -5,10 +5,15 @@ import { Chart } from 'chart.js';
 async function getImageBase64(imagePath) {
   try {
     const response = await fetch(imagePath);
+    if (!response.ok) {
+      console.warn('Imagen no encontrada:', imagePath);
+      return null;
+    }
     const blob = await response.blob();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Error leyendo imagen'));
       reader.readAsDataURL(blob);
     });
   } catch (err) {
@@ -21,7 +26,7 @@ export async function generatePdfReport(reportData, reportType, filters) {
   const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
   const doc = new jsPDF();
 
-  const logoBase64 = await getImageBase64('/src/assets/images/marca_deagua.png');
+  const logoBase64 = await getImageBase64('/images/marca_deagua.png');
 
   const primaryColor = '#6a11cb';
   const textColor = '#333333';

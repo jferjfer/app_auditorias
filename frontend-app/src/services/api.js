@@ -1,5 +1,6 @@
 // Lee la URL base de la API desde las variables de entorno de Vite (VITE_API_BASE) o usa el mismo origen por defecto.
 const API_BASE = import.meta.env.VITE_API_BASE || '';
+export const API_BASE_URL = API_BASE;
 
 // Helper para obtener el token de autenticación
 const getToken = () => localStorage.getItem('access_token');

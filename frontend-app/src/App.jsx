@@ -15,33 +15,30 @@ export default function App(){
 
   return (
     <div className="app-shell">
-      {!isLoginPage && <Sidebar />}
-      <div style={{flex:1, display:'flex', flexDirection:'column'}}>
-        {!isLoginPage && <Topbar />}
-        <main className="main-content">
-          <Suspense fallback={<div>Cargando...</div>}>
-            <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/analyst" element={
-                <ProtectedRoute allowedRoles={['analista', 'administrador']}>
-                  <AnalystDashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/auditor" element={
-                <ProtectedRoute allowedRoles={['auditor']}>
-                  <AuditorDashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/admin" element={
-                <ProtectedRoute allowedRoles={['administrador']}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </Suspense>
-        </main>
-      </div>
+      {!isLoginPage && <Topbar />}
+      <main className="main-content">
+        <Suspense fallback={<div>Cargando...</div>}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/analyst" element={
+              <ProtectedRoute allowedRoles={['analista', 'administrador']}>
+                <AnalystDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/auditor" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <AuditorDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute allowedRoles={['administrador']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } />
+          </Routes>
+        </Suspense>
+      </main>
     </div>
   )
 }

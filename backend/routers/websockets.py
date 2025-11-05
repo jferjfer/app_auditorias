@@ -55,6 +55,11 @@ class ConnectionManager:
                     await connection.send_text(message)
                 except (WebSocketDisconnect, ConnectionClosed, RuntimeError):
                     self.disconnect(connection, audit_id)
+    
+    async def send_to_audit(self, audit_id: int, data: dict):
+        """Envía evento estructurado a una auditoría específica."""
+        message = json.dumps(data, default=str)
+        await self.broadcast(message, audit_id)
 
     async def broadcast_to_all(self, message: str):
         """Envía un mensaje a todos los clientes conectados."""
@@ -99,6 +104,22 @@ async def websocket_audit_endpoint(websocket: WebSocket, audit_id: int, token: s
     try:
         user = get_user_from_token(db, token)
         if not user:
+            await websocket.close(code=1008)
+            return
+        
+        # Validar acceso a la auditoría
+        from backend import crud
+        audit = crud.get_audit_by_id(db, audit_id)
+        if not audit:
+            await websocket.close(code=1008)
+            return
+        
+        # Verificar permisos
+        is_owner = audit.auditor_id == user.id
+        is_collaborator = user in audit.collaborators
+        is_admin = user.rol in ["administrador", "analista"]
+        
+        if not (is_owner or is_collaborator or is_admin):
             await websocket.close(code=1008)
             return
 

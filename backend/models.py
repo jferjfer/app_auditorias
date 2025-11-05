@@ -86,8 +86,16 @@ class Product(Base):
     observaciones = Column(String, nullable=True)
     orden_traslado_original = Column(String)
     registrado_en = Column(DateTime, default=datetime.utcnow)
+    
+    # Campos para colaboración
+    locked_by_user_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    locked_at = Column(DateTime, nullable=True)
+    last_modified_by_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    last_modified_at = Column(DateTime, nullable=True)
 
     auditoria = relationship("Audit", back_populates="productos")
+    locked_by = relationship("User", foreign_keys=[locked_by_user_id])
+    last_modified_by = relationship("User", foreign_keys=[last_modified_by_id])
 
 # La tabla "archivos_auditoria" del script SQL
 class File(Base):
@@ -112,3 +120,17 @@ class Report(Base):
     generado_en = Column(DateTime, default=datetime.utcnow)
 
     analista = relationship("User", back_populates="informes_generados")
+
+class ProductHistory(Base):
+    __tablename__ = "product_history"
+    
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("productos_auditados.id"))
+    user_id = Column(Integer, ForeignKey("usuarios.id"))
+    field_changed = Column(String, nullable=False)
+    old_value = Column(String)
+    new_value = Column(String)
+    modified_at = Column(DateTime, default=datetime.utcnow)
+    
+    product = relationship("Product")
+    user = relationship("User")

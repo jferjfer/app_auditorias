@@ -1,94 +1,100 @@
 /* --- Dark Themes --- */
+/* Morado Nocturno - Elegante, reduce fatiga visual, creativo */
 body[data-theme="dark-default"] {
-    --bg-color: #1a1a1a;
-    --bg-secondary-color: #2a2a2a;
-    --text-color: #f0f0f0;
-    --primary-color: #00c6ff;
-    --primary-color-rgb: 0, 198, 255;
-    --accent-color: #ff0077;
-    --border-color: #444;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --info-color: #17a2b8;
-    --table-hover-color: #3a3a3a;
+    --bg-color: #1a1625;
+    --bg-secondary-color: #251e35;
+    --text-color: #e4dff7;
+    --primary-color: #a78bfa;
+    --primary-color-rgb: 167, 139, 250;
+    --accent-color: #ec4899;
+    --border-color: #3d3450;
+    --success-color: #10b981;
+    --danger-color: #f43f5e;
+    --info-color: #8b5cf6;
+    --table-hover-color: #2d2540;
 }
 
+/* Azul Medianoche - Profesional, inspirado en VS Code */
 body[data-theme="dark-blue"] {
-    --bg-color: #0d1117;
-    --bg-secondary-color: #161b22;
-    --text-color: #c9d1d9;
-    --primary-color: #58a6ff;
-    --primary-color-rgb: 88, 166, 255;
-    --accent-color: #f778ba;
-    --border-color: #30363d;
-    --success-color: #3fb950;
-    --danger-color: #f85149;
-    --info-color: #79c0ff;
-    --table-hover-color: #21262d;
+    --bg-color: #0a0e1a;
+    --bg-secondary-color: #151b2e;
+    --text-color: #cbd5e1;
+    --primary-color: #60a5fa;
+    --primary-color-rgb: 96, 165, 250;
+    --accent-color: #f472b6;
+    --border-color: #1e293b;
+    --success-color: #34d399;
+    --danger-color: #ef4444;
+    --info-color: #38bdf8;
+    --table-hover-color: #1e293b;
 }
 
+/* Verde Esmeralda - Relajante, reduce estrés, natural */
 body[data-theme="dark-green"] {
-    --bg-color: #1b2b24;
-    --bg-secondary-color: #283b33;
-    --text-color: #d9e0dd;
-    --primary-color: #4caf50;
-    --primary-color-rgb: 76, 175, 80;
-    --accent-color: #ff9800;
-    --border-color: #4a5c55;
-    --success-color: #81c784;
-    --danger-color: #e57373;
-    --info-color: #64b5f6;
-    --table-hover-color: #354a41;
+    --bg-color: #0f1e17;
+    --bg-secondary-color: #1a2e23;
+    --text-color: #d1f0e1;
+    --primary-color: #34d399;
+    --primary-color-rgb: 52, 211, 153;
+    --accent-color: #fbbf24;
+    --border-color: #2d4a3a;
+    --success-color: #6ee7b7;
+    --danger-color: #fb7185;
+    --info-color: #22d3ee;
+    --table-hover-color: #243b2f;
 }
 
 /* --- Light Themes --- */
+/* Blanco Puro - Máxima claridad, profesional, minimalista */
 body[data-theme="light-default"] {
-    --bg-color: #f8f9fa;
-    --bg-secondary-color: #ffffff;
-    --text-color: #212529;
-    --primary-color: #007bff;
-    --primary-color-rgb: 0, 123, 255;
-    --accent-color: #dc3545;
-    --border-color: #dee2e6;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --info-color: #17a2b8;
-    --table-hover-color: #f1f3f5;
+    --bg-color: #ffffff;
+    --bg-secondary-color: #f9fafb;
+    --text-color: #111827;
+    --primary-color: #2563eb;
+    --primary-color-rgb: 37, 99, 235;
+    --accent-color: #dc2626;
+    --border-color: #e5e7eb;
+    --success-color: #059669;
+    --danger-color: #dc2626;
+    --info-color: #0284c7;
+    --table-hover-color: #f3f4f6;
 }
 
+/* Beige Cálido - Suave para los ojos, ideal largas jornadas */
 body[data-theme="light-warm"] {
-    --bg-color: #fdf6e3;
-    --bg-secondary-color: #f5efdc;
-    --text-color: #455a64; /* Color más oscuro para mejor contraste */
-    --primary-color: #268bd2;
-    --primary-color-rgb: 38, 139, 210;
-    --accent-color: #d33682;
-    --border-color: #eee8d5;
-    --success-color: #859900;
-    --danger-color: #dc322f;
-    --info-color: #2aa198;
-    --table-hover-color: #eee8d5;
+    --bg-color: #fefcf7;
+    --bg-secondary-color: #f8f4ed;
+    --text-color: #292524;
+    --primary-color: #ea580c;
+    --primary-color-rgb: 234, 88, 12;
+    --accent-color: #dc2626;
+    --border-color: #e7e5e4;
+    --success-color: #16a34a;
+    --danger-color: #dc2626;
+    --info-color: #0891b2;
+    --table-hover-color: #f5f5f4;
 }
 
+/* Gris Azulado - Moderno, elegante, alta legibilidad */
 body[data-theme="light-cool"] {
-    --bg-color: #eff1f5;
-    --bg-secondary-color: #e6e9ef;
-    --text-color: #3c3f58; /* Color más oscuro para mejor contraste */
-    --primary-color: #1e66f5;
-    --primary-color-rgb: 30, 102, 245;
-    --accent-color: #d20f39;
-    --border-color: #dce0e8;
-    --success-color: #40a02b;
-    --danger-color: #d20f39;
-    --info-color: #04a5e5;
-    --table-hover-color: #dce0e8;
+    --bg-color: #f8fafc;
+    --bg-secondary-color: #f1f5f9;
+    --text-color: #0f172a;
+    --primary-color: #0ea5e9;
+    --primary-color-rgb: 14, 165, 233;
+    --accent-color: #8b5cf6;
+    --border-color: #cbd5e1;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --info-color: #06b6d4;
+    --table-hover-color: #e2e8f0;
 }
 
 /* Apply variables to elements */
 body {
     background-color: var(--bg-color);
     color: var(--text-color);
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .dashboard-section .card, .modal-content {
@@ -172,4 +178,28 @@ body {
 /* Corrige el color del botón de cierre en modales para temas claros */
 body[data-theme^="light"] .btn-close-white {
     filter: none;
+}
+
+/* Override Bootstrap CSS variables */
+:root {
+    --bs-body-bg: var(--bg-color) !important;
+    --bs-body-color: var(--text-color) !important;
+}
+
+/* Forzar fondo transparente en todos los contenedores Bootstrap */
+body .container-fluid,
+body .container,
+body .row,
+body .col,
+body [class*="col-"],
+body .py-4,
+body div[class*="container"],
+body div[class*="py-"] {
+    background-color: transparent !important;
+    color: var(--text-color) !important;
+}
+
+/* Forzar color de texto en todos los elementos */
+h1, h2, h3, h4, h5, h6, p, span, div, label, td, th {
+    color: var(--text-color) !important;
 }
