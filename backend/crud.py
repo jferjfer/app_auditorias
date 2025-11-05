@@ -269,8 +269,9 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
             start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
             start_utc = start_local.astimezone(timezone.utc)
             query = query.filter(models.Audit.creada_en >= start_utc)
-        except ValueError:
-            pass
+        except (ValueError, Exception) as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail=f"Fecha de inicio inválida: {start_date}")
 
     if end_date:
         try:
@@ -278,8 +279,9 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
             end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
             end_utc = end_local.astimezone(timezone.utc)
             query = query.filter(models.Audit.creada_en <= end_utc)
-        except ValueError:
-            pass
+        except (ValueError, Exception) as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail=f"Fecha de fin inválida: {end_date}")
 
     return query.all()
 

@@ -29,6 +29,10 @@ export default function AnalystDashboard(){
 
   const handleDownloadExcel = async (type) => {
     try {
+      if (!audits || audits.length === 0) {
+        toast.warning('No hay auditorías para exportar con los filtros seleccionados')
+        return
+      }
       const blob = await downloadReport(filters)
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -38,6 +42,7 @@ export default function AnalystDashboard(){
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      toast.success('Reporte descargado exitosamente')
     } catch (err) {
       toast.error('Error descargando reporte: ' + err.message)
     }
