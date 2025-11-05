@@ -12,8 +12,8 @@ export default function AuditHistory({ auditId, show, onClose }) {
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/collaboration/${auditId}/history`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      const res = await fetch(`${API_BASE_URL}/api/collaboration/${auditId}/history`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
       });
       const data = await res.json();
       setHistory(data);
