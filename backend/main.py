@@ -66,22 +66,35 @@ app.include_router(users.router, prefix="/api")
 app.include_router(websockets.router, prefix="/api")
 app.include_router(collaboration.router, prefix="/api")
 
-
-# Servir el frontend
-frontend_dir = "frontend-app/dist" if os.path.exists("frontend-app/dist") else "frontend-app"
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
-
 # Proteger directorio uploads
 @app.get("/uploads/{path:path}")
 async def serve_upload(path: str, request: Request, current_user: models.User = Depends(get_current_user)):
-    """Servir archivos protegidos por autenticación"""
     if current_user.rol not in ["auditor", "administrador", "analista"]:
         raise HTTPException(status_code=403, detail="Sin permisos")
     file_path = f"uploads/{path}"
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(file_path)
+
+# Servir el frontend
+frontend_dir = "frontend-app/dist"
+if os.path.exists(frontend_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("uploads/"):
+            raise HTTPException(status_code=404)
+        
+        file_path = os.path.join(frontend_dir, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        index_path = os.path.join(frontend_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        raise HTTPException(status_code=404)
 
 
 if __name__ == "__main__":
