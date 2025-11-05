@@ -14,35 +14,35 @@ export default function Topbar(){
 
   return (
     <nav className="topbar" style={{padding:'12px 20px', borderBottom:'1px solid var(--border-color)', background:'var(--bg-secondary-color)'}}>
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-        <div style={{display:'flex', alignItems:'center', gap:'30px'}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px'}}>
+        <div style={{display:'flex', alignItems:'center', gap:'15px', flexWrap:'wrap'}}>
           <div style={{fontWeight:700, fontSize:'18px'}}>NEMESIS</div>
-          <div style={{display:'flex', gap:'15px'}}>
+          <div style={{display:'flex', gap:'8px', flexWrap:'wrap'}}>
             {user?.rol === 'auditor' && (
               <a href="/auditor" className="btn btn-sm btn-outline-primary">
-                <i className="bi bi-speedometer2"></i> Dashboard
+                <i className="bi bi-speedometer2"></i><span className="d-none d-md-inline"> Dashboard</span>
               </a>
             )}
             {(user?.rol === 'analista' || user?.rol === 'administrador') && (
               <a href="/analyst" className="btn btn-sm btn-outline-primary">
-                <i className="bi bi-graph-up"></i> Analista
+                <i className="bi bi-graph-up"></i><span className="d-none d-md-inline"> Analista</span>
               </a>
             )}
             {user?.rol === 'administrador' && (
               <a href="/admin" className="btn btn-sm btn-outline-primary">
-                <i className="bi bi-gear"></i> Admin
+                <i className="bi bi-gear"></i><span className="d-none d-md-inline"> Admin</span>
               </a>
             )}
           </div>
         </div>
-        <div style={{display:'flex', alignItems:'center', gap:'15px'}}>
+        <div style={{display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
           <ThemeSwitcher />
-          <span style={{fontSize:'14px'}}>
+          <span style={{fontSize:'14px'}} className="d-none d-sm-inline">
             <i className="bi bi-person-circle"></i> {user?.nombre || 'Usuario'}
           </span>
-          <span className="badge bg-secondary">{user?.rol || ''}</span>
+          <span className="badge bg-secondary d-none d-sm-inline">{user?.rol || ''}</span>
           <button className="btn btn-sm btn-outline-danger" onClick={handleLogout}>
-            <i className="bi bi-box-arrow-right"></i> Salir
+            <i className="bi bi-box-arrow-right"></i><span className="d-none d-sm-inline"> Salir</span>
           </button>
         </div>
       </div>

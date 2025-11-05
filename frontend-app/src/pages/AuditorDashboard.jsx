@@ -17,7 +17,6 @@ const speak = (text) => {
   utterance.lang = 'es-ES';
   utterance.rate = 1;
   utterance.volume = 1;
-  if (voiceReady) utterance.voice = voiceReady;
   window.speechSynthesis.speak(utterance);
 };
 
@@ -47,18 +46,6 @@ export default function AuditorDashboard() {
   useEffect(() => {
     loadAudits();
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    
-    if ('speechSynthesis' in window) {
-      const loadVoices = () => {
-        const voices = window.speechSynthesis.getVoices();
-        voiceReady = voices.find(v => v.lang.startsWith('es')) || voices[0];
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-      const utterance = new SpeechSynthesisUtterance('');
-      utterance.volume = 0;
-      window.speechSynthesis.speak(utterance);
-    }
   }, []);
 
   useEffect(() => {
