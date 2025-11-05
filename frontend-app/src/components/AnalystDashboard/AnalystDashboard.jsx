@@ -4,6 +4,7 @@ import KPIs from './KPIs'
 import Charts from './Charts'
 import useStats from '../../hooks/useStats'
 import { fetchReportData, downloadReport } from '../../services/api'
+import ToastContainer, { toast } from '../Toast'
 
 export default function AnalystDashboard(){
   const { data, loading, error, filters, setFilters, reload } = useStats()
@@ -38,7 +39,7 @@ export default function AnalystDashboard(){
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (err) {
-      alert('Error descargando reporte: ' + err.message)
+      toast.error('Error descargando reporte: ' + err.message)
     }
   }
 
@@ -60,7 +61,7 @@ export default function AnalystDashboard(){
       
       await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters)
     } catch (err) {
-      alert('Error generando PDF: ' + err.message)
+      toast.error('Error generando PDF: ' + err.message)
     }
   }
 
@@ -154,6 +155,8 @@ export default function AnalystDashboard(){
           </div>
         </>
       )}
+      
+      <ToastContainer />
     </div>
   )
 }

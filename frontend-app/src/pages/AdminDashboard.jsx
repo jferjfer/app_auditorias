@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAllUsers, createUser, updateUser, deleteUser, fetchAudits } from '../services/api';
+import ToastContainer, { toast } from '../components/Toast';
+import ConfirmModal, { confirm } from '../components/ConfirmModal';
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
@@ -55,26 +57,27 @@ export default function AdminDashboard() {
         const updateData = { ...formData };
         if (!updateData.contrasena) delete updateData.contrasena;
         await updateUser(editingUser.id, updateData);
-        alert('Usuario actualizado');
+        toast.success('Usuario actualizado exitosamente');
       } else {
         await createUser(formData);
-        alert('Usuario creado');
+        toast.success('Usuario creado exitosamente');
       }
       handleCloseModal();
       loadUsers();
     } catch (err) {
-      alert('Error: ' + err.message);
+      toast.error('Error: ' + err.message);
     }
   };
 
   const handleDelete = async (userId) => {
-    if (!confirm('¿Eliminar usuario?')) return;
+    const confirmed = await confirm('¿Estás seguro de eliminar este usuario?');
+    if (!confirmed) return;
     try {
       await deleteUser(userId);
-      alert('Usuario eliminado');
+      toast.success('Usuario eliminado exitosamente');
       loadUsers();
     } catch (err) {
-      alert('Error: ' + err.message);
+      toast.error('Error: ' + err.message);
     }
   };
 
@@ -230,6 +233,9 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+      
+      <ToastContainer />
+      <ConfirmModal />
     </div>
   );
 }
