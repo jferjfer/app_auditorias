@@ -195,12 +195,22 @@ export async function fetchReportData(filters = {}) {
 
 export async function downloadReport(filters = {}) {
     const queryString = buildQueryString(filters);
-    const options = buildOptions('GET');
-    options.headers['Accept'] = 'application/octet-stream'; // Indicar que esperamos un blob
-    const response = await fetch(`${API_BASE}/api/audits/report${queryString}`, options);
-     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Fallo al descargar el reporte');
+    const token = getToken();
+    const response = await fetch(`${API_BASE}/api/audits/report${queryString}`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        let errorDetail = 'Fallo al descargar el reporte';
+        try {
+            const error = await response.json();
+            errorDetail = error.detail || JSON.stringify(error);
+        } catch (e) {
+            errorDetail = response.statusText;
+        }
+        throw new Error(errorDetail);
     }
     return response.blob();
 }
