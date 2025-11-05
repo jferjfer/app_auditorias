@@ -166,7 +166,7 @@ export default function AuditorDashboard() {
       const product = skuIndex[scannedSku];
       
       if (!product) {
-        speak('SKU no encontrado');
+        speak('Producto no encontrado');
         setScanInput('');
         return;
       }
