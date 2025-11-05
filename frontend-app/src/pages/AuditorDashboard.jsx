@@ -326,6 +326,19 @@ export default function AuditorDashboard() {
     });
   }, [products, searchTerm, filterNovedad]);
 
+  const cumplimientoActual = useMemo(() => {
+    if (!products.length) return 0;
+    const totalDocumento = products.reduce((sum, p) => sum + (p.cantidad_documento || 0), 0);
+    if (totalDocumento === 0) return 100;
+    const cumplidas = products.reduce((sum, p) => {
+      if (p.cantidad_fisica !== null && p.cantidad_fisica !== undefined) {
+        return sum + Math.min(p.cantidad_fisica, p.cantidad_documento);
+      }
+      return sum;
+    }, 0);
+    return Math.round((cumplidas / totalDocumento) * 100);
+  }, [products]);
+
   return (
     <div style={{width: '100%', padding: '20px', margin: '0', boxSizing: 'border-box'}}>
       <div style={{position: 'fixed', top: '70px', right: '20px', zIndex: 9999, maxWidth: '350px'}}>
@@ -507,11 +520,13 @@ export default function AuditorDashboard() {
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="card-title mb-0">
                       Productos - {currentAudit.ubicacion_destino}
-                      {currentAudit.estado === 'finalizada' && (
+                      {currentAudit.estado === 'finalizada' ? (
                         <>
                           <span className="badge bg-success ms-2">Finalizada</span>
                           <span className="badge bg-primary ms-2">{currentAudit.porcentaje_cumplimiento}% Cumplimiento</span>
                         </>
+                      ) : (
+                        <span className="badge bg-info ms-2">{cumplimientoActual}% Cumplimiento</span>
                       )}
                     </h5>
                     <div>
