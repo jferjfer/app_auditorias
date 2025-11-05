@@ -26,7 +26,7 @@ const speak = (text) => {
   
   if (selectedVoice) utterance.voice = selectedVoice;
   utterance.lang = 'es-CO';
-  utterance.rate = 0.9;
+  utterance.rate = 1;
   utterance.pitch = 1.1;
   utterance.volume = 1;
   
