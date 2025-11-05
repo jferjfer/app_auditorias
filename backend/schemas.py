@@ -25,7 +25,7 @@ class User(UserBase):  # ✅ Hereda nombre, correo, rol de UserBase
     creado_en: Optional[datetime] = None  
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para crear un nuevo usuario
@@ -55,14 +55,14 @@ class ProductBase(BaseModel):
     orden_traslado_original: str
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Esquema para el producto auditado CON ID (para respuestas)
 class Product(ProductBase):
     id: int
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Esquema para crear una auditoría (con productos anidados)
 class AuditCreate(BaseModel):
@@ -83,7 +83,7 @@ class Audit(AuditBase):
     auditor_nombre: Optional[str] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para mostrar los detalles de la auditoría con productos
@@ -92,7 +92,7 @@ class AuditDetails(Audit):
     collaborators: List[User] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para la carga de archivos
@@ -100,7 +100,7 @@ class FileUpload(BaseModel):
     nombre_archivo: str
     ruta_archivo: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Esquema para la respuesta de archivos
 class File(FileUpload):
@@ -109,7 +109,7 @@ class File(FileUpload):
     subido_en: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema de token JWT
@@ -135,7 +135,7 @@ class ProductCreate(ProductBase):
     pass
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Esquema para respuesta de auditorías con información básica
 class AuditResponse(BaseModel):
@@ -149,7 +149,7 @@ class AuditResponse(BaseModel):
     productos_count: Optional[int] = None
 
     class Config:
-        orm_mode = True # Ya estaba correcto, pero lo confirmo
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para respuesta de login exitoso
@@ -159,7 +159,7 @@ class LoginResponse(BaseModel):
     user: User
 
     class Config:
-        orm_mode = True # Ya estaba correcto
+        from_attributes = True
 
 # Esquema para respuesta de registro exitoso
 class RegisterResponse(BaseModel):
@@ -167,7 +167,7 @@ class RegisterResponse(BaseModel):
     user: User
 
     class Config:
-        orm_mode = True # Ya estaba correcto
+        from_attributes = True
 
 # Esquema para respuesta de carga de archivos
 class FileUploadResponse(BaseModel):
@@ -177,7 +177,7 @@ class FileUploadResponse(BaseModel):
     numero_documento: str
 
     class Config:
-        orm_mode = True # Ya estaba correcto
+        from_attributes = True
 
 # Esquema para respuesta de actualización de producto
 class ProductUpdateResponse(BaseModel):
@@ -185,7 +185,7 @@ class ProductUpdateResponse(BaseModel):
     product: Product
 
     class Config:
-        orm_mode = True # Ya estaba correcto
+        from_attributes = True
 
 # Esquema para respuesta de finalización de auditoría
 class AuditFinishResponse(BaseModel):
@@ -194,7 +194,7 @@ class AuditFinishResponse(BaseModel):
     porcentaje_cumplimiento: float
 
     class Config:
-        orm_mode = True # Ya estaba correcto
+        from_attributes = True
 
 # Esquema para añadir colaboradores a una auditoría
 class CollaboratorUpdate(BaseModel):
@@ -256,7 +256,7 @@ class ProductHistory(BaseModel):
         return getattr(self, '_user_name', 'Unknown')
     
     class Config:
-        orm_mode = True
+        from_attributes = True
         json_encoders = {datetime: datetime_to_bogota}
         
     @classmethod
