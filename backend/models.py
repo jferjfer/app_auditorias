@@ -74,10 +74,13 @@ class NovedadEnum(str, enum.Enum):
 
 class Product(Base):
     __tablename__ = "productos_auditados"
+    __table_args__ = (
+        {'extend_existing': True}
+    )
 
     id = Column(Integer, primary_key=True)
-    auditoria_id = Column(Integer, ForeignKey("auditorias.id"))
-    sku = Column(String, nullable=False)
+    auditoria_id = Column(Integer, ForeignKey("auditorias.id"), index=True)
+    sku = Column(String, nullable=False, index=True)
     nombre_articulo = Column(String, nullable=False)
     cantidad_documento = Column(Integer, nullable=False)
     cantidad_enviada = Column(Integer, nullable=False)

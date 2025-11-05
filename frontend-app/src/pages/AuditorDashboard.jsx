@@ -34,7 +34,9 @@ export default function AuditorDashboard() {
   const [scanHistory, setScanHistory] = useState([]);
   const [scannedCount, setScannedCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterNovedad, setFilterNovedad] = useState('all');
+  const [searchIndex, setSearchIndex] = useState({});
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [lockedProducts, setLockedProducts] = useState({});
@@ -47,6 +49,20 @@ export default function AuditorDashboard() {
     loadAudits();
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 150);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const index = {};
+    products.forEach(p => {
+      const key = `${p.sku}|${p.nombre_articulo}`.toLowerCase();
+      index[p.id] = key;
+    });
+    setSearchIndex(index);
+  }, [products]);
 
   useEffect(() => {
     if (!currentAudit) return;
@@ -301,17 +317,14 @@ export default function AuditorDashboard() {
   };
 
   const filteredProducts = useMemo(() => {
-    const searchLower = searchTerm.toLowerCase();
+    if (!debouncedSearch && filterNovedad === 'all') return products;
+    const searchLower = debouncedSearch.toLowerCase();
     return products.filter(p => {
-      if (searchTerm && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) {
-        return false;
-      }
-      if (filterNovedad !== 'all' && p.novedad !== filterNovedad) {
-        return false;
-      }
+      if (debouncedSearch && !searchIndex[p.id]?.includes(searchLower)) return false;
+      if (filterNovedad !== 'all' && p.novedad !== filterNovedad) return false;
       return true;
     });
-  }, [products, searchTerm, filterNovedad]);
+  }, [products, debouncedSearch, filterNovedad, searchIndex]);
 
   const cumplimientoActual = useMemo(() => {
     if (!products.length) return 0;
