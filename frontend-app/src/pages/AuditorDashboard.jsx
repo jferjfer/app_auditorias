@@ -8,17 +8,40 @@ import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
 
-let voiceReady = null;
+let selectedVoice = null;
 
 const speak = (text) => {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
+  
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'es-ES';
-  utterance.rate = 1;
+  
+  // Seleccionar voz en español (Colombia o México preferentemente)
+  if (!selectedVoice) {
+    const voices = window.speechSynthesis.getVoices();
+    selectedVoice = voices.find(v => v.lang === 'es-CO' || v.lang === 'es-MX') || 
+                    voices.find(v => v.lang.startsWith('es')) || 
+                    voices[0];
+  }
+  
+  if (selectedVoice) utterance.voice = selectedVoice;
+  utterance.lang = 'es-CO';
+  utterance.rate = 0.9;
+  utterance.pitch = 1.1;
   utterance.volume = 1;
+  
   window.speechSynthesis.speak(utterance);
 };
+
+// Cargar voces cuando estén disponibles
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    const voices = window.speechSynthesis.getVoices();
+    selectedVoice = voices.find(v => v.lang === 'es-CO' || v.lang === 'es-MX') || 
+                    voices.find(v => v.lang.startsWith('es')) || 
+                    voices[0];
+  };
+}
 
 export default function AuditorDashboard() {
   const [audits, setAudits] = useState([]);
