@@ -15,13 +15,19 @@ export function useOfflineSync(auditId) {
     };
     
     const handleOffline = () => setIsOnline(false);
+    
+    const handlePendingUpdate = () => {
+      if (auditId) updatePendingCount();
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('pendingChangesUpdated', handlePendingUpdate);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('pendingChangesUpdated', handlePendingUpdate);
     };
   }, [auditId]);
 

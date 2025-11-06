@@ -288,18 +288,18 @@ export default function AuditorDashboard() {
       p.id === productId ? { ...p, ...changes } : p
     ));
     
-    // Intentar guardar en backend
     try {
       if (isOnline) {
         await updateProduct(currentAudit.id, productId, changes);
       } else {
-        // Si está offline, guardar en cola de sincronización
         await offlineDB.savePendingChange(currentAudit.id, productId, changes);
-        toast.info('💾 Guardado localmente. Se sincronizará cuando haya internet');
+        toast.info('💾 Guardado offline');
+        // Forzar actualización del contador
+        window.dispatchEvent(new Event('pendingChangesUpdated'));
       }
     } catch (err) {
-      // Si falla, guardar offline
       await offlineDB.savePendingChange(currentAudit.id, productId, changes);
+      window.dispatchEvent(new Event('pendingChangesUpdated'));
       console.error('Error:', err);
     }
   };
