@@ -33,7 +33,12 @@ export default function AnalystDashboard(){
         toast.warning('No hay auditorías para exportar con los filtros seleccionados')
         return
       }
+      toast.info('Generando reporte...')
       const blob = await downloadReport(filters)
+      if (!blob || blob.size === 0) {
+        toast.error('El reporte está vacío')
+        return
+      }
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -44,6 +49,7 @@ export default function AnalystDashboard(){
       document.body.removeChild(a)
       toast.success('Reporte descargado exitosamente')
     } catch (err) {
+      console.error('Error completo:', err)
       toast.error('Error descargando reporte: ' + err.message)
     }
   }
