@@ -45,10 +45,15 @@ export function useOfflineSync(auditId) {
   }, [auditId]);
 
   const updatePendingCount = async () => {
-    if (!offlineDB.db) return; // DB no inicializada
+    if (!offlineDB.db) {
+      console.log('DB no inicializada');
+      return;
+    }
     try {
       const pending = await offlineDB.getPendingChanges();
+      console.log('Total pending changes:', pending.length);
       const auditPending = auditId ? pending.filter(p => p.auditId === auditId) : [];
+      console.log('Pending for audit', auditId, ':', auditPending.length);
       setPendingCount(auditPending.length);
     } catch (err) {
       console.error('Error counting pending:', err);

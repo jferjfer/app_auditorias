@@ -222,20 +222,26 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 2: Escaneo de SKU diferente = anterior SIN NOVEDAD (sin await)
+      // Caso 2: Escaneo de SKU diferente = anterior SIN NOVEDAD
       if (lastScanned && lastScanned.sku !== product.sku) {
         const lastProduct = products.find(p => p.sku === lastScanned.sku);
         if (lastProduct) {
-          setProducts(prev => prev.map(p => 
-            p.id === lastProduct.id 
-              ? { ...p, cantidad_fisica: lastProduct.cantidad_documento, novedad: 'sin_novedad', observaciones: 'sin novedad' }
-              : p
-          ));
-          updateProduct(currentAudit.id, lastProduct.id, {
+          const changes = {
             cantidad_fisica: lastProduct.cantidad_documento,
             novedad: 'sin_novedad',
             observaciones: 'sin novedad'
-          }).catch(err => console.error('Error guardando producto anterior:', err));
+          };
+          setProducts(prev => prev.map(p => 
+            p.id === lastProduct.id ? { ...p, ...changes } : p
+          ));
+          
+          if (isOnline) {
+            updateProduct(currentAudit.id, lastProduct.id, changes).catch(err => console.error('Error:', err));
+          } else {
+            offlineDB.savePendingChange(currentAudit.id, lastProduct.id, changes).then(() => {
+              window.dispatchEvent(new Event('pendingChangesUpdated'));
+            });
+          }
           speak('Guardado');
         }
       }
@@ -273,12 +279,19 @@ export default function AuditorDashboard() {
       observaciones = `${diferencia} sobrante`;
     }
 
+    const changes = { cantidad_fisica: cantidad, novedad, observaciones };
     setProducts(prev => prev.map(p => 
-      p.id === productId ? { ...p, cantidad_fisica: cantidad, novedad, observaciones } : p
+      p.id === productId ? { ...p, ...changes } : p
     ));
 
     speak('Guardado');
-    updateProduct(currentAudit.id, productId, { cantidad_fisica: cantidad, novedad, observaciones }).catch(err => console.error('Error:', err));
+    
+    if (isOnline) {
+      updateProduct(currentAudit.id, productId, changes).catch(err => console.error('Error:', err));
+    } else {
+      await offlineDB.savePendingChange(currentAudit.id, productId, changes);
+      window.dispatchEvent(new Event('pendingChangesUpdated'));
+    }
   };
 
   const handleUpdateProduct = async (productId, field, value) => {
@@ -288,19 +301,23 @@ export default function AuditorDashboard() {
       p.id === productId ? { ...p, ...changes } : p
     ));
     
+    console.log('handleUpdateProduct - isOnline:', isOnline, 'auditId:', currentAudit?.id);
+    
     try {
       if (isOnline) {
         await updateProduct(currentAudit.id, productId, changes);
       } else {
+        console.log('Guardando offline...');
         await offlineDB.savePendingChange(currentAudit.id, productId, changes);
+        console.log('Guardado en IndexedDB');
         toast.info('💾 Guardado offline');
-        // Forzar actualización del contador
         window.dispatchEvent(new Event('pendingChangesUpdated'));
+        console.log('Evento disparado');
       }
     } catch (err) {
+      console.error('Error guardando:', err);
       await offlineDB.savePendingChange(currentAudit.id, productId, changes);
       window.dispatchEvent(new Event('pendingChangesUpdated'));
-      console.error('Error:', err);
     }
   };
 
