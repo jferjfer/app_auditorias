@@ -12,6 +12,11 @@ export default function AnalystDashboard(){
   const [audits, setAudits] = useState([])
   const [loadingAudits, setLoadingAudits] = useState(false)
 
+  // Limpiar filtros al montar el componente
+  useEffect(() => {
+    setFilters({})
+  }, [])
+
   useEffect(() => {
     loadAudits()
   }, [filters])
@@ -36,18 +41,20 @@ export default function AnalystDashboard(){
       }
       toast.info('Generando reporte...')
       
+      console.log('Filters before download:', filters)
+      
       // Construir URL manualmente con solo filtros válidos
       const params = new URLSearchParams()
-      if (filters.audit_status && filters.audit_status !== 'Todos') {
+      if (filters.audit_status && filters.audit_status !== 'Todos' && filters.audit_status.trim()) {
         params.append('audit_status', filters.audit_status)
       }
       if (filters.auditor_id) {
         params.append('auditor_id', filters.auditor_id)
       }
-      if (filters.start_date && filters.start_date.trim()) {
+      if (filters.start_date && typeof filters.start_date === 'string' && filters.start_date.trim()) {
         params.append('start_date', filters.start_date.trim())
       }
-      if (filters.end_date && filters.end_date.trim()) {
+      if (filters.end_date && typeof filters.end_date === 'string' && filters.end_date.trim()) {
         params.append('end_date', filters.end_date.trim())
       }
       

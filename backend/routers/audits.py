@@ -400,20 +400,30 @@ async def download_audit_report(
     # Normalizar el estado si viene como texto legible
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
 
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    try:
+        audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting audits: {e}")
+        audits = []
 
-    data = []
-    for audit in audits:
-        data.append({
-            "ID": audit.id,
-            "Ubicación": audit.ubicacion_destino,
-            "Auditor": audit.auditor.nombre if audit.auditor else "",
-            "Fecha": audit.creada_en.strftime("%Y-%m-%d %H:%M:%S"),
-            "Estado": audit.estado,
-            "Productos": len(audit.productos),
-            "% Cumplimiento": audit.porcentaje_cumplimiento
-        })
-    df = pd.DataFrame(data)
+    if not audits:
+        # Si no hay auditorías, devolver Excel vacío
+        df = pd.DataFrame(columns=["ID", "Ubicación", "Auditor", "Fecha", "Estado", "Productos", "% Cumplimiento"])
+    else:
+        data = []
+        for audit in audits:
+            data.append({
+                "ID": audit.id,
+                "Ubicación": audit.ubicacion_destino,
+                "Auditor": audit.auditor.nombre if audit.auditor else "",
+                "Fecha": audit.creada_en.strftime("%Y-%m-%d %H:%M:%S"),
+                "Estado": audit.estado,
+                "Productos": len(audit.productos),
+                "% Cumplimiento": audit.porcentaje_cumplimiento
+            })
+        df = pd.DataFrame(data)
 
     stream = io.BytesIO()
     df.to_excel(stream, index=False, sheet_name='Auditorias')
