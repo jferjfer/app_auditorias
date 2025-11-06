@@ -7,11 +7,11 @@ export function useOfflineSync(auditId) {
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Detectar cambios de conexión
+  // Detectar cambios de conexión (siempre activo)
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      syncPendingChanges();
+      if (auditId) syncPendingChanges();
     };
     
     const handleOffline = () => setIsOnline(false);
@@ -30,12 +30,12 @@ export function useOfflineSync(auditId) {
     const init = async () => {
       try {
         await offlineDB.init();
-        await updatePendingCount();
+        if (auditId) await updatePendingCount();
       } catch (err) {
         console.error('Error initializing offline DB:', err);
       }
     };
-    if (auditId) init();
+    init();
   }, [auditId]);
 
   const updatePendingCount = async () => {
@@ -50,7 +50,7 @@ export function useOfflineSync(auditId) {
   };
 
   const syncPendingChanges = async () => {
-    if (!isOnline || isSyncing) return;
+    if (!isOnline || isSyncing || !auditId) return;
 
     setIsSyncing(true);
     try {
