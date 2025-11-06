@@ -593,6 +593,7 @@ export default function AuditorDashboard() {
                           </th>
                         </tr>
                         <tr>
+                          <th>OT</th>
                           <th>SKU</th>
                           <th>Nombre</th>
                           <th>Cant. Doc</th>
@@ -604,6 +605,7 @@ export default function AuditorDashboard() {
                       <tbody>
                         {filteredProducts.map(product => (
                           <tr key={product.id} data-product-id={product.id}>
+                            <td><span className="badge bg-secondary">{product.orden_traslado_original}</span></td>
                             <td>{product.sku}</td>
                             <td>{product.nombre_articulo}</td>
                             <td>{product.cantidad_documento}</td>

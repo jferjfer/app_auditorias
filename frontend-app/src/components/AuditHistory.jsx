@@ -28,7 +28,7 @@ export default function AuditHistory({ auditId, show, onClose }) {
 
   return (
     <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-      <div className="modal-dialog modal-lg">
+      <div className="modal-dialog modal-xl">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">📜 Historial de Cambios</h5>
@@ -45,6 +45,9 @@ export default function AuditHistory({ auditId, show, onClose }) {
                   <tr>
                     <th>Fecha</th>
                     <th>Usuario</th>
+                    <th>OT</th>
+                    <th>SKU</th>
+                    <th>Descripción</th>
                     <th>Campo</th>
                     <th>Antes</th>
                     <th>Después</th>
@@ -53,8 +56,11 @@ export default function AuditHistory({ auditId, show, onClose }) {
                 <tbody>
                   {history.map(h => (
                     <tr key={h.id}>
-                      <td>{new Date(h.modified_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
+                      <td style={{fontSize: '11px'}}>{new Date(h.modified_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                       <td>{h.user_name}</td>
+                      <td><span className="badge bg-secondary">{h.ot}</span></td>
+                      <td><code>{h.sku}</code></td>
+                      <td style={{fontSize: '11px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{h.descripcion}</td>
                       <td><code>{h.field_changed}</code></td>
                       <td><span className="badge bg-secondary">{h.old_value || '-'}</span></td>
                       <td><span className="badge bg-primary">{h.new_value || '-'}</span></td>
