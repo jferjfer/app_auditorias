@@ -252,7 +252,9 @@ export default function AuditorDashboard() {
           (product.novedad === 'faltante' || product.novedad === 'sobrante')) {
         setLastScanned({ sku: product.sku, id: product.id });
         setScanInput('');
-        speak(product.novedad === 'faltante' ? 'Faltante' : 'Sobrante');
+        const diferencia = Math.abs(product.cantidad_fisica - product.cantidad_documento);
+        const mensaje = product.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
+        speak(mensaje);
         setTimeout(() => {
           document.getElementById(`qty-${product.id}`)?.focus();
           document.getElementById(`qty-${product.id}`)?.select();
