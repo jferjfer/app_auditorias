@@ -7,6 +7,8 @@ import AuditHistory from '../components/AuditHistory';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
+import { useOfflineSync } from '../hooks/useOfflineSync';
+import { offlineDB } from '../utils/offlineDB';
 
 let selectedVoice = null;
 
@@ -66,6 +68,7 @@ export default function AuditorDashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const wsRef = useRef(null);
   const user = getCurrentUser();
+  const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
 
   useEffect(() => {
     loadAudits();
@@ -157,10 +160,17 @@ export default function AuditorDashboard() {
 
   const handleVerAuditoria = async (auditId) => {
     try {
+      // Inicializar IndexedDB
+      await offlineDB.init();
+      
       const data = await fetchAuditDetails(auditId);
       setCurrentAudit(data);
       const prods = data.productos || [];
       setProducts(prods);
+      
+      // Guardar productos en IndexedDB para uso offline
+      await offlineDB.saveProducts(auditId, prods);
+      
       const index = {};
       prods.forEach(p => {
         const normalizedSku = String(p.sku).toUpperCase().replace(/^0+/, '').substring(0, 50);
@@ -259,11 +269,26 @@ export default function AuditorDashboard() {
   };
 
   const handleUpdateProduct = async (productId, field, value) => {
+    const changes = { [field]: value };
+    
     setProducts(prev => prev.map(p => 
-      p.id === productId ? { ...p, [field]: value } : p
+      p.id === productId ? { ...p, ...changes } : p
     ));
     
-    updateProduct(currentAudit.id, productId, { [field]: value }).catch(err => console.error('Error:', err));
+    // Intentar guardar en backend
+    try {
+      if (isOnline) {
+        await updateProduct(currentAudit.id, productId, changes);
+      } else {
+        // Si está offline, guardar en cola de sincronización
+        await offlineDB.savePendingChange(currentAudit.id, productId, changes);
+        toast.info('💾 Guardado localmente. Se sincronizará cuando haya internet');
+      }
+    } catch (err) {
+      // Si falla, guardar offline
+      await offlineDB.savePendingChange(currentAudit.id, productId, changes);
+      console.error('Error:', err);
+    }
   };
 
   const handleSave = async () => {
@@ -386,7 +411,41 @@ export default function AuditorDashboard() {
           to { transform: translateX(0); opacity: 1; }
         }
       `}</style>
-      <h1 className="h3 mb-3">Dashboard del Auditor</h1>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h1 className="h3 mb-0">Dashboard del Auditor</h1>
+        
+        {/* Indicador Online/Offline */}
+        <div className="d-flex align-items-center gap-2">
+          {isOnline ? (
+            <span className="badge bg-success" style={{fontSize: '14px', padding: '8px 12px'}}>
+              <i className="bi bi-wifi"></i> Online
+            </span>
+          ) : (
+            <span className="badge bg-danger" style={{fontSize: '14px', padding: '8px 12px'}}>
+              <i className="bi bi-wifi-off"></i> Offline
+            </span>
+          )}
+          
+          {/* Contador de cambios pendientes */}
+          {pendingCount > 0 && (
+            <span className="badge bg-warning text-dark" style={{fontSize: '14px', padding: '8px 12px'}}>
+              <i className="bi bi-cloud-upload"></i> {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
+              {isSyncing && <span className="spinner-border spinner-border-sm ms-2"></span>}
+            </span>
+          )}
+          
+          {/* Botón sincronizar manual */}
+          {pendingCount > 0 && isOnline && (
+            <button 
+              className="btn btn-sm btn-warning" 
+              onClick={syncNow}
+              disabled={isSyncing}
+            >
+              <i className="bi bi-arrow-repeat"></i> Sincronizar
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Carga de archivos */}
       <div style={{width: '100%', marginBottom: '15px'}}>
