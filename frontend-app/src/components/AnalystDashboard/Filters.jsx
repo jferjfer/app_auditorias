@@ -59,7 +59,7 @@ export default function Filters({ onChange, initial = {} }){
               className="form-control"
               value={start} 
               onChange={d=>setStart(d[0]||'')} 
-              options={{dateFormat:'Y-m-d', altInput:true, altFormat:'d/m/Y'}} 
+              options={{dateFormat:'Y-m-d', altInput:true, altFormat:'d/m/Y', maxDate: 'today'}} 
               placeholder="dd/mm/YYYY"
             />
           </div>
@@ -69,7 +69,7 @@ export default function Filters({ onChange, initial = {} }){
               className="form-control"
               value={end} 
               onChange={d=>setEnd(d[0]||'')} 
-              options={{dateFormat:'Y-m-d', altInput:true, altFormat:'d/m/Y'}} 
+              options={{dateFormat:'Y-m-d', altInput:true, altFormat:'d/m/Y', maxDate: 'today'}} 
               placeholder="dd/mm/YYYY"
             />
           </div>
