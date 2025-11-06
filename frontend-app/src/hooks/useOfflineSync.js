@@ -62,15 +62,25 @@ export function useOfflineSync(auditId) {
     try {
       const pending = await offlineDB.getPendingChanges();
       const auditPending = pending.filter(p => p.auditId === auditId);
+      
+      let hasAuthError = false;
 
       for (const change of auditPending) {
         try {
           await updateProduct(change.auditId, change.productId, change.changes);
           await offlineDB.deletePendingChange(change.id);
         } catch (err) {
+          // Si es error 401, el token expiró
+          if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+            hasAuthError = true;
+            break; // Detener sincronización
+          }
           console.error('Error syncing change:', err);
-          // Si falla, lo dejamos para el próximo intento
         }
+      }
+      
+      if (hasAuthError) {
+        alert('⚠️ Sesión expirada. Por favor inicia sesión nuevamente para sincronizar los cambios pendientes.');
       }
 
       await updatePendingCount();
