@@ -1,16 +1,18 @@
 const CACHE_NAME = 'auditorias-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/static/css/main.css',
-  '/static/js/main.js'
+  '/'
 ];
 
 // Instalación - cachear recursos estáticos
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+      .then(cache => {
+        // Intentar cachear, pero no fallar si alguno falla
+        return Promise.allSettled(
+          urlsToCache.map(url => cache.add(url).catch(err => console.log('Cache miss:', url)))
+        );
+      })
       .then(() => self.skipWaiting())
   );
 });

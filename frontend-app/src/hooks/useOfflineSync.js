@@ -25,15 +25,24 @@ export function useOfflineSync(auditId) {
     };
   }, [auditId]);
 
-  // Actualizar contador de pendientes
+  // Inicializar DB y actualizar contador de pendientes
   useEffect(() => {
-    updatePendingCount();
+    const init = async () => {
+      try {
+        await offlineDB.init();
+        await updatePendingCount();
+      } catch (err) {
+        console.error('Error initializing offline DB:', err);
+      }
+    };
+    if (auditId) init();
   }, [auditId]);
 
   const updatePendingCount = async () => {
+    if (!offlineDB.db) return; // DB no inicializada
     try {
       const pending = await offlineDB.getPendingChanges();
-      const auditPending = pending.filter(p => p.auditId === auditId);
+      const auditPending = auditId ? pending.filter(p => p.auditId === auditId) : [];
       setPendingCount(auditPending.length);
     } catch (err) {
       console.error('Error counting pending:', err);
