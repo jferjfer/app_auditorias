@@ -139,7 +139,7 @@ export default function AnalystDashboard(){
                               <td>{audit.id}</td>
                               <td>{audit.ubicacion_destino}</td>
                               <td>{audit.auditor?.nombre || 'N/A'}</td>
-                              <td>{new Date(audit.creada_en).toLocaleString()}</td>
+                              <td>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                               <td>
                                 <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
                                   {audit.estado}

@@ -53,7 +53,7 @@ export default function AuditHistory({ auditId, show, onClose }) {
                 <tbody>
                   {history.map(h => (
                     <tr key={h.id}>
-                      <td>{new Date(h.modified_at).toLocaleString()}</td>
+                      <td>{new Date(h.modified_at).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                       <td>{h.user_name}</td>
                       <td><code>{h.field_changed}</code></td>
                       <td><span className="badge bg-secondary">{h.old_value || '-'}</span></td>

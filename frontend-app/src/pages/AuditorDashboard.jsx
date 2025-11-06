@@ -264,6 +264,15 @@ export default function AuditorDashboard() {
     updateProduct(currentAudit.id, productId, { [field]: value }).catch(err => console.error('Error:', err));
   };
 
+  const handleSave = async () => {
+    try {
+      await fetchAuditDetails(currentAudit.id);
+      toast.success('Progreso guardado correctamente');
+    } catch (err) {
+      toast.error('Error guardando: ' + err.message);
+    }
+  };
+
   const handleFinish = async () => {
     const confirmed = await confirm('¿Finalizar auditoría?');
     if (!confirmed) return;
@@ -426,7 +435,7 @@ export default function AuditorDashboard() {
                       <tr key={audit.id}>
                         <td>{audit.id}</td>
                         <td>{audit.ubicacion_destino}</td>
-                        <td>{new Date(audit.creada_en).toLocaleString()}</td>
+                        <td>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                         <td>
                           <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
                             {audit.estado}
@@ -544,9 +553,14 @@ export default function AuditorDashboard() {
                         <i className="bi bi-clock-history"></i> Historial
                       </button>
                       {currentAudit.estado !== 'finalizada' && (
-                        <button className="btn btn-success" onClick={handleFinish}>
-                          <i className="bi bi-check-circle"></i> Finalizar
-                        </button>
+                        <>
+                          <button className="btn btn-primary me-2" onClick={handleSave}>
+                            <i className="bi bi-save"></i> Guardar
+                          </button>
+                          <button className="btn btn-success" onClick={handleFinish}>
+                            <i className="bi bi-check-circle"></i> Finalizar
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
