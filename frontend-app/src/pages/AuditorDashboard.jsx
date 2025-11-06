@@ -160,16 +160,29 @@ export default function AuditorDashboard() {
 
   const handleVerAuditoria = async (auditId) => {
     try {
-      // Inicializar IndexedDB
       await offlineDB.init();
       
-      const data = await fetchAuditDetails(auditId);
-      setCurrentAudit(data);
-      const prods = data.productos || [];
-      setProducts(prods);
+      let data, prods;
       
-      // Guardar productos en IndexedDB para uso offline
-      await offlineDB.saveProducts(auditId, prods);
+      if (isOnline) {
+        // Online: cargar desde API
+        data = await fetchAuditDetails(auditId);
+        prods = data.productos || [];
+        await offlineDB.saveProducts(auditId, prods);
+      } else {
+        // Offline: cargar desde IndexedDB
+        prods = await offlineDB.getProducts(auditId);
+        if (!prods || prods.length === 0) {
+          toast.error('No hay datos offline para esta auditoría');
+          return;
+        }
+        // Reconstruir objeto audit básico
+        const audit = audits.find(a => a.id === auditId);
+        data = { ...audit, productos: prods };
+      }
+      
+      setCurrentAudit(data);
+      setProducts(prods);
       
       const index = {};
       prods.forEach(p => {
