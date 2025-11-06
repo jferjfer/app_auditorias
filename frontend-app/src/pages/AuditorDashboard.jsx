@@ -824,53 +824,94 @@ export default function AuditorDashboard() {
                     p.novedad !== 'sin_novedad'
                   );
                   
-                  if (productsWithNovelty.length === 0) {
+                  const productsNotScanned = products.filter(p => 
+                    (p.cantidad_fisica === null || p.cantidad_fisica === undefined) &&
+                    p.cantidad_documento > 0
+                  );
+                  
+                  if (productsWithNovelty.length === 0 && productsNotScanned.length === 0) {
                     return (
                       <div className="alert alert-success">
-                        <i className="bi bi-check-circle"></i> No hay productos escaneados con novedades
+                        <i className="bi bi-check-circle"></i> Todos los productos están escaneados sin novedades
                       </div>
                     );
                   }
                   
                   return (
                     <>
-                      <div className="alert alert-warning">
-                        <strong>{productsWithNovelty.length}</strong> producto(s) con novedad encontrado(s)
-                      </div>
-                      <div className="table-responsive">
-                        <table className="table table-sm table-hover">
-                          <thead>
-                            <tr>
-                              <th>SKU</th>
-                              <th>Nombre</th>
-                              <th>Cant. Doc</th>
-                              <th>Cant. Física</th>
-                              <th>Novedad</th>
-                              <th>Observaciones</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {productsWithNovelty.map(p => (
-                              <tr key={p.id}>
-                                <td><strong>{p.sku}</strong></td>
-                                <td>{p.nombre_articulo}</td>
-                                <td>{p.cantidad_documento}</td>
-                                <td><strong>{p.cantidad_fisica}</strong></td>
-                                <td>
-                                  <span className={`badge bg-${
-                                    p.novedad === 'faltante' ? 'danger' :
-                                    p.novedad === 'sobrante' ? 'warning' :
-                                    p.novedad === 'averia' ? 'dark' : 'secondary'
-                                  }`}>
-                                    {p.novedad}
-                                  </span>
-                                </td>
-                                <td>{p.observaciones}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      {productsWithNovelty.length > 0 && (
+                        <>
+                          <div className="alert alert-warning">
+                            <strong>{productsWithNovelty.length}</strong> producto(s) con novedad
+                          </div>
+                          <div className="table-responsive mb-3">
+                            <table className="table table-sm table-hover">
+                              <thead>
+                                <tr>
+                                  <th>SKU</th>
+                                  <th>Nombre</th>
+                                  <th>Cant. Doc</th>
+                                  <th>Cant. Física</th>
+                                  <th>Novedad</th>
+                                  <th>Observaciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {productsWithNovelty.map(p => (
+                                  <tr key={p.id}>
+                                    <td><strong>{p.sku}</strong></td>
+                                    <td>{p.nombre_articulo}</td>
+                                    <td>{p.cantidad_documento}</td>
+                                    <td><strong>{p.cantidad_fisica}</strong></td>
+                                    <td>
+                                      <span className={`badge bg-${
+                                        p.novedad === 'faltante' ? 'danger' :
+                                        p.novedad === 'sobrante' ? 'warning' :
+                                        p.novedad === 'averia' ? 'dark' : 'secondary'
+                                      }`}>
+                                        {p.novedad}
+                                      </span>
+                                    </td>
+                                    <td>{p.observaciones}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
+                      
+                      {productsNotScanned.length > 0 && (
+                        <>
+                          <div className="alert alert-danger">
+                            <strong>{productsNotScanned.length}</strong> producto(s) sin escanear
+                          </div>
+                          <div className="table-responsive">
+                            <table className="table table-sm table-hover">
+                              <thead>
+                                <tr>
+                                  <th>SKU</th>
+                                  <th>Nombre</th>
+                                  <th>Cant. Doc</th>
+                                  <th>Estado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {productsNotScanned.map(p => (
+                                  <tr key={p.id}>
+                                    <td><strong>{p.sku}</strong></td>
+                                    <td>{p.nombre_articulo}</td>
+                                    <td>{p.cantidad_documento}</td>
+                                    <td>
+                                      <span className="badge bg-danger">Sin escanear</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      )}
                     </>
                   );
                 })()}
