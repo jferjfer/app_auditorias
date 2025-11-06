@@ -181,6 +181,20 @@ export default function AuditorDashboard() {
         return;
       }
 
+      // Si el producto ya tiene cantidad física registrada, anunciar la novedad
+      if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined) {
+        const diferencia = Math.abs(product.cantidad_fisica - product.cantidad_documento);
+        if (product.cantidad_fisica < product.cantidad_documento) {
+          speak(`Faltan ${diferencia}`);
+        } else if (product.cantidad_fisica > product.cantidad_documento) {
+          speak(`Sobran ${diferencia}`);
+        } else {
+          speak('Sin novedad');
+        }
+        setScanInput('');
+        return;
+      }
+
       // Caso 1: Escaneo repetido del mismo SKU = HAY NOVEDAD
       if (lastScanned && lastScanned.sku === product.sku) {
         setLastScanned(null);
@@ -422,7 +436,7 @@ export default function AuditorDashboard() {
               <div className="table-responsive">
                 <table className="table table-hover">
                   <thead>
-                    <tr>
+                    <tr style={{textAlign: 'center'}}>
                       <th>ID</th>
                       <th>Ubicación</th>
                       <th>Fecha</th>
@@ -592,7 +606,7 @@ export default function AuditorDashboard() {
                             </div>
                           </th>
                         </tr>
-                        <tr>
+                        <tr style={{textAlign: 'center'}}>
                           <th>OT</th>
                           <th>SKU</th>
                           <th>Nombre</th>

@@ -42,7 +42,7 @@ export default function AuditHistory({ auditId, show, onClose }) {
             ) : (
               <table className="table table-sm">
                 <thead>
-                  <tr>
+                  <tr style={{textAlign: 'center'}}>
                     <th>Fecha</th>
                     <th>Usuario</th>
                     <th>OT</th>
