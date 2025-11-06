@@ -30,7 +30,15 @@ function buildQueryString(params) {
   if (!params) return '';
   const esc = encodeURIComponent;
   const query = Object.keys(params)
-    .filter(k => params[k] !== undefined && params[k] !== null && params[k] !== '' && params[k] !== 'Todos')
+    .filter(k => {
+      const val = params[k];
+      // Filtrar valores vacíos, null, undefined, 'Todos', y strings vacíos después de trim
+      return val !== undefined && 
+             val !== null && 
+             val !== '' && 
+             val !== 'Todos' && 
+             (typeof val !== 'string' || val.trim() !== '');
+    })
     .map(k => esc(k) + '=' + esc(params[k]))
     .join('&');
   return query ? `?${query}` : '';
