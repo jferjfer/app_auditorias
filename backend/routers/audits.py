@@ -5,11 +5,12 @@ import re
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
 import io
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from backend import models, schemas, crud
 from backend.dependencies import get_db
@@ -137,8 +138,10 @@ async def upload_multiple_audit_files(
     processed_orders_list = list(ordenes_procesadas)
     num_orders = len(processed_orders_list)
     ubicacion_destino = f"Auditoría OT {processed_orders_list[0]}" if num_orders == 1 else f"Auditoría Múltiple ({', '.join(processed_orders_list)})"
-    # append UTC timestamp to ubicacion_destino to keep stored values in UTC
-    ubicacion_destino += f" - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+    # Append Colombia local time to ubicacion_destino
+    bogota_tz = ZoneInfo("America/Bogota")
+    now_bogota = datetime.now(bogota_tz)
+    ubicacion_destino += f" - {now_bogota.strftime('%Y-%m-%d %H:%M')}"
 
     audit_data = schemas.AuditCreate(ubicacion_destino=ubicacion_destino, productos=all_productos_data)
     db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
