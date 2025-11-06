@@ -199,25 +199,21 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 2: Escaneo de SKU diferente = anterior SIN NOVEDAD
+      // Caso 2: Escaneo de SKU diferente = anterior SIN NOVEDAD (sin await)
       if (lastScanned && lastScanned.sku !== product.sku) {
         const lastProduct = products.find(p => p.sku === lastScanned.sku);
         if (lastProduct) {
-          try {
-            await updateProduct(currentAudit.id, lastProduct.id, {
-              cantidad_fisica: lastProduct.cantidad_documento,
-              novedad: 'sin_novedad',
-              observaciones: 'sin novedad'
-            });
-            setProducts(prev => prev.map(p => 
-              p.id === lastProduct.id 
-                ? { ...p, cantidad_fisica: lastProduct.cantidad_documento, novedad: 'sin_novedad', observaciones: 'sin novedad' }
-                : p
-            ));
-            speak('Guardado');
-          } catch (err) {
-            console.error('Error guardando producto anterior:', err);
-          }
+          setProducts(prev => prev.map(p => 
+            p.id === lastProduct.id 
+              ? { ...p, cantidad_fisica: lastProduct.cantidad_documento, novedad: 'sin_novedad', observaciones: 'sin novedad' }
+              : p
+          ));
+          updateProduct(currentAudit.id, lastProduct.id, {
+            cantidad_fisica: lastProduct.cantidad_documento,
+            novedad: 'sin_novedad',
+            observaciones: 'sin novedad'
+          }).catch(err => console.error('Error guardando producto anterior:', err));
+          speak('Guardado');
         }
       }
 
