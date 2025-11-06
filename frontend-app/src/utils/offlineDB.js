@@ -49,11 +49,17 @@ class OfflineDB {
 
   // Obtener productos de auditoría
   async getProducts(auditId) {
-    const tx = this.db.transaction(['products'], 'readonly');
-    const store = tx.objectStore('products');
-    const products = await store.getAll();
-    
-    return products.filter(p => p.auditId === auditId);
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['products'], 'readonly');
+      const store = tx.objectStore('products');
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const products = request.result || [];
+        resolve(products.filter(p => p.auditId === auditId));
+      };
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Guardar cambio pendiente de sincronizar
@@ -73,9 +79,14 @@ class OfflineDB {
 
   // Obtener cambios pendientes
   async getPendingChanges() {
-    const tx = this.db.transaction(['pendingChanges'], 'readonly');
-    const store = tx.objectStore('pendingChanges');
-    return store.getAll();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['pendingChanges'], 'readonly');
+      const store = tx.objectStore('pendingChanges');
+      const request = store.getAll();
+      
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
   }
 
   // Eliminar cambio sincronizado
