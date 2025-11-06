@@ -3,7 +3,8 @@ import Filters from './Filters'
 import KPIs from './KPIs'
 import Charts from './Charts'
 import useStats from '../../hooks/useStats'
-import { fetchReportData, downloadReport } from '../../services/api'
+import { fetchReportData } from '../../services/api'
+import { API_BASE_URL } from '../../services/api'
 import ToastContainer, { toast } from '../Toast'
 
 export default function AnalystDashboard(){
@@ -30,27 +31,50 @@ export default function AnalystDashboard(){
   const handleDownloadExcel = async (type) => {
     try {
       if (!audits || audits.length === 0) {
-        toast.warning('No hay auditorías para exportar con los filtros seleccionados')
+        toast.warning('No hay auditorías para exportar')
         return
       }
       toast.info('Generando reporte...')
-      const blob = await downloadReport(filters)
-      if (!blob || blob.size === 0) {
-        toast.error('El reporte está vacío')
-        return
+      
+      // Construir URL manualmente con solo filtros válidos
+      const params = new URLSearchParams()
+      if (filters.audit_status && filters.audit_status !== 'Todos') {
+        params.append('audit_status', filters.audit_status)
       }
-      const url = window.URL.createObjectURL(blob)
+      if (filters.auditor_id) {
+        params.append('auditor_id', filters.auditor_id)
+      }
+      if (filters.start_date && filters.start_date.trim()) {
+        params.append('start_date', filters.start_date.trim())
+      }
+      if (filters.end_date && filters.end_date.trim()) {
+        params.append('end_date', filters.end_date.trim())
+      }
+      
+      const queryString = params.toString()
+      const url = `${API_BASE_URL}/api/audits/report${queryString ? '?' + queryString : ''}`
+      
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Error desconocido' }))
+        throw new Error(error.detail || 'Error al generar reporte')
+      }
+      
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
+      a.href = downloadUrl
       a.download = `reporte_${type}_${new Date().toISOString().split('T')[0]}.xlsx`
       document.body.appendChild(a)
       a.click()
-      window.URL.revokeObjectURL(url)
+      window.URL.revokeObjectURL(downloadUrl)
       document.body.removeChild(a)
       toast.success('Reporte descargado exitosamente')
     } catch (err) {
-      const errorMsg = err.message.includes('inválida') ? err.message : 'Error descargando reporte: ' + err.message
-      toast.error(errorMsg)
+      toast.error(err.message || 'Error descargando reporte')
     }
   }
 
