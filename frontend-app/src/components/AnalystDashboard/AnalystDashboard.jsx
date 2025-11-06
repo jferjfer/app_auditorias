@@ -49,8 +49,8 @@ export default function AnalystDashboard(){
       document.body.removeChild(a)
       toast.success('Reporte descargado exitosamente')
     } catch (err) {
-      console.error('Error completo:', err)
-      toast.error('Error descargando reporte: ' + err.message)
+      const errorMsg = err.message.includes('inválida') ? err.message : 'Error descargando reporte: ' + err.message
+      toast.error(errorMsg)
     }
   }
 

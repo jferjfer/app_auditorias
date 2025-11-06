@@ -196,16 +196,12 @@ export async function fetchReportData(filters = {}) {
 export async function downloadReport(filters = {}) {
     const queryString = buildQueryString(filters);
     const token = getToken();
-    console.log('Downloading report with filters:', filters);
-    console.log('Query string:', queryString);
     const response = await fetch(`${API_BASE}/api/audits/report${queryString}`, {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${token}`
         }
     });
-    console.log('Response status:', response.status);
-    console.log('Response headers:', response.headers);
     if (!response.ok) {
         let errorDetail = 'Fallo al descargar el reporte';
         try {
@@ -216,9 +212,7 @@ export async function downloadReport(filters = {}) {
         }
         throw new Error(errorDetail);
     }
-    const blob = await response.blob();
-    console.log('Blob size:', blob.size);
-    return blob;
+    return response.blob();
 }
 
 export async function getAuditStatusStatistics(filters = {}) {
