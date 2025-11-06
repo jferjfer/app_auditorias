@@ -66,6 +66,7 @@ export default function AuditorDashboard() {
   const [lockedProducts, setLockedProducts] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const wsRef = useRef(null);
   const user = getCurrentUser();
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
@@ -649,6 +650,9 @@ export default function AuditorDashboard() {
                           <button className="btn btn-primary me-2" onClick={handleSave}>
                             <i className="bi bi-save"></i> Guardar
                           </button>
+                          <button className="btn btn-warning me-2" onClick={() => setShowVerifyModal(true)}>
+                            <i className="bi bi-exclamation-triangle"></i> Verificar
+                          </button>
                           <button className="btn btn-success" onClick={handleFinish}>
                             <i className="bi bi-check-circle"></i> Finalizar
                           </button>
@@ -785,6 +789,86 @@ export default function AuditorDashboard() {
         show={showHistory}
         onClose={() => setShowHistory(false)}
       />
+
+      {/* Modal de Verificación */}
+      {showVerifyModal && (
+        <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="bi bi-exclamation-triangle text-warning"></i> Productos con Novedad
+                </h5>
+                <button className="btn-close" onClick={() => setShowVerifyModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {(() => {
+                  const productsWithNovelty = products.filter(p => 
+                    p.cantidad_fisica !== null && 
+                    p.cantidad_fisica !== undefined && 
+                    p.novedad !== 'sin_novedad'
+                  );
+                  
+                  if (productsWithNovelty.length === 0) {
+                    return (
+                      <div className="alert alert-success">
+                        <i className="bi bi-check-circle"></i> No hay productos escaneados con novedades
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <>
+                      <div className="alert alert-warning">
+                        <strong>{productsWithNovelty.length}</strong> producto(s) con novedad encontrado(s)
+                      </div>
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover">
+                          <thead>
+                            <tr>
+                              <th>SKU</th>
+                              <th>Nombre</th>
+                              <th>Cant. Doc</th>
+                              <th>Cant. Física</th>
+                              <th>Novedad</th>
+                              <th>Observaciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {productsWithNovelty.map(p => (
+                              <tr key={p.id}>
+                                <td><strong>{p.sku}</strong></td>
+                                <td>{p.nombre_articulo}</td>
+                                <td>{p.cantidad_documento}</td>
+                                <td><strong>{p.cantidad_fisica}</strong></td>
+                                <td>
+                                  <span className={`badge bg-${
+                                    p.novedad === 'faltante' ? 'danger' :
+                                    p.novedad === 'sobrante' ? 'warning' :
+                                    p.novedad === 'averia' ? 'dark' : 'secondary'
+                                  }`}>
+                                    {p.novedad}
+                                  </span>
+                                </td>
+                                <td>{p.observaciones}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowVerifyModal(false)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ToastContainer />
       <ConfirmModal />
