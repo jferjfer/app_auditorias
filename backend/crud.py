@@ -263,7 +263,7 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
 
     # Interpret provided dates as local dates in America/Bogota and convert to UTC range
     bogota_tz = ZoneInfo("America/Bogota")
-    if start_date:
+    if start_date and start_date.strip():
         try:
             sd = datetime.strptime(start_date, "%Y-%m-%d").date()
             start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
@@ -273,7 +273,7 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
             from fastapi import HTTPException
             raise HTTPException(status_code=422, detail=f"Fecha de inicio inválida: {start_date}")
 
-    if end_date:
+    if end_date and end_date.strip():
         try:
             ed = datetime.strptime(end_date, "%Y-%m-%d").date()
             end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
