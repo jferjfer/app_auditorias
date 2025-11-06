@@ -211,7 +211,7 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 1: Escaneo repetido del mismo SKU = HAY NOVEDAD
+      // Caso 1: Escaneo repetido del mismo SKU consecutivo = HAY NOVEDAD
       if (lastScanned && lastScanned.sku === product.sku) {
         setLastScanned(null);
         setScanInput('');
@@ -223,7 +223,7 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 2: Escaneo de SKU diferente = anterior SIN NOVEDAD
+      // Caso 2: Escaneo de SKU diferente = guardar anterior
       if (lastScanned && lastScanned.sku !== product.sku) {
         const lastProduct = products.find(p => p.sku === lastScanned.sku);
         if (lastProduct) {
@@ -247,7 +247,20 @@ export default function AuditorDashboard() {
         }
       }
 
-      // Guardar como último escaneado y solo anunciar cantidad
+      // Caso 3: SKU ya tiene novedad previa (faltante/sobrante) - permitir ajustar cantidad
+      if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined &&
+          (product.novedad === 'faltante' || product.novedad === 'sobrante')) {
+        setLastScanned({ sku: product.sku, id: product.id });
+        setScanInput('');
+        speak(product.novedad === 'faltante' ? 'Faltante' : 'Sobrante');
+        setTimeout(() => {
+          document.getElementById(`qty-${product.id}`)?.focus();
+          document.getElementById(`qty-${product.id}`)?.select();
+        }, 50);
+        return;
+      }
+
+      // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
       setLastScanned({ sku: product.sku, id: product.id });
       setScanHistory(prev => [{ sku: product.sku, nombre: product.nombre_articulo, time: new Date() }, ...prev.slice(0, 4)]);
       setScannedCount(prev => prev + 1);
