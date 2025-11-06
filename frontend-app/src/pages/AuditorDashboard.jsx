@@ -301,21 +301,15 @@ export default function AuditorDashboard() {
       p.id === productId ? { ...p, ...changes } : p
     ));
     
-    console.log('handleUpdateProduct - isOnline:', isOnline, 'auditId:', currentAudit?.id);
-    
     try {
       if (isOnline) {
         await updateProduct(currentAudit.id, productId, changes);
       } else {
-        console.log('Guardando offline...');
         await offlineDB.savePendingChange(currentAudit.id, productId, changes);
-        console.log('Guardado en IndexedDB');
         toast.info('💾 Guardado offline');
         window.dispatchEvent(new Event('pendingChangesUpdated'));
-        console.log('Evento disparado');
       }
     } catch (err) {
-      console.error('Error guardando:', err);
       await offlineDB.savePendingChange(currentAudit.id, productId, changes);
       window.dispatchEvent(new Event('pendingChangesUpdated'));
     }
