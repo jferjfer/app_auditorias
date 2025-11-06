@@ -204,59 +204,76 @@ def get_audit_details(audit_id: int, db: Session = Depends(get_db), current_user
 
 @router.put("/{audit_id}/products/{product_id}", response_model=schemas.ProductUpdateResponse)
 async def update_product_endpoint(audit_id: int, product_id: int, product: schemas.ProductUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
-    if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
-        raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
-    
-    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
-    if not db_product:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-    
-    # Track changes
-    for field, new_value in product.dict(exclude_unset=True).items():
-        old_value = getattr(db_product, field)
-        if old_value != new_value:
-            history = models.ProductHistory(
-                product_id=product_id,
-                user_id=current_user.id,
-                field_changed=field,
-                old_value=str(old_value) if old_value else None,
-                new_value=str(new_value) if new_value else None
-            )
-            db.add(history)
-    
-    updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
-    updated_product.last_modified_by_id = current_user.id
-    updated_product.last_modified_at = datetime.utcnow()
-    updated_product.locked_by_user_id = None
-    updated_product.locked_at = None
-    db.commit()
-
-    # Recalculate percentage and get updated audit
-    updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
-
-    # Broadcast product update to the specific audit room
     try:
-        product_for_broadcast = schemas.Product.from_orm(updated_product).dict()
-        payload = {
-            "type": "product_updated",
-            "product": product_for_broadcast,
-            "user": current_user.nombre
-        }
-        await manager.send_to_audit(audit_id, payload)
+        db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+        if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
+            raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
+        
+        db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+        if not db_product:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error broadcasting product update for audit {audit_id}: {e}")
+        print(f"Error en update_product_endpoint: {e}")
+        print(f"audit_id: {audit_id}, product_id: {product_id}, data: {product.dict()}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+    
+    try:
+        # Track changes
+        for field, new_value in product.dict(exclude_unset=True).items():
+            old_value = getattr(db_product, field)
+            if old_value != new_value:
+                history = models.ProductHistory(
+                    product_id=product_id,
+                    user_id=current_user.id,
+                    field_changed=field,
+                    old_value=str(old_value) if old_value else None,
+                    new_value=str(new_value) if new_value else None
+                )
+                db.add(history)
+        
+        updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
+        updated_product.last_modified_by_id = current_user.id
+        updated_product.last_modified_at = datetime.utcnow()
+        updated_product.locked_by_user_id = None
+        updated_product.locked_at = None
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error actualizando producto: {e}")
+        raise HTTPException(status_code=500, detail=f"Error actualizando producto: {str(e)}")
 
-    # Broadcast the general audit update to everyone
-    if updated_audit:
+    try:
+        # Recalculate percentage and get updated audit
+        updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
+
+        # Broadcast product update to the specific audit room
         try:
-            audit_response = schemas.AuditResponse.from_orm(updated_audit)
-            payload = {"type": "audit_updated", "data": audit_response.dict()}
-            await manager.broadcast_to_all(json.dumps(payload, default=str))
+            product_for_broadcast = schemas.Product.from_orm(updated_product).dict()
+            payload = {
+                "type": "product_updated",
+                "product": product_for_broadcast,
+                "user": current_user.nombre
+            }
+            await manager.send_to_audit(audit_id, payload)
         except Exception as e:
-            print(f"Error broadcasting audit update: {e}")
+            print(f"Error broadcasting product update for audit {audit_id}: {e}")
 
-    return {"message": "Producto actualizado", "product": updated_product}
+        # Broadcast the general audit update to everyone
+        if updated_audit:
+            try:
+                audit_response = schemas.AuditResponse.from_orm(updated_audit)
+                payload = {"type": "audit_updated", "data": audit_response.dict()}
+                await manager.broadcast_to_all(json.dumps(payload, default=str))
+            except Exception as e:
+                print(f"Error broadcasting audit update: {e}")
+
+        return {"message": "Producto actualizado", "product": updated_product}
+    except Exception as e:
+        print(f"Error en post-update: {e}")
+        # Aún así retornar el producto actualizado
+        return {"message": "Producto actualizado", "product": updated_product}
 
 @router.post("/{audit_id}/products/bulk-update", response_model=dict)
 async def bulk_update_products_endpoint(

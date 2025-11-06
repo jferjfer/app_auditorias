@@ -266,6 +266,12 @@ export default function AuditorDashboard() {
   const handleQuantityChange = async (productId, cantidad) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
+    
+    // Validar que la cantidad sea razonable (máximo 2 mil millones)
+    if (cantidad > 2147483647) {
+      toast.error('Cantidad demasiado grande. Máximo: 2,147,483,647');
+      return;
+    }
 
     let novedad = 'sin_novedad';
     let observaciones = '';
