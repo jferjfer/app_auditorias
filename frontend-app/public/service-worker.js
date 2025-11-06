@@ -34,13 +34,16 @@ self.addEventListener('activate', event => {
 
 // Fetch - estrategia Network First con fallback a caché
 self.addEventListener('fetch', event => {
-  // Solo cachear GET requests
   if (event.request.method !== 'GET') return;
+  
+  // Ignorar favicon y chrome-extension
+  if (event.request.url.includes('favicon.ico') || event.request.url.startsWith('chrome-extension://')) {
+    return;
+  }
   
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Cachear respuestas exitosas
         if (response && response.status === 200) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
@@ -50,8 +53,9 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => {
-        // Si falla la red, usar caché
-        return caches.match(event.request);
+        return caches.match(event.request).then(cached => {
+          return cached || new Response('Offline', { status: 503 });
+        });
       })
   );
 });
