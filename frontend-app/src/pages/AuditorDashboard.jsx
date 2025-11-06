@@ -215,20 +215,6 @@ export default function AuditorDashboard() {
         }
       }
 
-      // Si el producto ya tiene cantidad física registrada, solo anunciar la novedad
-      if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined) {
-        const diferencia = Math.abs(product.cantidad_fisica - product.cantidad_documento);
-        if (product.cantidad_fisica < product.cantidad_documento) {
-          speak(`Faltan ${diferencia}`);
-        } else if (product.cantidad_fisica > product.cantidad_documento) {
-          speak(`Sobran ${diferencia}`);
-        } else {
-          speak('Sin novedad');
-        }
-        setScanInput('');
-        return;
-      }
-
       // Guardar como último escaneado y solo anunciar cantidad
       setLastScanned({ sku: product.sku, id: product.id });
       setScanHistory(prev => [{ sku: product.sku, nombre: product.nombre_articulo, time: new Date() }, ...prev.slice(0, 4)]);
