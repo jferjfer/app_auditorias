@@ -260,16 +260,19 @@ export default function AuditorDashboard() {
       }
 
       // Caso 3: SKU ya tiene novedad previa (faltante/sobrante) - permitir ajustar cantidad
-      if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined &&
-          (product.novedad === 'faltante' || product.novedad === 'sobrante')) {
-        setLastScanned({ sku: product.sku, id: product.id });
+      const updatedProduct = products.find(p => p.id === product.id);
+      if (updatedProduct && 
+          updatedProduct.cantidad_fisica !== null && 
+          updatedProduct.cantidad_fisica !== undefined &&
+          (updatedProduct.novedad === 'faltante' || updatedProduct.novedad === 'sobrante')) {
+        setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
         setScanInput('');
-        const diferencia = Math.abs(product.cantidad_fisica - product.cantidad_documento);
-        const mensaje = product.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
+        const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
+        const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
         speak(mensaje);
         setTimeout(() => {
-          document.getElementById(`qty-${product.id}`)?.focus();
-          document.getElementById(`qty-${product.id}`)?.select();
+          document.getElementById(`qty-${updatedProduct.id}`)?.focus();
+          document.getElementById(`qty-${updatedProduct.id}`)?.select();
         }, 50);
         return;
       }

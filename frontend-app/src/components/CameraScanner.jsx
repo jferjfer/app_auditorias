@@ -4,14 +4,9 @@ import { Html5Qrcode } from 'html5-qrcode';
 export default function CameraScanner({ onScan, onClose }) {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
-  const lastScanRef = useRef({ text: '', time: 0 });
 
   useEffect(() => {
-    const config = { 
-      fps: 5, 
-      qrbox: { width: 200, height: 200 },
-      aspectRatio: 1.0
-    };
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
     
     html5QrCodeRef.current = new Html5Qrcode("reader");
     
@@ -19,12 +14,6 @@ export default function CameraScanner({ onScan, onClose }) {
       { facingMode: "environment" },
       config,
       (decodedText) => {
-        const now = Date.now();
-        // Solo ignorar si es el MISMO código Y fue escaneado hace menos de 1 segundo
-        if (lastScanRef.current.text && decodedText === lastScanRef.current.text && now - lastScanRef.current.time < 1000) {
-          return;
-        }
-        lastScanRef.current = { text: decodedText, time: now };
         if (navigator.vibrate) navigator.vibrate(200);
         onScan(decodedText);
         stopScanner();
@@ -62,17 +51,14 @@ export default function CameraScanner({ onScan, onClose }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px',
-      transform: 'translateZ(0)',
-      willChange: 'transform'
+      padding: '20px'
     }}>
       <div style={{
         width: '100%',
         maxWidth: '500px',
         backgroundColor: 'white',
         borderRadius: '12px',
-        overflow: 'hidden',
-        transform: 'translateZ(0)'
+        overflow: 'hidden'
       }}>
         <div id="reader" ref={scannerRef}></div>
       </div>
