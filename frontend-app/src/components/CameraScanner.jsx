@@ -1,12 +1,21 @@
 import React, { useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 export default function CameraScanner({ onScan, onClose }) {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
 
   useEffect(() => {
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    const config = { 
+      fps: 10, 
+      qrbox: { width: 250, height: 250 },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.UPC_A
+      ]
+    };
     
     html5QrCodeRef.current = new Html5Qrcode("reader");
     
