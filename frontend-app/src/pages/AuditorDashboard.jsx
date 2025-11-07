@@ -782,8 +782,8 @@ export default function AuditorDashboard() {
                       )}
                     </div>
                   </div>
-                  <div className="table-responsive" style={{width: '100%'}}>
-                    <table className="table table-sm table-hover" style={{fontSize: '0.9rem', width: '100%', marginBottom: '0'}}>
+                  <div className="table-responsive" style={{width: '100%', maxWidth: '900px', margin: '0 auto'}}>
+                    <table className="table table-sm table-hover" style={{fontSize: '0.85rem', width: '100%', marginBottom: '0'}}>
                       <thead>
                         <tr>
                           <th colSpan="6">
@@ -811,21 +811,21 @@ export default function AuditorDashboard() {
                           </th>
                         </tr>
                         <tr style={{textAlign: 'center'}}>
-                          <th>OT</th>
-                          <th>SKU</th>
+                          <th style={{width: '80px'}}>OT</th>
+                          <th style={{width: '120px'}}>SKU</th>
                           <th>Nombre</th>
-                          <th>Cant. Doc</th>
-                          <th>Cant. Física</th>
+                          <th style={{width: '80px'}}>Doc</th>
+                          <th style={{width: '80px'}}>Física</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredProducts.map(product => (
                           <tr key={product.id} data-product-id={product.id}>
-                            <td><span className="badge bg-secondary">{product.orden_traslado_original}</span></td>
-                            <td>{product.sku}</td>
-                            <td>{product.nombre_articulo}</td>
-                            <td>{product.cantidad_documento}</td>
-                            <td>
+                            <td style={{fontSize: '0.75rem'}}><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{product.orden_traslado_original}</span></td>
+                            <td style={{fontWeight: '500'}}>{product.sku}</td>
+                            <td style={{fontSize: '0.8rem'}}>{product.nombre_articulo}</td>
+                            <td style={{textAlign: 'center'}}>{product.cantidad_documento}</td>
+                            <td style={{textAlign: 'center'}}>
                               {product.cantidad_fisica || product.cantidad_fisica === 0 ? (
                                 <>
                                   <strong>{product.cantidad_fisica}</strong>
