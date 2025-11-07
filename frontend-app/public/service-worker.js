@@ -36,8 +36,10 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   
-  // Ignorar favicon y chrome-extension
-  if (event.request.url.includes('favicon.ico') || event.request.url.startsWith('chrome-extension://')) {
+  // Ignorar favicon, chrome-extension, y API requests
+  if (event.request.url.includes('favicon.ico') || 
+      event.request.url.startsWith('chrome-extension://') ||
+      event.request.url.includes('/api/')) {
     return;
   }
   

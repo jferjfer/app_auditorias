@@ -264,16 +264,7 @@ export default function AuditorDashboard() {
 
       // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
       setLastScanned({ sku: product.sku, id: product.id });
-      setScanHistory(prev => [{ sku: product.sku, nombre: product.nombre_articulo, time: new Date() }, ...prev.slice(0, 4)]);
       setScannedCount(prev => prev + 1);
-      
-      // Feedback visual
-      const row = document.querySelector(`tr[data-product-id="${product.id}"]`);
-      if (row) {
-        row.classList.add('scan-flash');
-        setTimeout(() => row.classList.remove('scan-flash'), 1000);
-      }
-      
       speak(`${product.cantidad_documento}`);
       setScanInput('');
     }

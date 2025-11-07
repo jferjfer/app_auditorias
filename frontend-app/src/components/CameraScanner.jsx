@@ -4,9 +4,10 @@ import { Html5Qrcode } from 'html5-qrcode';
 export default function CameraScanner({ onScan, onClose }) {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
+  const lastScanRef = useRef({ text: '', time: 0 });
 
   useEffect(() => {
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    const config = { fps: 5, qrbox: { width: 200, height: 200 } };
     
     html5QrCodeRef.current = new Html5Qrcode("reader");
     
@@ -14,6 +15,11 @@ export default function CameraScanner({ onScan, onClose }) {
       { facingMode: "environment" },
       config,
       (decodedText) => {
+        const now = Date.now();
+        if (decodedText === lastScanRef.current.text && now - lastScanRef.current.time < 1000) {
+          return;
+        }
+        lastScanRef.current = { text: decodedText, time: now };
         onScan(decodedText);
         stopScanner();
       },
