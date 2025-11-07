@@ -377,10 +377,73 @@ export default function AuditorDashboard() {
   };
 
   const handleCameraScan = (decodedText) => {
-    setScanInput(decodedText);
-    const event = { key: 'Enter', preventDefault: () => {} };
-    handleScan(event);
     setShowCameraScanner(false);
+    
+    const scannedSku = decodedText.trim().toUpperCase().replace(/^0+/, '');
+    if (!scannedSku) return;
+    
+    const product = skuIndex[scannedSku];
+    if (!product) {
+      speak('Producto no encontrado');
+      return;
+    }
+
+    // Caso 1: Escaneo repetido del mismo SKU consecutivo = HAY NOVEDAD
+    if (lastScanned && lastScanned.sku === product.sku) {
+      setLastScanned(null);
+      speak('Ingrese novedad');
+      setTimeout(() => {
+        document.getElementById(`qty-${product.id}`)?.focus();
+        document.getElementById(`qty-${product.id}`)?.select();
+      }, 50);
+      return;
+    }
+
+    // Caso 2: Escaneo de SKU diferente = guardar anterior
+    if (lastScanned && lastScanned.sku !== product.sku) {
+      const lastProduct = products.find(p => p.sku === lastScanned.sku);
+      if (lastProduct) {
+        const changes = {
+          cantidad_fisica: lastProduct.cantidad_documento,
+          novedad: 'sin_novedad',
+          observaciones: 'sin novedad'
+        };
+        setProducts(prev => prev.map(p => 
+          p.id === lastProduct.id ? { ...p, ...changes } : p
+        ));
+        
+        if (isOnline) {
+          updateProduct(currentAudit.id, lastProduct.id, changes).catch(err => console.error('Error:', err));
+        } else {
+          offlineDB.savePendingChange(currentAudit.id, lastProduct.id, changes).then(() => {
+            window.dispatchEvent(new Event('pendingChangesUpdated'));
+          });
+        }
+        speak('Guardado');
+      }
+    }
+
+    // Caso 3: SKU ya tiene novedad previa (faltante/sobrante) - permitir ajustar cantidad
+    const updatedProduct = products.find(p => p.id === product.id);
+    if (updatedProduct && 
+        updatedProduct.cantidad_fisica !== null && 
+        updatedProduct.cantidad_fisica !== undefined &&
+        (updatedProduct.novedad === 'faltante' || updatedProduct.novedad === 'sobrante')) {
+      setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
+      const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
+      const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
+      speak(mensaje);
+      setTimeout(() => {
+        document.getElementById(`qty-${updatedProduct.id}`)?.focus();
+        document.getElementById(`qty-${updatedProduct.id}`)?.select();
+      }, 50);
+      return;
+    }
+
+    // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
+    setLastScanned({ sku: product.sku, id: product.id });
+    setScannedCount(prev => prev + 1);
+    speak(`${product.cantidad_documento}`);
   };
 
   const addNotification = (msg) => {
