@@ -221,19 +221,27 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
     
     try:
         # Track changes
-        for field, new_value in product.dict(exclude_unset=True).items():
-            old_value = getattr(db_product, field)
-            if old_value != new_value:
-                history = models.ProductHistory(
-                    product_id=product_id,
-                    user_id=current_user.id,
-                    field_changed=field,
-                    old_value=str(old_value) if old_value else None,
-                    new_value=str(new_value) if new_value else None
-                )
-                db.add(history)
+        product_dict = product.dict(exclude_unset=True)
+        for field, new_value in product_dict.items():
+            if field != 'novelties':
+                old_value = getattr(db_product, field, None)
+                if old_value != new_value:
+                    history = models.ProductHistory(
+                        product_id=product_id,
+                        user_id=current_user.id,
+                        field_changed=field,
+                        old_value=str(old_value) if old_value else None,
+                        new_value=str(new_value) if new_value else None
+                    )
+                    db.add(history)
         
-        updated_product = crud.update_product(db, product_id, product.dict(exclude_unset=True))
+        # Actualizar producto
+        updated_product = crud.update_product(db, product_id, product_dict)
+        
+        # Crear novedades si se proporcionaron
+        if 'novelties' in product_dict and product_dict['novelties']:
+            crud.create_product_novelties(db, product_id, product_dict['novelties'], current_user.id)
+        
         updated_product.last_modified_by_id = current_user.id
         updated_product.last_modified_at = datetime.utcnow()
         updated_product.locked_by_user_id = None
@@ -335,6 +343,25 @@ def add_collaborators(audit_id: int, collaborators: schemas.CollaboratorUpdate, 
 
     crud.add_collaborators_to_audit(db, audit_id=audit_id, collaborator_ids=collaborators.collaborator_ids)
     return {"message": "Colaboradores añadidos exitosamente"}
+
+@router.get("/{audit_id}/novelties-by-sku")
+def get_novelties_by_sku(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Obtiene todas las novedades de una auditoría agrupadas por SKU."""
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators and current_user.rol not in ["analista", "administrador"]):
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
+    
+    return crud.get_novelties_by_audit(db, audit_id)
+
+@router.get("/{audit_id}/products/{product_id}/novelties", response_model=List[schemas.ProductNovelty])
+def get_product_novelties_endpoint(audit_id: int, product_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Obtiene todas las novedades de un producto específico."""
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators and current_user.rol not in ["analista", "administrador"]):
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
+    
+    novelties = crud.get_product_novelties(db, product_id)
+    return novelties
 
 @router.post("/{audit_id}/products", response_model=schemas.Product, status_code=status.HTTP_201_CREATED)
 async def add_surplus_product_to_audit(

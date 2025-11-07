@@ -96,6 +96,7 @@ class Product(Base):
     auditoria = relationship("Audit", back_populates="productos")
     locked_by = relationship("User", foreign_keys=[locked_by_user_id])
     last_modified_by = relationship("User", foreign_keys=[last_modified_by_id])
+    novelties = relationship("ProductNovelty", back_populates="product", cascade="all, delete-orphan")
 
 # La tabla "archivos_auditoria" del script SQL
 class File(Base):
@@ -133,4 +134,18 @@ class ProductHistory(Base):
     modified_at = Column(DateTime, default=datetime.utcnow)
     
     product = relationship("Product")
+    user = relationship("User")
+
+class ProductNovelty(Base):
+    __tablename__ = "product_novelties"
+    
+    id = Column(Integer, primary_key=True)
+    product_id = Column(Integer, ForeignKey("productos_auditados.id"), nullable=False)
+    novedad_tipo = Column(Enum(NovedadEnum), nullable=False)
+    cantidad = Column(Integer, nullable=False)
+    observaciones = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    product = relationship("Product", back_populates="novelties")
     user = relationship("User")

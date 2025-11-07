@@ -1,31 +1,64 @@
 import React, { useState, useEffect } from 'react';
 
 export default function NovedadModal({ show, product, onSave, onClose }) {
-  const [cantidad, setCantidad] = useState('');
-  const [novedad, setNovedad] = useState('sin_novedad');
+  const [cantidadFisica, setCantidadFisica] = useState('');
+  const [novelties, setNovelties] = useState({
+    faltante: 0,
+    sobrante: 0,
+    averia: 0,
+    fecha_corta: 0,
+    vencido: 0,
+    contaminado: 0
+  });
   const [observaciones, setObservaciones] = useState('');
 
   useEffect(() => {
     if (show && product) {
-      setCantidad(product.cantidad_fisica || product.cantidad_documento || '');
-      setNovedad(product.novedad || 'sin_novedad');
+      setCantidadFisica(product.cantidad_fisica || product.cantidad_documento || '');
       setObservaciones(product.observaciones || '');
+      // Reset novelties
+      setNovelties({
+        faltante: 0,
+        sobrante: 0,
+        averia: 0,
+        fecha_corta: 0,
+        vencido: 0,
+        contaminado: 0
+      });
     }
   }, [show, product]);
 
   const handleSave = () => {
-    const cantidadNum = parseInt(cantidad) || 0;
+    const cantidadNum = parseInt(cantidadFisica) || 0;
+    
+    // Construir array de novedades
+    const noveltiesArray = [];
+    Object.entries(novelties).forEach(([tipo, cantidad]) => {
+      if (cantidad > 0) {
+        noveltiesArray.push({
+          novedad_tipo: tipo,
+          cantidad: cantidad,
+          observaciones: observaciones
+        });
+      }
+    });
+    
+    // Determinar novedad principal para compatibilidad
+    let mainNovedad = 'sin_novedad';
+    if (cantidadNum < product.cantidad_documento) mainNovedad = 'faltante';
+    else if (cantidadNum > product.cantidad_documento) mainNovedad = 'sobrante';
+    
     onSave({
       cantidad_fisica: cantidadNum,
-      novedad,
-      observaciones
+      novedad: mainNovedad,
+      observaciones,
+      novelties: noveltiesArray
     });
   };
 
   if (!show || !product) return null;
 
   const novedades = [
-    { value: 'sin_novedad', label: 'Sin Novedad', icon: '✓', color: 'success' },
     { value: 'faltante', label: 'Faltante', icon: '⚠️', color: 'danger' },
     { value: 'sobrante', label: 'Sobrante', icon: '📈', color: 'warning' },
     { value: 'averia', label: 'Avería', icon: '💔', color: 'dark' },
@@ -33,6 +66,11 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
     { value: 'vencido', label: 'Vencido', icon: '☠️', color: 'danger' },
     { value: 'contaminado', label: 'Contaminado', icon: '🦠', color: 'secondary' }
   ];
+  
+  const handleNoveltyChange = (tipo, valor) => {
+    const num = parseInt(valor) || 0;
+    setNovelties(prev => ({ ...prev, [tipo]: num }));
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -58,14 +96,14 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
             </div>
 
             <div className="mb-2">
-              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '3px' }}>Cantidad:</label>
+              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '3px' }}>Cantidad Física Total:</label>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 className="form-control form-control-sm"
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value)}
+                value={cantidadFisica}
+                onChange={(e) => setCantidadFisica(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoFocus
                 style={{ fontSize: '1.1rem', padding: '8px', textAlign: 'center' }}
@@ -73,36 +111,40 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
             </div>
 
             <div className="mb-2">
-              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '3px' }}>Novedad:</label>
-              <div className="d-grid gap-1" style={{ gridTemplateColumns: 'repeat(2, 1fr)', fontSize: '0.75rem' }}>
+              <label className="form-label" style={{ fontSize: '0.8rem', marginBottom: '3px' }}>Novedades (ingrese cantidades):</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {novedades.map(nov => (
-                  <button
-                    key={nov.value}
-                    className={`btn btn-sm btn-${novedad === nov.value ? nov.color : 'outline-' + nov.color}`}
-                    onClick={() => setNovedad(nov.value)}
-                    style={{ textAlign: 'center', fontSize: '11px', padding: '6px 2px' }}
-                  >
-                    <span style={{ fontSize: '14px', marginRight: '2px' }}>{nov.icon}</span>
-                    <span style={{ fontSize: '10px' }}>{nov.label}</span>
-                  </button>
+                  <div key={nov.value} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px', width: '24px' }}>{nov.icon}</span>
+                    <label style={{ flex: 1, fontSize: '0.8rem', margin: 0 }}>{nov.label}:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control form-control-sm"
+                      value={novelties[nov.value]}
+                      onChange={(e) => handleNoveltyChange(nov.value, e.target.value)}
+                      style={{ width: '80px', textAlign: 'center', fontSize: '0.9rem' }}
+                      placeholder="0"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
 
             {/* Recuadro de diferencia */}
-            {cantidad && parseInt(cantidad) !== product.cantidad_documento && (
+            {cantidadFisica && parseInt(cantidadFisica) !== product.cantidad_documento && (
               <div className="mb-2" style={{
                 padding: '8px',
                 borderRadius: '6px',
-                backgroundColor: parseInt(cantidad) < product.cantidad_documento ? '#fee' : 
-                                 parseInt(cantidad) > product.cantidad_documento ? '#ffc' : '#efe',
-                border: `1px solid ${parseInt(cantidad) < product.cantidad_documento ? '#fcc' : 
-                                      parseInt(cantidad) > product.cantidad_documento ? '#ffb' : '#cfc'}`,
+                backgroundColor: parseInt(cantidadFisica) < product.cantidad_documento ? '#fee' : 
+                                 parseInt(cantidadFisica) > product.cantidad_documento ? '#ffc' : '#efe',
+                border: `1px solid ${parseInt(cantidadFisica) < product.cantidad_documento ? '#fcc' : 
+                                      parseInt(cantidadFisica) > product.cantidad_documento ? '#ffb' : '#cfc'}`,
                 textAlign: 'center'
               }}>
                 <strong style={{ fontSize: '0.9rem' }}>
-                  {parseInt(cantidad) < product.cantidad_documento ? '⚠️ Faltante: ' : '📈 Sobrante: '}
-                  {Math.abs(parseInt(cantidad) - product.cantidad_documento)}
+                  {parseInt(cantidadFisica) < product.cantidad_documento ? '⚠️ Faltante: ' : '📈 Sobrante: '}
+                  {Math.abs(parseInt(cantidadFisica) - product.cantidad_documento)}
                 </strong>
               </div>
             )}

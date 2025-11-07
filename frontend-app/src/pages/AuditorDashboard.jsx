@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { uploadAuditFiles, fetchAudits, iniciarAuditoria, fetchAuditDetails, updateProduct, finishAudit } from '../services/api';
+import { uploadAuditFiles, fetchAudits, iniciarAuditoria, fetchAuditDetails, updateProduct, finishAudit, fetchNoveltiesBySku } from '../services/api';
 import { getCurrentUser } from '../services/auth';
 import CollaboratorModal from '../components/CollaboratorModal';
 import CameraScanner from '../components/CameraScanner';
@@ -66,6 +66,7 @@ export default function AuditorDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [noveltiesBySku, setNoveltiesBySku] = useState([]);
   const [showNovedadModal, setShowNovedadModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -784,7 +785,15 @@ export default function AuditorDashboard() {
                           <button className="btn btn-primary me-2" onClick={handleSave}>
                             <i className="bi bi-save"></i> Guardar
                           </button>
-                          <button className="btn btn-warning me-2" onClick={() => setShowVerifyModal(true)}>
+                          <button className="btn btn-warning me-2" onClick={async () => {
+                            setShowVerifyModal(true);
+                            try {
+                              const novelties = await fetchNoveltiesBySku(currentAudit.id);
+                              setNoveltiesBySku(novelties);
+                            } catch (err) {
+                              console.error('Error cargando novedades:', err);
+                            }
+                          }}>
                             <i className="bi bi-exclamation-triangle"></i> Verificar
                           </button>
                           <button className="btn btn-success" onClick={handleFinish}>
@@ -915,28 +924,22 @@ export default function AuditorDashboard() {
       {/* Modal de Verificación */}
       {showVerifyModal && (
         <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-          <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-dialog modal-xl modal-dialog-scrollable">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  <i className="bi bi-exclamation-triangle text-warning"></i> Productos con Novedad
+                  <i className="bi bi-exclamation-triangle text-warning"></i> Verificación de Auditoría
                 </h5>
                 <button className="btn-close" onClick={() => setShowVerifyModal(false)}></button>
               </div>
               <div className="modal-body">
                 {(() => {
-                  const productsWithNovelty = products.filter(p => 
-                    p.cantidad_fisica !== null && 
-                    p.cantidad_fisica !== undefined && 
-                    p.novedad !== 'sin_novedad'
-                  );
-                  
                   const productsNotScanned = products.filter(p => 
                     (p.cantidad_fisica === null || p.cantidad_fisica === undefined) &&
                     p.cantidad_documento > 0
                   );
                   
-                  if (productsWithNovelty.length === 0 && productsNotScanned.length === 0) {
+                  if (noveltiesBySku.length === 0 && productsNotScanned.length === 0) {
                     return (
                       <div className="alert alert-success">
                         <i className="bi bi-check-circle"></i> Todos los productos están escaneados sin novedades
@@ -946,10 +949,10 @@ export default function AuditorDashboard() {
                   
                   return (
                     <>
-                      {productsWithNovelty.length > 0 && (
+                      {noveltiesBySku.length > 0 && (
                         <>
                           <div className="alert alert-warning">
-                            <strong>{productsWithNovelty.length}</strong> producto(s) con novedad
+                            <strong>{noveltiesBySku.length}</strong> SKU(s) con novedades registradas
                           </div>
                           <div className="table-responsive mb-3">
                             <table className="table table-sm table-hover">
@@ -958,28 +961,36 @@ export default function AuditorDashboard() {
                                   <th>SKU</th>
                                   <th>Nombre</th>
                                   <th>Cant. Doc</th>
-                                  <th>Cant. Física</th>
-                                  <th>Novedad</th>
-                                  <th>Observaciones</th>
+                                  <th>Novedades</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {productsWithNovelty.map(p => (
-                                  <tr key={p.id}>
-                                    <td><strong>{p.sku}</strong></td>
-                                    <td>{p.nombre_articulo}</td>
-                                    <td>{p.cantidad_documento}</td>
-                                    <td><strong>{p.cantidad_fisica}</strong></td>
+                                {noveltiesBySku.map((item, idx) => (
+                                  <tr key={idx}>
+                                    <td><strong>{item.sku}</strong></td>
+                                    <td>{item.nombre_articulo}</td>
+                                    <td>{item.cantidad_documento}</td>
                                     <td>
-                                      <span className={`badge bg-${
-                                        p.novedad === 'faltante' ? 'danger' :
-                                        p.novedad === 'sobrante' ? 'warning' :
-                                        p.novedad === 'averia' ? 'dark' : 'secondary'
-                                      }`}>
-                                        {p.novedad}
-                                      </span>
+                                      <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                                        {item.novelties.map((nov, nIdx) => (
+                                          <div key={nIdx} style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                            <span className={`badge bg-${
+                                              nov.tipo === 'faltante' ? 'danger' :
+                                              nov.tipo === 'sobrante' ? 'warning' :
+                                              nov.tipo === 'averia' ? 'dark' :
+                                              nov.tipo === 'vencido' ? 'danger' :
+                                              nov.tipo === 'fecha_corta' ? 'info' : 'secondary'
+                                            }`} style={{minWidth: '90px'}}>
+                                              {nov.tipo}
+                                            </span>
+                                            <strong style={{fontSize: '0.9rem'}}>x {nov.cantidad}</strong>
+                                            {nov.observaciones && (
+                                              <small className="text-muted" style={{fontSize: '0.75rem'}}>({nov.observaciones})</small>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </td>
-                                    <td>{p.observaciones}</td>
                                   </tr>
                                 ))}
                               </tbody>

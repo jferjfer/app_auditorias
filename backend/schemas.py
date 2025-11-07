@@ -129,6 +129,7 @@ class ProductUpdate(BaseModel):
     cantidad_fisica: Optional[int] = None
     novedad: Optional[str] = None
     observaciones: Optional[str] = None
+    novelties: Optional[List[ProductNoveltyCreate]] = None
 
 # Esquema para crear un producto (sin ID)
 class ProductCreate(ProductBase):
@@ -265,3 +266,27 @@ class ProductHistory(BaseModel):
         if hasattr(obj, 'user') and obj.user:
             instance._user_name = obj.user.nombre
         return instance
+
+class ProductNoveltyBase(BaseModel):
+    novedad_tipo: str
+    cantidad: int
+    observaciones: Optional[str] = None
+
+class ProductNoveltyCreate(ProductNoveltyBase):
+    pass
+
+class ProductNovelty(ProductNoveltyBase):
+    id: int
+    product_id: int
+    user_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class ProductWithNovelties(Product):
+    novelties: List[ProductNovelty] = []
+    
+    class Config:
+        from_attributes = True

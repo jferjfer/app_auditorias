@@ -160,6 +160,14 @@ export async function addCollaborators(auditId, collaborator_ids) {
     return fetchApi(`/api/audits/${auditId}/collaborators`, buildOptions('POST', { collaborator_ids }));
 }
 
+export async function fetchNoveltiesBySku(auditId) {
+    return fetchApi(`/api/audits/${auditId}/novelties-by-sku`, buildOptions('GET'));
+}
+
+export async function fetchProductNovelties(auditId, productId) {
+    return fetchApi(`/api/audits/${auditId}/products/${productId}/novelties`, buildOptions('GET'));
+}
+
 
 // --- Reportes y Estadísticas ---
 

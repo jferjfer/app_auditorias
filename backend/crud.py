@@ -159,10 +159,62 @@ def update_product(db: Session, product_id: int, product_data: dict):
     if not db_product:
         return None
     for key, value in product_data.items():
-        setattr(db_product, key, value)
+        if key != 'novelties':
+            setattr(db_product, key, value)
     db.commit()
     db.refresh(db_product)
     return db_product
+
+def create_product_novelties(db: Session, product_id: int, novelties: list, user_id: int):
+    """Crea múltiples novedades para un producto."""
+    # Eliminar novedades anteriores
+    db.query(models.ProductNovelty).filter(models.ProductNovelty.product_id == product_id).delete()
+    
+    # Crear nuevas novedades
+    for novelty_data in novelties:
+        if novelty_data.get('cantidad', 0) > 0:
+            db_novelty = models.ProductNovelty(
+                product_id=product_id,
+                novedad_tipo=novelty_data['novedad_tipo'],
+                cantidad=novelty_data['cantidad'],
+                observaciones=novelty_data.get('observaciones'),
+                user_id=user_id
+            )
+            db.add(db_novelty)
+    
+    db.commit()
+    return True
+
+def get_product_novelties(db: Session, product_id: int):
+    """Obtiene todas las novedades de un producto."""
+    return db.query(models.ProductNovelty).filter(models.ProductNovelty.product_id == product_id).all()
+
+def get_novelties_by_audit(db: Session, audit_id: int):
+    """Obtiene todas las novedades de una auditoría agrupadas por SKU."""
+    from sqlalchemy.orm import joinedload
+    products = db.query(models.Product).options(
+        joinedload(models.Product.novelties)
+    ).filter(models.Product.auditoria_id == audit_id).all()
+    
+    # Agrupar por SKU
+    sku_novelties = {}
+    for product in products:
+        if product.novelties:
+            if product.sku not in sku_novelties:
+                sku_novelties[product.sku] = {
+                    'sku': product.sku,
+                    'nombre_articulo': product.nombre_articulo,
+                    'cantidad_documento': product.cantidad_documento,
+                    'novelties': []
+                }
+            for novelty in product.novelties:
+                sku_novelties[product.sku]['novelties'].append({
+                    'tipo': novelty.novedad_tipo.value if hasattr(novelty.novedad_tipo, 'value') else novelty.novedad_tipo,
+                    'cantidad': novelty.cantidad,
+                    'observaciones': novelty.observaciones
+                })
+    
+    return list(sku_novelties.values())
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
     """
@@ -396,3 +448,10 @@ def get_average_audit_duration(db: Session):
         func.avg(func.extract('epoch', models.Audit.finalizada_en - models.Audit.creada_en)) / 3600
     ).filter(models.Audit.estado == "finalizada", models.Audit.finalizada_en.isnot(None)).scalar()
     return round(result, 2) if result else 0.0
+
+def get_product_with_novelties(db: Session, product_id: int):
+    """Obtiene un producto con todas sus novedades."""
+    from sqlalchemy.orm import joinedload
+    return db.query(models.Product).options(
+        joinedload(models.Product.novelties)
+    ).filter(models.Product.id == product_id).first()
