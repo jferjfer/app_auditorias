@@ -20,7 +20,8 @@ export default function CameraScanner({ onScan, onClose }) {
       config,
       (decodedText) => {
         const now = Date.now();
-        if (decodedText === lastScanRef.current.text && now - lastScanRef.current.time < 1000) {
+        // Solo ignorar si es el MISMO código Y fue escaneado hace menos de 1 segundo
+        if (lastScanRef.current.text && decodedText === lastScanRef.current.text && now - lastScanRef.current.time < 1000) {
           return;
         }
         lastScanRef.current = { text: decodedText, time: now };
