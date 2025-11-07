@@ -11,21 +11,29 @@ import { useOfflineSync } from '../hooks/useOfflineSync';
 import { offlineDB } from '../utils/offlineDB';
 
 let selectedVoice = null;
+let voicesLoaded = false;
+
+// Precargar voces inmediatamente
+if ('speechSynthesis' in window) {
+  const loadVoices = () => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0 && !voicesLoaded) {
+      selectedVoice = voices.find(v => v.lang === 'es-CO' || v.lang === 'es-MX') || 
+                      voices.find(v => v.lang.startsWith('es')) || 
+                      voices[0];
+      voicesLoaded = true;
+    }
+  };
+  
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
 
 const speak = (text) => {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   
   const utterance = new SpeechSynthesisUtterance(text);
-  
-  // Seleccionar voz en español (Colombia o México preferentemente)
-  if (!selectedVoice) {
-    const voices = window.speechSynthesis.getVoices();
-    selectedVoice = voices.find(v => v.lang === 'es-CO' || v.lang === 'es-MX') || 
-                    voices.find(v => v.lang.startsWith('es')) || 
-                    voices[0];
-  }
-  
   if (selectedVoice) utterance.voice = selectedVoice;
   utterance.lang = 'es-CO';
   utterance.rate = 1.5;
@@ -34,16 +42,6 @@ const speak = (text) => {
   
   window.speechSynthesis.speak(utterance);
 };
-
-// Cargar voces cuando estén disponibles
-if ('speechSynthesis' in window) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    const voices = window.speechSynthesis.getVoices();
-    selectedVoice = voices.find(v => v.lang === 'es-CO' || v.lang === 'es-MX') || 
-                    voices.find(v => v.lang.startsWith('es')) || 
-                    voices[0];
-  };
-}
 
 export default function AuditorDashboard() {
   const [audits, setAudits] = useState([]);
@@ -67,9 +65,14 @@ export default function AuditorDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
   const wsRef = useRef(null);
+  const wsThrottleRef = useRef(null);
+  const abortControllerRef = useRef(null);
   const user = getCurrentUser();
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
+  
+  const ITEMS_PER_PAGE = 50;
 
   useEffect(() => {
     loadAudits();
@@ -95,29 +98,31 @@ export default function AuditorDashboard() {
     wsRef.current.onerror = (err) => console.error('❌ WebSocket error:', err);
     
     wsRef.current.onmessage = (event) => {
-      console.log('📨 Raw WS message:', event.data);
       const data = JSON.parse(event.data);
-      console.log('📦 Parsed WS data:', data);
       
       if (data.type === 'ping') return;
       
-      if (data.type === 'product_locked') {
-        console.log('🔒 Product locked:', data);
-        setLockedProducts(prev => ({...prev, [data.product_id]: data.user}));
-        addNotification(`⚠️ ${data.user} está editando un producto`);
-      } else if (data.type === 'product_unlocked') {
-        console.log('🔓 Product unlocked:', data);
-        setLockedProducts(prev => {const n = {...prev}; delete n[data.product_id]; return n;});
-      } else if (data.type === 'product_updated') {
-        console.log('✏️ Product updated:', data);
-        setProducts(prev => prev.map(p => p.id === data.product.id ? data.product : p));
-        if (data.user !== user.nombre) {
-          addNotification(`✅ ${data.user} actualizó ${data.product.sku}`);
+      // Throttle: agrupar mensajes cada 500ms
+      clearTimeout(wsThrottleRef.current);
+      wsThrottleRef.current = setTimeout(() => {
+        if (data.type === 'product_locked') {
+          setLockedProducts(prev => ({...prev, [data.product_id]: data.user}));
+          addNotification(`⚠️ ${data.user} está editando un producto`);
+        } else if (data.type === 'product_unlocked') {
+          setLockedProducts(prev => {const n = {...prev}; delete n[data.product_id]; return n;});
+        } else if (data.type === 'product_updated') {
+          setProducts(prev => prev.map(p => p.id === data.product.id ? data.product : p));
+          if (data.user !== user.nombre) {
+            addNotification(`✅ ${data.user} actualizó ${data.product.sku}`);
+          }
         }
-      }
+      }, 500);
     };
     
-    return () => wsRef.current?.close();
+    return () => {
+      clearTimeout(wsThrottleRef.current);
+      wsRef.current?.close();
+    };
   }, [currentAudit]);
 
   const loadAudits = async () => {
@@ -161,6 +166,12 @@ export default function AuditorDashboard() {
 
   const handleVerAuditoria = async (auditId) => {
     try {
+      // Cancelar request anterior si existe
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+      
       await offlineDB.init();
       
       let data, prods;
@@ -184,6 +195,7 @@ export default function AuditorDashboard() {
       
       setCurrentAudit(data);
       setProducts(prods);
+      setCurrentPage(0);
       
       const index = {};
       prods.forEach(p => {
@@ -397,17 +409,37 @@ export default function AuditorDashboard() {
   };
 
   const filteredProducts = useMemo(() => {
-    if (!debouncedSearch && filterNovedad === 'all') return products;
-    const searchLower = debouncedSearch.toLowerCase();
-    return products.filter(p => {
-      if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) {
-        return false;
-      }
-      if (filterNovedad !== 'all' && p.novedad !== filterNovedad) {
-        return false;
-      }
-      return true;
-    });
+    let filtered = products;
+    
+    if (debouncedSearch || filterNovedad !== 'all') {
+      const searchLower = debouncedSearch.toLowerCase();
+      filtered = products.filter(p => {
+        if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) {
+          return false;
+        }
+        if (filterNovedad !== 'all' && p.novedad !== filterNovedad) {
+          return false;
+        }
+        return true;
+      });
+    }
+    
+    // Paginación
+    const start = currentPage * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [products, debouncedSearch, filterNovedad, currentPage]);
+  
+  const totalPages = useMemo(() => {
+    let count = products.length;
+    if (debouncedSearch || filterNovedad !== 'all') {
+      const searchLower = debouncedSearch.toLowerCase();
+      count = products.filter(p => {
+        if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) return false;
+        if (filterNovedad !== 'all' && p.novedad !== filterNovedad) return false;
+        return true;
+      }).length;
+    }
+    return Math.ceil(count / ITEMS_PER_PAGE);
   }, [products, debouncedSearch, filterNovedad]);
 
   const cumplimientoActual = useMemo(() => {
@@ -719,7 +751,9 @@ export default function AuditorDashboard() {
                               )}
                               <input 
                                 id={`qty-${product.id}`}
-                                type="number" 
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 className="form-control form-control-sm" 
                                 style={{width: '80px'}}
                                 value={product.cantidad_fisica || ''}
@@ -767,6 +801,29 @@ export default function AuditorDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  
+                  {/* Controles de paginación */}
+                  {totalPages > 1 && (
+                    <div className="d-flex justify-content-between align-items-center mt-3">
+                      <button 
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                        disabled={currentPage === 0}
+                      >
+                        <i className="bi bi-chevron-left"></i> Anterior
+                      </button>
+                      <span className="text-muted">
+                        Página {currentPage + 1} de {totalPages}
+                      </span>
+                      <button 
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                        disabled={currentPage >= totalPages - 1}
+                      >
+                        Siguiente <i className="bi bi-chevron-right"></i>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -775,12 +832,12 @@ export default function AuditorDashboard() {
       )}
 
       {/* Modal de colaboradores */}
-      <CollaboratorModal 
+      {showCollaboratorModal && <CollaboratorModal 
         show={showCollaboratorModal}
         onClose={() => setShowCollaboratorModal(false)}
         auditId={selectedAuditForCollab?.id}
         onSuccess={handleCollaboratorSuccess}
-      />
+      />}
 
       {/* Modal de escáner de cámara */}
       {showCameraScanner && (
@@ -790,11 +847,11 @@ export default function AuditorDashboard() {
         />
       )}
 
-      <AuditHistory 
+      {showHistory && <AuditHistory 
         auditId={currentAudit?.id}
         show={showHistory}
         onClose={() => setShowHistory(false)}
-      />
+      />}
 
       {/* Modal de Verificación */}
       {showVerifyModal && (

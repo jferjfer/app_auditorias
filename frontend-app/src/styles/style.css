@@ -180,6 +180,27 @@ body::before {
     animation: scanFlash 1s ease;
 }
 
+/* Hardware acceleration para mejor rendimiento en móviles */
+.card, .modal-content, .btn, .table-responsive, .sidebar {
+    transform: translateZ(0);
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.card:hover, .btn:hover {
+    will-change: transform, box-shadow;
+}
+
+/* Optimización de animaciones */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
 /* Scan counter badge */
 .scan-counter {
     position: fixed;

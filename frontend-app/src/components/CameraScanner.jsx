@@ -7,12 +7,19 @@ export default function CameraScanner({ onScan, onClose }) {
   const lastScanRef = useRef({ text: '', time: 0 });
 
   useEffect(() => {
-    const config = { fps: 5, qrbox: { width: 200, height: 200 } };
+    const config = { 
+      fps: 5, 
+      qrbox: { width: 200, height: 200 },
+      aspectRatio: 1.0
+    };
     
     html5QrCodeRef.current = new Html5Qrcode("reader");
     
     html5QrCodeRef.current.start(
-      { facingMode: "environment" },
+      { 
+        facingMode: "environment",
+        advanced: [{ width: { ideal: 1280 }, height: { ideal: 720 } }]
+      },
       config,
       (decodedText) => {
         const now = Date.now();
@@ -20,6 +27,7 @@ export default function CameraScanner({ onScan, onClose }) {
           return;
         }
         lastScanRef.current = { text: decodedText, time: now };
+        if (navigator.vibrate) navigator.vibrate(200);
         onScan(decodedText);
         stopScanner();
       },
@@ -56,14 +64,17 @@ export default function CameraScanner({ onScan, onClose }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px'
+      padding: '20px',
+      transform: 'translateZ(0)',
+      willChange: 'transform'
     }}>
       <div style={{
         width: '100%',
         maxWidth: '500px',
         backgroundColor: 'white',
         borderRadius: '12px',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        transform: 'translateZ(0)'
       }}>
         <div id="reader" ref={scannerRef}></div>
       </div>

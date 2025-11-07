@@ -5,6 +5,8 @@ const DB_VERSION = 1;
 class OfflineDB {
   constructor() {
     this.db = null;
+    this.writeQueue = [];
+    this.isProcessing = false;
   }
 
   async init() {
@@ -35,14 +37,13 @@ class OfflineDB {
     });
   }
 
-  // Guardar productos de auditoría
+  // Guardar productos de auditoría (batch optimizado)
   async saveProducts(auditId, products) {
     const tx = this.db.transaction(['products'], 'readwrite');
     const store = tx.objectStore('products');
     
-    for (const product of products) {
-      await store.put({ ...product, auditId });
-    }
+    const promises = products.map(product => store.put({ ...product, auditId }));
+    await Promise.all(promises);
     
     return tx.complete;
   }
@@ -62,19 +63,45 @@ class OfflineDB {
     });
   }
 
-  // Guardar cambio pendiente de sincronizar
+  // Guardar cambio pendiente de sincronizar (con batch)
   async savePendingChange(auditId, productId, changes) {
-    const tx = this.db.transaction(['pendingChanges'], 'readwrite');
-    const store = tx.objectStore('pendingChanges');
-    
-    await store.add({
-      auditId,
-      productId,
-      changes,
-      timestamp: Date.now()
+    return new Promise((resolve) => {
+      this.writeQueue.push({ auditId, productId, changes, timestamp: Date.now(), resolve });
+      this.processBatch();
     });
+  }
+
+  processBatch() {
+    if (this.isProcessing || this.writeQueue.length === 0) return;
     
-    return tx.complete;
+    const scheduleWrite = window.requestIdleCallback || ((cb) => setTimeout(cb, 50));
+    
+    scheduleWrite(async () => {
+      this.isProcessing = true;
+      const batch = this.writeQueue.splice(0, 10);
+      
+      try {
+        const tx = this.db.transaction(['pendingChanges'], 'readwrite');
+        const store = tx.objectStore('pendingChanges');
+        
+        for (const item of batch) {
+          await store.add({
+            auditId: item.auditId,
+            productId: item.productId,
+            changes: item.changes,
+            timestamp: item.timestamp
+          });
+          item.resolve();
+        }
+        
+        await tx.complete;
+      } catch (err) {
+        console.error('Batch write error:', err);
+      }
+      
+      this.isProcessing = false;
+      if (this.writeQueue.length > 0) this.processBatch();
+    });
   }
 
   // Obtener cambios pendientes
