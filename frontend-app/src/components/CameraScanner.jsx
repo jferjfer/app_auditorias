@@ -16,10 +16,7 @@ export default function CameraScanner({ onScan, onClose }) {
     html5QrCodeRef.current = new Html5Qrcode("reader");
     
     html5QrCodeRef.current.start(
-      { 
-        facingMode: "environment",
-        advanced: [{ width: { ideal: 1280 }, height: { ideal: 720 } }]
-      },
+      { facingMode: "environment" },
       config,
       (decodedText) => {
         const now = Date.now();
