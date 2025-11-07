@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { uploadAuditFiles, fetchAudits, iniciarAuditoria, fetchAuditDetails, updateProduct, finishAudit, fetchNoveltiesBySku } from '../services/api';
+import api from '../services/api';
 import { getCurrentUser } from '../services/auth';
 import CollaboratorModal from '../components/CollaboratorModal';
 import CameraScanner from '../components/CameraScanner';

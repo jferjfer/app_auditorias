@@ -285,6 +285,8 @@ const api = {
     updateProduct,
     bulkUpdateProducts,
     addCollaborators,
+    fetchNoveltiesBySku,
+    fetchProductNovelties,
     fetchStats,
     fetchReportData,
     downloadReport,

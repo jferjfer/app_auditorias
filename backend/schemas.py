@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime, date, timezone
@@ -123,6 +124,24 @@ class Token(BaseModel):
 # Esquema de datos de token
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+class ProductNoveltyBase(BaseModel):
+    novedad_tipo: str
+    cantidad: int
+    observaciones: Optional[str] = None
+
+class ProductNoveltyCreate(ProductNoveltyBase):
+    pass
+
+class ProductNovelty(ProductNoveltyBase):
+    id: int
+    product_id: int
+    user_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
 
 # Esquema para actualizar un producto
 class ProductUpdate(BaseModel):
@@ -266,25 +285,6 @@ class ProductHistory(BaseModel):
         if hasattr(obj, 'user') and obj.user:
             instance._user_name = obj.user.nombre
         return instance
-
-class ProductNoveltyBase(BaseModel):
-    novedad_tipo: str
-    cantidad: int
-    observaciones: Optional[str] = None
-
-class ProductNoveltyCreate(ProductNoveltyBase):
-    pass
-
-class ProductNovelty(ProductNoveltyBase):
-    id: int
-    product_id: int
-    user_id: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: datetime_to_bogota}
-
 class ProductWithNovelties(Product):
     novelties: List[ProductNovelty] = []
     
