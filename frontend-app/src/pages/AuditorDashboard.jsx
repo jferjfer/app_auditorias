@@ -4,6 +4,7 @@ import { getCurrentUser } from '../services/auth';
 import CollaboratorModal from '../components/CollaboratorModal';
 import CameraScanner from '../components/CameraScanner';
 import AuditHistory from '../components/AuditHistory';
+import NovedadModal from '../components/NovedadModal';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
@@ -65,6 +66,8 @@ export default function AuditorDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showNovedadModal, setShowNovedadModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
@@ -223,15 +226,13 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 1: Escaneo repetido del mismo SKU consecutivo = HAY NOVEDAD
+      // Caso 1: Escaneo repetido del mismo SKU consecutivo = ABRIR MODAL
       if (lastScanned && lastScanned.sku === product.sku) {
         setLastScanned(null);
         setScanInput('');
         speak('Ingrese novedad');
-        setTimeout(() => {
-          document.getElementById(`qty-${product.id}`)?.focus();
-          document.getElementById(`qty-${product.id}`)?.select();
-        }, 50);
+        setSelectedProduct(product);
+        setShowNovedadModal(true);
         return;
       }
 
@@ -259,21 +260,20 @@ export default function AuditorDashboard() {
         }
       }
 
-      // Caso 3: SKU ya tiene novedad previa (faltante/sobrante) - permitir ajustar cantidad
+      // Caso 3: SKU ya tiene novedad previa - abrir modal para modificar
       const updatedProduct = products.find(p => p.id === product.id);
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
           updatedProduct.cantidad_fisica !== undefined &&
-          (updatedProduct.novedad === 'faltante' || updatedProduct.novedad === 'sobrante')) {
+          updatedProduct.novedad !== 'sin_novedad') {
         setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
         setScanInput('');
         const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
-        const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
+        const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
+                       updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
         speak(mensaje);
-        setTimeout(() => {
-          document.getElementById(`qty-${updatedProduct.id}`)?.focus();
-          document.getElementById(`qty-${updatedProduct.id}`)?.select();
-        }, 50);
+        setSelectedProduct(updatedProduct);
+        setShowNovedadModal(true);
         return;
       }
 
@@ -376,6 +376,27 @@ export default function AuditorDashboard() {
     loadAudits();
   };
 
+  const handleNovedadSave = async (changes) => {
+    if (!selectedProduct) return;
+    
+    setProducts(prev => prev.map(p => 
+      p.id === selectedProduct.id ? { ...p, ...changes } : p
+    ));
+
+    speak('Guardado');
+    
+    if (isOnline) {
+      updateProduct(currentAudit.id, selectedProduct.id, changes).catch(err => console.error('Error:', err));
+    } else {
+      await offlineDB.savePendingChange(currentAudit.id, selectedProduct.id, changes);
+      window.dispatchEvent(new Event('pendingChangesUpdated'));
+    }
+    
+    setShowNovedadModal(false);
+    setSelectedProduct(null);
+    setTimeout(() => document.getElementById('scan-input')?.focus(), 100);
+  };
+
   const handleCameraScan = (decodedText) => {
     setShowCameraScanner(false);
     
@@ -388,14 +409,12 @@ export default function AuditorDashboard() {
       return;
     }
 
-    // Caso 1: Escaneo repetido del mismo SKU consecutivo = HAY NOVEDAD
+    // Caso 1: Escaneo repetido del mismo SKU consecutivo = ABRIR MODAL
     if (lastScanned && lastScanned.sku === product.sku) {
       setLastScanned(null);
       speak('Ingrese novedad');
-      setTimeout(() => {
-        document.getElementById(`qty-${product.id}`)?.focus();
-        document.getElementById(`qty-${product.id}`)?.select();
-      }, 50);
+      setSelectedProduct(product);
+      setShowNovedadModal(true);
       return;
     }
 
@@ -423,20 +442,19 @@ export default function AuditorDashboard() {
       }
     }
 
-    // Caso 3: SKU ya tiene novedad previa (faltante/sobrante) - permitir ajustar cantidad
+    // Caso 3: SKU ya tiene novedad previa - abrir modal para modificar
     const updatedProduct = products.find(p => p.id === product.id);
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
         updatedProduct.cantidad_fisica !== undefined &&
-        (updatedProduct.novedad === 'faltante' || updatedProduct.novedad === 'sobrante')) {
+        updatedProduct.novedad !== 'sin_novedad') {
       setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
       const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
-      const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : `Sobrante ${diferencia}`;
+      const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
+                     updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
       speak(mensaje);
-      setTimeout(() => {
-        document.getElementById(`qty-${updatedProduct.id}`)?.focus();
-        document.getElementById(`qty-${updatedProduct.id}`)?.select();
-      }, 50);
+      setSelectedProduct(updatedProduct);
+      setShowNovedadModal(true);
       return;
     }
 
@@ -798,8 +816,6 @@ export default function AuditorDashboard() {
                           <th>Nombre</th>
                           <th>Cant. Doc</th>
                           <th>Cant. Física</th>
-                          <th>Novedad</th>
-                          <th>Observaciones</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -810,57 +826,22 @@ export default function AuditorDashboard() {
                             <td>{product.nombre_articulo}</td>
                             <td>{product.cantidad_documento}</td>
                             <td>
-                              {lockedProducts[product.id] && lockedProducts[product.id] !== user.nombre && (
-                                <span className="badge bg-warning text-dark" style={{fontSize: '10px', marginRight: '5px'}}>
-                                  🔒 {lockedProducts[product.id]}
-                                </span>
+                              {product.cantidad_fisica || product.cantidad_fisica === 0 ? (
+                                <>
+                                  <strong>{product.cantidad_fisica}</strong>
+                                  {product.novedad && product.novedad !== 'sin_novedad' && (
+                                    <span className={`badge bg-${
+                                      product.novedad === 'faltante' ? 'danger' :
+                                      product.novedad === 'sobrante' ? 'warning' :
+                                      product.novedad === 'averia' ? 'dark' : 'secondary'
+                                    } ms-1`} style={{fontSize: '10px'}}>
+                                      ⚠️
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-muted">-</span>
                               )}
-                              <input 
-                                id={`qty-${product.id}`}
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                className="form-control form-control-sm" 
-                                style={{width: '80px'}}
-                                value={product.cantidad_fisica || ''}
-                                onChange={(e) => setProducts(prev => prev.map(p => p.id === product.id ? {...p, cantidad_fisica: parseInt(e.target.value) || 0} : p))}
-                                onFocus={() => lockProduct(product.id)}
-                                onBlur={() => unlockProduct(product.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleQuantityChange(product.id, parseInt(e.target.value) || 0);
-                                    setTimeout(() => document.getElementById('scan-input')?.focus(), 50);
-                                  }
-                                }}
-                                disabled={currentAudit.estado === 'finalizada' || (lockedProducts[product.id] && lockedProducts[product.id] !== user.nombre)}
-                              />
-                            </td>
-                            <td>
-                              <select 
-                                className="form-select form-select-sm" 
-                                style={{width: '140px'}}
-                                value={product.novedad}
-                                onChange={(e) => handleUpdateProduct(product.id, 'novedad', e.target.value)}
-                                disabled={currentAudit.estado === 'finalizada'}
-                              >
-                                <option value="sin_novedad">Sin Novedad</option>
-                                <option value="faltante">Faltante</option>
-                                <option value="sobrante">Sobrante</option>
-                                <option value="averia">Avería</option>
-                                <option value="fecha_corta">Fecha Corta</option>
-                                <option value="contaminado">Contaminado</option>
-                                <option value="vencido">Vencido</option>
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm" 
-                                value={product.observaciones || ''}
-                                onChange={(e) => handleUpdateProduct(product.id, 'observaciones', e.target.value)}
-                                placeholder="Observaciones..."
-                                disabled={currentAudit.estado === 'finalizada'}
-                              />
                             </td>
                           </tr>
                         ))}
@@ -1039,6 +1020,17 @@ export default function AuditorDashboard() {
           </div>
         </div>
       )}
+
+      <NovedadModal 
+        show={showNovedadModal}
+        product={selectedProduct}
+        onSave={handleNovedadSave}
+        onClose={() => {
+          setShowNovedadModal(false);
+          setSelectedProduct(null);
+          setTimeout(() => document.getElementById('scan-input')?.focus(), 100);
+        }}
+      />
 
       <ToastContainer />
       <ConfirmModal />
