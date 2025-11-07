@@ -379,6 +379,18 @@ export default function AuditorDashboard() {
   const handleNovedadSave = async (changes) => {
     if (!selectedProduct) return;
     
+    // Calcular automáticamente faltante/sobrante si no se especificó otra novedad
+    if (changes.novedad === 'sin_novedad' && changes.cantidad_fisica !== selectedProduct.cantidad_documento) {
+      const diferencia = Math.abs(changes.cantidad_fisica - selectedProduct.cantidad_documento);
+      if (changes.cantidad_fisica < selectedProduct.cantidad_documento) {
+        changes.novedad = 'faltante';
+        changes.observaciones = changes.observaciones || `${diferencia} faltante`;
+      } else if (changes.cantidad_fisica > selectedProduct.cantidad_documento) {
+        changes.novedad = 'sobrante';
+        changes.observaciones = changes.observaciones || `${diferencia} sobrante`;
+      }
+    }
+    
     setProducts(prev => prev.map(p => 
       p.id === selectedProduct.id ? { ...p, ...changes } : p
     ));
