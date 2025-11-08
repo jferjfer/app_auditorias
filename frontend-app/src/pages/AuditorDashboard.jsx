@@ -77,6 +77,8 @@ export default function AuditorDashboard() {
   const [noveltiesBySku, setNoveltiesBySku] = useState([]);
   const [showNovedadModal, setShowNovedadModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [editingQuantity, setEditingQuantity] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
@@ -329,6 +331,26 @@ export default function AuditorDashboard() {
       await offlineDB.savePendingChange(currentAudit.id, productId, changes);
       window.dispatchEvent(new Event('pendingChangesUpdated'));
     }
+  };
+
+  const handleEditClick = (product) => {
+    if (currentAudit.estado === 'finalizada') return;
+    setEditingProductId(product.id);
+    setEditingQuantity(product.cantidad_fisica !== null && product.cantidad_fisica !== undefined ? String(product.cantidad_fisica) : '');
+  };
+
+  const handleEditSave = (productId) => {
+    const product = products.find(p => p.id === productId);
+    if (product && String(product.cantidad_fisica) === editingQuantity) {
+      setEditingProductId(null);
+      return;
+    }
+
+    const quantity = parseInt(editingQuantity, 10);
+    if (!isNaN(quantity)) {
+      handleQuantityChange(productId, quantity);
+    }
+    setEditingProductId(null);
   };
 
   const handleUpdateProduct = async (productId, field, value) => {
@@ -855,22 +877,38 @@ export default function AuditorDashboard() {
                             <td style={{fontSize: '0.8rem'}}>{product.nombre_articulo}</td>
                             <td style={{textAlign: 'center'}}>{product.cantidad_documento}</td>
                             <td style={{textAlign: 'center'}}>
-                              {product.cantidad_fisica || product.cantidad_fisica === 0 ? (
-                                <>
-                                  <strong>{product.cantidad_fisica}</strong>
-                                  {product.novedad && product.novedad !== 'sin_novedad' && (
-                                    <span className={`badge bg-${
-                                      product.novedad === 'faltante' ? 'danger' :
-                                      product.novedad === 'sobrante' ? 'warning' :
-                                      product.novedad === 'averia' ? 'dark' : 'secondary'
-                                    } ms-1`} style={{fontSize: '10px'}}>
-                                      ⚠️
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-muted">-</span>
-                              )}
+                              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
+                                <input
+                                  type="number"
+                                  className="form-control form-control-sm"
+                                  key={product.id}
+                                  defaultValue={product.cantidad_fisica ?? ''}
+                                  onBlur={(e) => {
+                                    const value = e.target.value;
+                                    const newQuantity = value === '' ? null : parseInt(value, 10);
+                                    if (newQuantity !== product.cantidad_fisica) {
+                                      handleQuantityChange(product.id, newQuantity);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      e.target.blur();
+                                    }
+                                  }}
+                                  disabled={currentAudit.estado === 'finalizada'}
+                                  style={{ width: '80px', margin: 'auto' }}
+                                />
+                                {product.novedad && product.novedad !== 'sin_novedad' && (
+                                  <span className={`badge bg-${
+                                    product.novedad === 'faltante' ? 'danger' :
+                                    product.novedad === 'sobrante' ? 'warning' :
+                                    product.novedad === 'averia' ? 'dark' : 'secondary'
+                                  } ms-1`} style={{fontSize: '10px'}}>
+                                    ⚠️
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}

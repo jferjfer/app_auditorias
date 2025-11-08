@@ -358,6 +358,9 @@ export async function verAuditoria(auditId) {
             const cameraBtn = document.getElementById('start-camera-scan-btn');
             if(cameraBtn) cameraBtn.disabled = true;
         } else {
+            document.querySelectorAll('#auditor-products-table-body input, #auditor-products-table-body select, #auditor-products-table-body textarea, #auditor-products-table-body button').forEach(el => {
+                el.disabled = false;
+            });
             ['save-all-btn', 'finish-audit-btn', 'collaborative-audit-btn'].forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) btn.classList.remove('d-none');
