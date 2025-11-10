@@ -174,13 +174,13 @@ export async function fetchProductNovelties(auditId, productId) {
 export async function fetchStats(filters = {}) {
     const queryString = buildQueryString(filters);
     const statsPromises = [
-        getAuditStatusStatistics(filters),
-        getAverageComplianceStatistic(filters),
-        getNoveltyDistributionStatistic(filters),
-        getComplianceByAuditorStatistic(filters),
-        getAuditsByPeriodStatistic(filters),
-        getTopNoveltySkusStatistic(filters),
-        getAverageAuditDurationStatistic(filters)
+        getAuditStatusStatistics(filters).catch(e => { console.error('Error status:', e); return null; }),
+        getAverageComplianceStatistic(filters).catch(e => { console.error('Error compliance:', e); return null; }),
+        getNoveltyDistributionStatistic(filters).catch(e => { console.error('Error novelty:', e); return null; }),
+        getComplianceByAuditorStatistic(filters).catch(e => { console.error('Error by auditor:', e); return null; }),
+        getAuditsByPeriodStatistic(filters).catch(e => { console.error('Error by period:', e); return null; }),
+        getTopNoveltySkusStatistic(filters).catch(e => { console.error('Error top skus:', e); return null; }),
+        getAverageAuditDurationStatistic(filters).catch(e => { console.error('Error duration:', e); return null; })
     ];
 
     const [

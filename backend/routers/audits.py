@@ -4,7 +4,7 @@ import pandas as pd
 import re
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
@@ -174,8 +174,69 @@ def get_audits(db: Session = Depends(get_db), current_user: models.User = Depend
 def get_audits_by_auditor(auditor_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     if current_user.rol != "administrador" and current_user.id != auditor_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para ver estas auditorías")
+    
     audits = crud.get_audits_by_auditor(db, auditor_id)
     return [schemas.AuditResponse.from_orm(audit) for audit in audits]
+
+@router.get("/search-by-ot/{ot_number}", response_model=schemas.AuditDetails)
+def search_audit_by_exact_ot(
+    ot_number: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Busca una auditoría que contenga la OT especificada y devuelve SOLO los productos de esa OT.
+    """
+    # Construir filtro según el rol
+    if current_user.rol in ["analista", "administrador"]:
+        # Analistas y admins pueden ver todas las auditorías
+        audit = db.query(models.Audit).options(
+            joinedload(models.Audit.auditor),
+            joinedload(models.Audit.collaborators)
+        ).filter(
+            models.Audit.auditor_id.isnot(None),
+            models.Audit.ubicacion_destino.contains(ot_number)
+        ).order_by(models.Audit.creada_en.desc()).first()
+    else:
+        # Auditores solo ven sus auditorías o donde son colaboradores
+        audit = db.query(models.Audit).options(
+            joinedload(models.Audit.auditor),
+            joinedload(models.Audit.collaborators)
+        ).filter(
+            models.Audit.auditor_id.isnot(None),
+            (
+                (models.Audit.auditor_id == current_user.id) |
+                (models.Audit.collaborators.any(models.User.id == current_user.id))
+            ),
+            models.Audit.ubicacion_destino.contains(ot_number)
+        ).order_by(models.Audit.creada_en.desc()).first()
+    
+    if not audit:
+        raise HTTPException(status_code=404, detail=f"No se encontró auditoría con OT {ot_number}")
+    
+    # Filtrar productos para mostrar SOLO los de esa OT específica
+    filtered_products = db.query(models.Product).options(
+        joinedload(models.Product.novelties)
+    ).filter(
+        models.Product.auditoria_id == audit.id,
+        models.Product.orden_traslado_original == ot_number
+    ).all()
+    
+    # Crear respuesta con productos filtrados
+    audit_dict = {
+        'id': audit.id,
+        'auditor_id': audit.auditor_id,
+        'ubicacion_destino': audit.ubicacion_destino,
+        'estado': audit.estado,
+        'porcentaje_cumplimiento': audit.porcentaje_cumplimiento,
+        'creada_en': audit.creada_en,
+        'auditor_nombre': audit.auditor.nombre if audit.auditor else None,
+        'productos': filtered_products,
+        'collaborators': audit.collaborators,
+        'auditor': audit.auditor
+    }
+    
+    return schemas.AuditDetails(**audit_dict)
 
 @router.put("/{audit_id}/iniciar", response_model=schemas.Audit)
 async def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

@@ -80,6 +80,7 @@ export default function AuditorDashboard() {
   const [editingProductId, setEditingProductId] = useState(null);
   const [editingQuantity, setEditingQuantity] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+  const [otSearch, setOtSearch] = useState('');
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -148,6 +149,46 @@ export default function AuditorDashboard() {
     }
   };
 
+  const handleOtSearch = async (e) => {
+    e.preventDefault();
+    if (!otSearch.trim()) {
+      toast.warning('Ingresa una OT para buscar');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${otSearch.trim()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast.error(`No se encontró auditoría con OT ${otSearch}`);
+        } else {
+          throw new Error('Error en la búsqueda');
+        }
+        return;
+      }
+      
+      const auditData = await response.json();
+      
+      // Mostrar la auditoría encontrada como único resultado
+      setAudits([{
+        id: auditData.id,
+        ubicacion_destino: `${auditData.ubicacion_destino} (Filtrado: ${otSearch})`,
+        auditor_id: auditData.auditor_id,
+        creada_en: auditData.creada_en,
+        estado: auditData.estado,
+        porcentaje_cumplimiento: auditData.porcentaje_cumplimiento
+      }]);
+      
+      toast.success(`Auditoría encontrada con ${auditData.productos.length} producto(s) de OT ${otSearch}`);
+    } catch (err) {
+      toast.error('Error: ' + err.message);
+    }
+  };
+
   const handleFileSelect = (e) => {
     setSelectedFiles(Array.from(e.target.files));
   };
@@ -178,7 +219,7 @@ export default function AuditorDashboard() {
     }
   };
 
-  const handleVerAuditoria = async (auditId) => {
+  const handleVerAuditoria = async (auditId, isFiltered = false) => {
     try {
       // Cancelar request anterior si existe
       if (abortControllerRef.current) {
@@ -191,10 +232,20 @@ export default function AuditorDashboard() {
       let data, prods;
       
       if (isOnline) {
-        // Online: cargar desde API
-        data = await fetchAuditDetails(auditId);
+        // Si es búsqueda filtrada, usar el endpoint de búsqueda
+        if (isFiltered && otSearch) {
+          const token = localStorage.getItem('access_token');
+          const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${otSearch.trim()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          data = await response.json();
+        } else {
+          // Online: cargar desde API normal
+          data = await fetchAuditDetails(auditId);
+        }
         prods = data.productos || [];
-        await offlineDB.saveProducts(auditId, prods);
+        // Guardar en background sin bloquear UI
+        offlineDB.saveProducts(auditId, prods).catch(err => console.error('Error saving offline:', err));
       } else {
         // Offline: cargar desde IndexedDB
         prods = await offlineDB.getProducts(auditId);
@@ -676,7 +727,34 @@ export default function AuditorDashboard() {
         <div>
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Mis Auditorías</h5>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="card-title mb-0">Mis Auditorías (Últimas 6)</h5>
+                <form onSubmit={handleOtSearch} className="d-flex gap-2">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="Buscar por OT (ej: VE23456)"
+                    value={otSearch}
+                    onChange={(e) => setOtSearch(e.target.value)}
+                    style={{width: '250px'}}
+                  />
+                  <button type="submit" className="btn btn-sm btn-primary">
+                    <i className="bi bi-search"></i>
+                  </button>
+                  {otSearch && (
+                    <button 
+                      type="button" 
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => {
+                        setOtSearch('');
+                        loadAudits();
+                      }}
+                    >
+                      <i className="bi bi-x"></i>
+                    </button>
+                  )}
+                </form>
+              </div>
               <div className="table-responsive">
                 <table className="table table-hover">
                   <thead>
@@ -712,7 +790,7 @@ export default function AuditorDashboard() {
                           )}
                           {audit.estado === 'en_progreso' && (
                             <>
-                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id)}>
+                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino.includes('Filtrado:'))}>
                                 Ver
                               </button>
                               <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)}>
@@ -721,7 +799,7 @@ export default function AuditorDashboard() {
                             </>
                           )}
                           {audit.estado === 'finalizada' && (
-                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id)}>
+                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino.includes('Filtrado:'))}>
                               <i className="bi bi-eye"></i> Ver
                             </button>
                           )}
@@ -815,14 +893,48 @@ export default function AuditorDashboard() {
                           <button className="btn btn-primary me-2" onClick={handleSave}>
                             <i className="bi bi-save"></i> Guardar
                           </button>
-                          <button className="btn btn-warning me-2" onClick={async () => {
+                          <button className="btn btn-warning me-2" onClick={() => {
                             setShowVerifyModal(true);
-                            try {
-                              const novelties = await fetchNoveltiesBySku(currentAudit.id);
-                              setNoveltiesBySku(novelties);
-                            } catch (err) {
-                              console.error('Error cargando novedades:', err);
-                            }
+                            
+                            // Combinar novedades del array Y del campo único
+                            const localNovelties = products
+                              .filter(p => 
+                                (p.novelties && p.novelties.length > 0) || 
+                                (p.novedad && p.novedad !== 'sin_novedad')
+                              )
+                              .reduce((acc, p) => {
+                                if (!acc[p.sku]) {
+                                  acc[p.sku] = {
+                                    sku: p.sku,
+                                    nombre_articulo: p.nombre_articulo,
+                                    cantidad_documento: p.cantidad_documento,
+                                    novelties: []
+                                  };
+                                }
+                                
+                                // Agregar novedades del array (avería, vencido, etc.)
+                                if (p.novelties && p.novelties.length > 0) {
+                                  p.novelties.forEach(nov => {
+                                    acc[p.sku].novelties.push({
+                                      tipo: nov.novedad_tipo,
+                                      cantidad: nov.cantidad,
+                                      observaciones: nov.observaciones
+                                    });
+                                  });
+                                }
+                                
+                                // Agregar novedad del campo único (faltante/sobrante)
+                                if (p.novedad && p.novedad !== 'sin_novedad') {
+                                  acc[p.sku].novelties.push({
+                                    tipo: p.novedad,
+                                    cantidad: p.cantidad_fisica,
+                                    observaciones: p.observaciones
+                                  });
+                                }
+                                
+                                return acc;
+                              }, {});
+                            setNoveltiesBySku(Object.values(localNovelties));
                           }}>
                             <i className="bi bi-exclamation-triangle"></i> Verificar
                           </button>

@@ -61,6 +61,7 @@ class ProductBase(BaseModel):
 # Esquema para el producto auditado CON ID (para respuestas)
 class Product(ProductBase):
     id: int
+    novelties: List[ProductNovelty] = [] # <--- AÑADIR ESTA LÍNEA
     
     class Config:
         from_attributes = True
@@ -91,6 +92,7 @@ class Audit(AuditBase):
 class AuditDetails(Audit):
     productos: List[Product]
     collaborators: List[User] = []
+    auditor: Optional[User] = None
 
     class Config:
         from_attributes = True

@@ -11,6 +11,7 @@ export default function AnalystDashboard(){
   const { data, loading, error, filters, setFilters, reload } = useStats()
   const [audits, setAudits] = useState([])
   const [loadingAudits, setLoadingAudits] = useState(false)
+  const [otSearch, setOtSearch] = useState('')
 
   // Limpiar filtros al montar el componente
   useEffect(() => {
@@ -28,6 +29,42 @@ export default function AnalystDashboard(){
       setAudits(data || [])
     } catch (err) {
       console.error('Error cargando auditorías:', err)
+    } finally {
+      setLoadingAudits(false)
+    }
+  }
+
+  const handleOtSearch = async (e) => {
+    e.preventDefault()
+    if (!otSearch.trim()) {
+      toast.warning('Ingresa una OT para buscar')
+      return
+    }
+    
+    setLoadingAudits(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${otSearch.trim()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast.error(`No se encontró auditoría con OT ${otSearch}`)
+        } else {
+          throw new Error('Error en la búsqueda')
+        }
+        setLoadingAudits(false)
+        return
+      }
+      
+      const auditData = await response.json()
+      
+      // Mostrar la auditoría encontrada
+      setAudits([auditData])
+      toast.success(`Auditoría encontrada con ${auditData.productos.length} producto(s) de OT ${otSearch}`)
+    } catch (err) {
+      toast.error('Error: ' + err.message)
     } finally {
       setLoadingAudits(false)
     }
@@ -135,7 +172,33 @@ export default function AnalystDashboard(){
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="card-title mb-0">Auditorías Recientes</h5>
-                    <div className="btn-group">
+                    <div className="d-flex gap-2 align-items-center">
+                      <form onSubmit={handleOtSearch} className="d-flex gap-2">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="Buscar por OT (ej: VE23456)"
+                          value={otSearch}
+                          onChange={(e) => setOtSearch(e.target.value)}
+                          style={{width: '200px'}}
+                        />
+                        <button type="submit" className="btn btn-sm btn-primary">
+                          <i className="bi bi-search"></i>
+                        </button>
+                        {otSearch && (
+                          <button 
+                            type="button" 
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => {
+                              setOtSearch('')
+                              loadAudits()
+                            }}
+                          >
+                            <i className="bi bi-x"></i>
+                          </button>
+                        )}
+                      </form>
+                      <div className="btn-group">
                       <button className="btn btn-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
                         <i className="bi bi-file-pdf"></i> PDF
                       </button>
@@ -144,13 +207,14 @@ export default function AnalystDashboard(){
                         <li><button className="dropdown-item" onClick={() => handleDownloadPDF('novedades')}>Reporte de Novedades</button></li>
                       </ul>
                       
-                      <button className="btn btn-success btn-sm dropdown-toggle ms-2" data-bs-toggle="dropdown">
-                        <i className="bi bi-file-excel"></i> Excel
-                      </button>
-                      <ul className="dropdown-menu">
-                        <li><button className="dropdown-item" onClick={() => handleDownloadExcel('general')}>Reporte General</button></li>
-                        <li><button className="dropdown-item" onClick={() => handleDownloadExcel('novedades')}>Reporte de Novedades</button></li>
-                      </ul>
+                        <button className="btn btn-success btn-sm dropdown-toggle ms-2" data-bs-toggle="dropdown">
+                          <i className="bi bi-file-excel"></i> Excel
+                        </button>
+                        <ul className="dropdown-menu">
+                          <li><button className="dropdown-item" onClick={() => handleDownloadExcel('general')}>Reporte General</button></li>
+                          <li><button className="dropdown-item" onClick={() => handleDownloadExcel('novedades')}>Reporte de Novedades</button></li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                   {loadingAudits ? (

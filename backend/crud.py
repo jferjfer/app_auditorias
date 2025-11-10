@@ -122,7 +122,7 @@ def get_audits(db: Session, limit: int = 100, offset: int = 0) -> List[models.Au
 def get_audit_by_id(db: Session, audit_id: int):
     """Obtiene una auditoría por su ID, incluyendo sus productos y colaboradores."""
     return db.query(models.Audit).options(
-        joinedload(models.Audit.productos),
+        joinedload(models.Audit.productos).joinedload(models.Product.novelties),
         joinedload(models.Audit.collaborators)
     ).filter(models.Audit.id == audit_id).first()
 
@@ -140,14 +140,14 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
     return db_file 
 
 def get_audits_by_auditor(db: Session, auditor_id: int):
-    """Obtiene todas las auditorías donde el usuario es propietario O colaborador."""
+    """Obtiene las últimas 6 auditorías donde el usuario es propietario O colaborador."""
     return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
         models.Audit.auditor_id.isnot(None),
         (
             (models.Audit.auditor_id == auditor_id) |
             (models.Audit.collaborators.any(models.User.id == auditor_id))
         )
-    ).all()
+    ).order_by(models.Audit.creada_en.desc()).limit(6).all()
 
 def get_products_by_audit(db: Session, audit_id: int):
     """Obtiene todos los productos de una auditoría."""
@@ -190,30 +190,33 @@ def get_product_novelties(db: Session, product_id: int):
     return db.query(models.ProductNovelty).filter(models.ProductNovelty.product_id == product_id).all()
 
 def get_novelties_by_audit(db: Session, audit_id: int):
-    """Obtiene todas las novedades de una auditoría agrupadas por SKU."""
-    from sqlalchemy.orm import joinedload
-    products = db.query(models.Product).options(
-        joinedload(models.Product.novelties)
-    ).filter(models.Product.auditoria_id == audit_id).all()
-    
-    # Agrupar por SKU
+    """
+    Obtiene todas las novedades de una auditoría agrupadas por SKU,
+    leyendo desde la tabla 'product_novelties'.
+    """
+    # Consultar todas las novedades para la auditoría, uniendo con el producto para obtener sus detalles.
+    novelties_query = db.query(models.ProductNovelty).join(models.Product).filter(
+        models.Product.auditoria_id == audit_id
+    ).options(joinedload(models.ProductNovelty.product)).all()
+
     sku_novelties = {}
-    for product in products:
-        if product.novelties:
-            if product.sku not in sku_novelties:
-                sku_novelties[product.sku] = {
-                    'sku': product.sku,
-                    'nombre_articulo': product.nombre_articulo,
-                    'cantidad_documento': product.cantidad_documento,
-                    'novelties': []
-                }
-            for novelty in product.novelties:
-                sku_novelties[product.sku]['novelties'].append({
-                    'tipo': novelty.novedad_tipo.value if hasattr(novelty.novedad_tipo, 'value') else novelty.novedad_tipo,
-                    'cantidad': novelty.cantidad,
-                    'observaciones': novelty.observaciones
-                })
-    
+    for novelty in novelties_query:
+        product = novelty.product
+        if product.sku not in sku_novelties:
+            sku_novelties[product.sku] = {
+                'sku': product.sku,
+                'nombre_articulo': product.nombre_articulo,
+                'cantidad_documento': product.cantidad_documento,
+                'novelties': []
+            }
+        
+        # Añadir la novedad real desde la tabla correcta
+        sku_novelties[product.sku]['novelties'].append({
+            'tipo': novelty.novedad_tipo.value,
+            'cantidad': novelty.cantidad,
+            'observaciones': novelty.observaciones
+        })
+            
     return list(sku_novelties.values())
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
@@ -455,3 +458,14 @@ def get_product_with_novelties(db: Session, product_id: int):
     return db.query(models.Product).options(
         joinedload(models.Product.novelties)
     ).filter(models.Product.id == product_id).first()
+
+def search_audits_by_ot(db: Session, auditor_id: int, ot_query: str):
+    """Busca EXACTAMENTE una auditoría que contenga la OT especificada."""
+    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+        models.Audit.auditor_id.isnot(None),
+        (
+            (models.Audit.auditor_id == auditor_id) |
+            (models.Audit.collaborators.any(models.User.id == auditor_id))
+        ),
+        models.Audit.ubicacion_destino.contains(ot_query)
+    ).order_by(models.Audit.creada_en.desc()).limit(1).all()
