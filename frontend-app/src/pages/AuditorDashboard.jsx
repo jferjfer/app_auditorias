@@ -17,6 +17,7 @@ import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
 import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive';
 import { offlineDB } from '../utils/offlineDB';
 
 let selectedVoice = null;
@@ -42,10 +43,16 @@ const speak = (text) => {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   
-  const utterance = new SpeechSynthesisUtterance(text);
+  // Si el texto es solo un número, agregar "cantidad" para mejor pronunciación
+  let spokenText = text;
+  if (/^\d+$/.test(String(text).trim())) {
+    spokenText = `cantidad ${text}`;
+  }
+  
+  const utterance = new SpeechSynthesisUtterance(spokenText);
   if (selectedVoice) utterance.voice = selectedVoice;
   utterance.lang = 'es-CO';
-  utterance.rate = 1.5;
+  utterance.rate = 1.3;
   utterance.pitch = 1.1;
   utterance.volume = 1;
   
@@ -86,6 +93,7 @@ export default function AuditorDashboard() {
   const abortControllerRef = useRef(null);
   const user = getCurrentUser();
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
+  useSessionKeepAlive(30000); // Ping cada 30 segundos
   
   const ITEMS_PER_PAGE = 50;
 
@@ -945,7 +953,7 @@ export default function AuditorDashboard() {
                       )}
                     </div>
                   </div>
-                  <div className="table-responsive" style={{width: '100%', maxWidth: '900px', margin: '0 auto'}}>
+                  <div className="table-responsive" style={{width: '100%', margin: '0 auto'}}>
                     <table className="table table-sm table-hover" style={{fontSize: '0.85rem', width: '100%', marginBottom: '0'}}>
                       <thead>
                         <tr>

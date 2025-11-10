@@ -45,7 +45,7 @@ function buildQueryString(params) {
 }
 
 // Helper genérico para realizar las peticiones a la API.
-async function fetchApi(endpoint, options) {
+async function fetchApi(endpoint, options, auditContext = null) {
     const response = await fetch(`${API_BASE}${endpoint}`, options);
 
     if (!response.ok) {
@@ -56,6 +56,24 @@ async function fetchApi(endpoint, options) {
         } catch (e) {
             errorDetail = response.statusText;
         }
+        
+        // Si es error 401 y hay contexto de auditoría, guardar en offline
+        if (response.status === 401 && auditContext) {
+            try {
+                const { offlineDB } = await import('../utils/offlineDB');
+                await offlineDB.init();
+                await offlineDB.savePendingChange(
+                    auditContext.auditId,
+                    auditContext.productId,
+                    auditContext.changes
+                );
+                window.dispatchEvent(new Event('pendingChangesUpdated'));
+                throw new Error('⚠️ Sesión expirada. Cambios guardados localmente. Inicia sesión para sincronizar.');
+            } catch (offlineError) {
+                console.error('Error guardando offline:', offlineError);
+            }
+        }
+        
         throw new Error(errorDetail);
     }
 
@@ -149,7 +167,8 @@ export async function finishAudit(auditId) {
 }
 
 export async function updateProduct(auditId, productId, updateData) {
-    return fetchApi(`/api/audits/${auditId}/products/${productId}`, buildOptions('PUT', updateData));
+    const auditContext = { auditId, productId, changes: updateData };
+    return fetchApi(`/api/audits/${auditId}/products/${productId}`, buildOptions('PUT', updateData), auditContext);
 }
 
 export async function bulkUpdateProducts(auditId, products) {

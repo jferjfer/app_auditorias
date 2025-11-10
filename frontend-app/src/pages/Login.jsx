@@ -15,6 +15,19 @@ const Login = () => {
     setLoading(true);
     try {
       const data = await login(email, password);
+      
+      // Verificar si hay cambios pendientes de sincronizar
+      try {
+        const { offlineDB } = await import('../utils/offlineDB');
+        await offlineDB.init();
+        const pending = await offlineDB.getPendingChanges();
+        if (pending.length > 0) {
+          window.dispatchEvent(new CustomEvent('loginSuccess', { detail: { hasPending: true } }));
+        }
+      } catch (offlineErr) {
+        console.error('Error verificando pendientes:', offlineErr);
+      }
+      
       // Redirigir según rol
       if (data.user_role === 'auditor') {
         navigate('/auditor');

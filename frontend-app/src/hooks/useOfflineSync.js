@@ -19,15 +19,25 @@ export function useOfflineSync(auditId) {
     const handlePendingUpdate = () => {
       if (auditId) updatePendingCount();
     };
+    
+    const handleLoginSuccess = (e) => {
+      if (e.detail?.hasPending) {
+        setTimeout(() => {
+          if (auditId) syncPendingChanges();
+        }, 1000);
+      }
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('pendingChangesUpdated', handlePendingUpdate);
+    window.addEventListener('loginSuccess', handleLoginSuccess);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('pendingChangesUpdated', handlePendingUpdate);
+      window.removeEventListener('loginSuccess', handleLoginSuccess);
     };
   }, [auditId]);
 

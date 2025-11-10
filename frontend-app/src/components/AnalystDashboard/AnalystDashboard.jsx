@@ -3,11 +3,13 @@ import Filters from './Filters'
 import KPIs from './KPIs'
 import Charts from './Charts'
 import useStats from '../../hooks/useStats'
+import { useSessionKeepAlive } from '../../hooks/useSessionKeepAlive'
 import { fetchReportData } from '../../services/api'
 import { API_BASE_URL } from '../../services/api'
 import ToastContainer, { toast } from '../Toast'
 
 export default function AnalystDashboard(){
+  useSessionKeepAlive(30000); // Ping cada 30 segundos
   const { data, loading, error, filters, setFilters, reload } = useStats()
   const [audits, setAudits] = useState([])
   const [loadingAudits, setLoadingAudits] = useState(false)

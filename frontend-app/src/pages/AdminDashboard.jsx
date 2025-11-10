@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAllUsers, createUser, updateUser, deleteUser } from '../services/api';
+import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 
 export default function AdminDashboard() {
+  useSessionKeepAlive(30000); // Ping cada 30 segundos
   const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
