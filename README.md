@@ -177,6 +177,23 @@ Si tienes problemas:
 - ✅ **Interfaz Moderna**: Diseño responsive con 7 temas de color y modo alto contraste
 - ✅ **Base de Datos**: PostgreSQL con persistencia segura
 - ✅ **API RESTful**: Endpoints documentados con FastAPI
+- ✅ **Seguridad Reforzada**: Rate limiting, validación de archivos, contraseñas fuertes, headers de seguridad
+
+## 🔒 Seguridad
+
+El sistema implementa múltiples capas de protección:
+
+- **Rate Limiting**: 100 requests/min global, 5 intentos/min en login
+- **Validación de Archivos**: Solo Excel válidos, máx 10MB, verificación de contenido
+- **Contraseñas Fuertes**: Mínimo 8 caracteres con mayúsculas, minúsculas y números
+- **Headers de Seguridad**: X-Frame-Options, X-XSS-Protection, HSTS
+- **Sanitización de Entrada**: Validación y limpieza de todos los inputs
+- **CORS Restrictivo**: Solo orígenes autorizados
+- **Protección IDOR**: Verificación de permisos por rol
+- **Timing Attack Protection**: Delays constantes en autenticación
+
+Ver [SECURITY_REPORT.md](SECURITY_REPORT.md) para detalles completos.
+Ver [SECURITY_TESTS.md](SECURITY_TESTS.md) para pruebas de seguridad.
 
 ---
 

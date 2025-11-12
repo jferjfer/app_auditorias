@@ -114,7 +114,7 @@ export default function AuditorDashboard() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname === 'localhost' ? '127.0.0.1:8000' : window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws/${currentAudit.id}?token=${token}`;
-    console.log('Connecting to:', wsUrl);
+    console.log('Connecting to WebSocket for audit:', currentAudit.id);
     wsRef.current = new WebSocket(wsUrl);
     
     wsRef.current.onopen = () => console.log('✅ WebSocket connected');
@@ -166,7 +166,7 @@ export default function AuditorDashboard() {
     
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${otSearch.trim()}`, {
+      const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${encodeURIComponent(otSearch.trim())}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       

@@ -36,15 +36,28 @@ if not DEBUG:
     )
 
 # CORS (solo orígenes permitidos)
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# Agregar dominio de producción desde variable de entorno
+production_url = os.getenv("PRODUCTION_URL")
+if production_url:
+    allowed_origins.append(production_url)
+    # También permitir sin www si tiene www
+    if production_url.startswith("https://www."):
+        allowed_origins.append(production_url.replace("https://www.", "https://"))
+else:
+    # Fallback: permitir cualquier subdominio de Render en producción
+    if not DEBUG:
+        allowed_origins.append("https://app-auditorias.onrender.com")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://app-auditorias.onrender.com",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],

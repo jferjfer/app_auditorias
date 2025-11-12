@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from backend import models, schemas, crud
 from backend.dependencies import get_db
 from backend.services.auth_service import get_current_user
+from backend.utils.validators import validate_excel_file, validate_files_batch, validate_ot_number
 from .websockets import manager
 
 router = APIRouter(
@@ -55,20 +56,23 @@ async def upload_multiple_audit_files(
     if current_user.rol != "auditor":
         raise HTTPException(status_code=403, detail="No tienes permiso para cargar archivos.")
 
-    if not files:
-        raise HTTPException(status_code=400, detail="No se recibieron archivos")
+    # Validar lote de archivos
+    validate_files_batch(files)
 
     all_productos_data = []
     ordenes_procesadas = set()
 
     for file_index, file in enumerate(files):
-        if not file.filename.endswith(('.xlsx', '.xls')):
-            raise HTTPException(status_code=400, detail=f"Solo se permiten archivos Excel. Archivo {file.filename} no válido.")
+        # Leer contenido del archivo
+        content = await file.read()
+        
+        # Validar archivo Excel
+        validate_excel_file(file, content)
 
         temp_file_path = f"temp_{file.filename}_{file_index}"
         try:
             with open(temp_file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+                buffer.write(content)
 
             df = pd.read_excel(temp_file_path, engine='openpyxl', header=None)
             
@@ -187,6 +191,8 @@ def search_audit_by_exact_ot(
     """
     Busca una auditoría que contenga la OT especificada y devuelve SOLO los productos de esa OT.
     """
+    # Validar y sanitizar OT
+    ot_number = validate_ot_number(ot_number)
     # Construir filtro según el rol
     if current_user.rol in ["analista", "administrador"]:
         # Analistas y admins pueden ver todas las auditorías

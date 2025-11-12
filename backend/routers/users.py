@@ -5,6 +5,7 @@ from typing import List
 from backend import models, schemas, crud
 from backend.dependencies import get_db
 from backend.services.auth_service import get_current_user
+from backend.utils.validators import validate_password_strength
 
 router = APIRouter(
     prefix="/users",
@@ -16,6 +17,9 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
     """
     Obtiene el usuario actual a partir del token JWT.
     """
+    import logging
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Keep-alive: Usuario {current_user.nombre} (ID: {current_user.id})")
     return current_user
 
 @router.get("/", response_model=List[schemas.User])
@@ -41,6 +45,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     """
     if current_user.rol != "administrador":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para crear usuarios")
+    
+    # Validar fortaleza de contraseña
+    validate_password_strength(user.contrasena)
     
     db_user = crud.get_user_by_email(db, email=user.correo)
     if db_user:

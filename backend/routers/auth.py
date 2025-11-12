@@ -18,8 +18,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 
 
-# Login attempt tracking
-login_attempts = {}
+# Login attempt tracking (se limpia automáticamente)
+from collections import defaultdict
+login_attempts = defaultdict(lambda: [0, None])
 
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(
@@ -36,17 +37,22 @@ def login_for_access_token(
     email = form_data.username.lower()
     now = datetime.utcnow()
     
-    if email in login_attempts:
-        attempts, last_attempt = login_attempts[email]
-        if (now - last_attempt).seconds < 60 and attempts >= 5:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Demasiados intentos. Intenta en 1 minuto"
-            )
-        if (now - last_attempt).seconds >= 60:
-            login_attempts[email] = [0, now]
-    else:
+    import logging
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Login attempt for: {email}")
+    
+    attempts, last_attempt = login_attempts[email]
+    
+    # Si es el primer intento o pasó más de 1 minuto, resetear
+    if last_attempt is None or (now - last_attempt).total_seconds() >= 60:
         login_attempts[email] = [0, now]
+        attempts = 0
+    # Bloquear si hay 5+ intentos en menos de 1 minuto
+    elif attempts >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos. Intenta en 1 minuto"
+        )
     
     # Timing attack mitigation
     user = crud.get_user_by_email(db, email=email)
@@ -61,14 +67,15 @@ def login_for_access_token(
     if not user or not password_valid:
         login_attempts[email][0] += 1
         login_attempts[email][1] = now
-        time.sleep(0.5)  # Delay para prevenir fuerza bruta
+        time.sleep(0.2)  # Delay reducido para prevenir fuerza bruta
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas"
         )
     
-    # Reset intentos exitosos
-    login_attempts[email] = [0, now]
+    # Limpiar intentos exitosos completamente
+    if email in login_attempts:
+        del login_attempts[email]
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

@@ -69,7 +69,7 @@ def update_user(db: Session, user_id: int, user_update: schemas.UserUpdate):
     return db_user
 
 def delete_user(db: Session, user_id: int):
-    """Elimina un usuario."""
+    """Elimina un usuario. Las auditorías asociadas quedan con auditor_id=NULL para mantener trazabilidad."""
     db_user = get_user_by_id(db, user_id)
     if not db_user:
         return None
