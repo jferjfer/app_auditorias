@@ -13,6 +13,7 @@ import CollaboratorModal from '../components/CollaboratorModal';
 import CameraScanner from '../components/CameraScanner';
 import AuditHistory from '../components/AuditHistory';
 import NovedadModal from '../components/NovedadModal';
+import AddOtModal from '../components/AddOtModal';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
@@ -66,6 +67,9 @@ export default function AuditorDashboard() {
   const [loading, setLoading] = useState(false);
   const [scanInput, setScanInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [ubicacionOrigenId, setUbicacionOrigenId] = useState('');
+  const [ubicacionDestinoId, setUbicacionDestinoId] = useState('');
+  const [sedes, setSedes] = useState([]);
   const [showCollaboratorModal, setShowCollaboratorModal] = useState(false);
   const [selectedAuditForCollab, setSelectedAuditForCollab] = useState(null);
   const [lastScanned, setLastScanned] = useState(null);
@@ -83,6 +87,8 @@ export default function AuditorDashboard() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [noveltiesBySku, setNoveltiesBySku] = useState([]);
   const [showNovedadModal, setShowNovedadModal] = useState(false);
+  const [unscannedQuantities, setUnscannedQuantities] = useState({});
+  const [showAddOtModal, setShowAddOtModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [editingQuantity, setEditingQuantity] = useState('');
@@ -95,12 +101,28 @@ export default function AuditorDashboard() {
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
   useSessionKeepAlive(30000); // Ping cada 30 segundos
   
-  const ITEMS_PER_PAGE = 50;
+  const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
     loadAudits();
+    loadUbicaciones();
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
   }, []);
+
+  const loadUbicaciones = async () => {
+    try {
+      const { fetchUbicaciones } = await import('../services/api');
+      const data = await fetchUbicaciones();
+      setSedes(data);
+    } catch (err) {
+      console.error('Error cargando sedes:', err);
+    }
+  };
+
+  // Filtrar destinos excluyendo el origen seleccionado
+  const availableDestinos = sedes.filter(s => s.id !== parseInt(ubicacionOrigenId));
+  // Filtrar orígenes excluyendo el destino seleccionado
+  const availableOrigenes = sedes.filter(s => s.id !== parseInt(ubicacionDestinoId));
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -204,11 +226,14 @@ export default function AuditorDashboard() {
   const handleUpload = async (e) => {
     e.preventDefault();
     if (selectedFiles.length === 0) return toast.warning('Selecciona archivos');
+    if (!ubicacionOrigenId || !ubicacionDestinoId) return toast.warning('Selecciona origen y destino');
     setLoading(true);
     try {
-      const result = await uploadAuditFiles(selectedFiles);
+      const result = await uploadAuditFiles(selectedFiles, ubicacionOrigenId, ubicacionDestinoId);
       toast.success(`Auditoría #${result.audit_id} creada exitosamente`);
       setSelectedFiles([]);
+      setUbicacionOrigenId('');
+      setUbicacionDestinoId('');
       e.target.reset();
       loadAudits();
     } catch (err) {
@@ -709,6 +734,36 @@ export default function AuditorDashboard() {
             <div className="card-body">
               <h5 className="card-title">Cargar Archivos Excel</h5>
               <form onSubmit={handleUpload}>
+                <div className="row g-2 mb-2">
+                  <div className="col-md-6">
+                    <label className="form-label">Origen</label>
+                    <select 
+                      className="form-select"
+                      value={ubicacionOrigenId}
+                      onChange={(e) => setUbicacionOrigenId(e.target.value)}
+                      required
+                    >
+                      <option value="">Selecciona origen...</option>
+                      {availableOrigenes.map(s => (
+                        <option key={s.id} value={s.id}>{s.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Destino</label>
+                    <select 
+                      className="form-select"
+                      value={ubicacionDestinoId}
+                      onChange={(e) => setUbicacionDestinoId(e.target.value)}
+                      required
+                    >
+                      <option value="">Selecciona destino...</option>
+                      {availableDestinos.map(s => (
+                        <option key={s.id} value={s.id}>{s.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="input-group">
                   <input 
                     type="file" 
@@ -768,7 +823,8 @@ export default function AuditorDashboard() {
                   <thead>
                     <tr style={{textAlign: 'center'}}>
                       <th>ID</th>
-                      <th>Ubicación</th>
+                      <th>Origen</th>
+                      <th>Destino</th>
                       <th>Fecha</th>
                       <th>Estado</th>
                       <th>Acciones</th>
@@ -778,7 +834,8 @@ export default function AuditorDashboard() {
                     {audits.map(audit => (
                       <tr key={audit.id}>
                         <td>{audit.id}</td>
-                        <td>{audit.ubicacion_destino}</td>
+                        <td>{audit.ubicacion_origen?.nombre || 'N/A'}</td>
+                        <td>{audit.ubicacion_destino?.nombre || 'N/A'}</td>
                         <td>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                         <td>
                           <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
@@ -798,8 +855,14 @@ export default function AuditorDashboard() {
                           )}
                           {audit.estado === 'en_progreso' && (
                             <>
-                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino.includes('Filtrado:'))}>
+                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))}>
                                 Ver
+                              </button>
+                              <button className="btn btn-sm btn-warning me-2" onClick={() => {
+                                setCurrentAudit(audit);
+                                setShowAddOtModal(true);
+                              }}>
+                                <i className="bi bi-plus-circle"></i> OT
                               </button>
                               <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)}>
                                 <i className="bi bi-people"></i>
@@ -807,7 +870,7 @@ export default function AuditorDashboard() {
                             </>
                           )}
                           {audit.estado === 'finalizada' && (
-                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino.includes('Filtrado:'))}>
+                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))}>
                               <i className="bi bi-eye"></i> Ver
                             </button>
                           )}
@@ -882,7 +945,7 @@ export default function AuditorDashboard() {
                 <div className="card-body" style={{padding: '15px'}}>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="card-title mb-0">
-                      Productos - {currentAudit.ubicacion_destino}
+                      Productos - {currentAudit.ubicacion_origen?.nombre || 'N/A'} → {currentAudit.ubicacion_destino?.nombre || 'N/A'}
                       {currentAudit.estado === 'finalizada' ? (
                         <>
                           <span className="badge bg-success ms-2">Finalizada</span>
@@ -1096,7 +1159,14 @@ export default function AuditorDashboard() {
                 <h5 className="modal-title">
                   <i className="bi bi-exclamation-triangle text-warning"></i> Verificación de Auditoría
                 </h5>
-                <button className="btn-close" onClick={() => setShowVerifyModal(false)}></button>
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setShowVerifyModal(false)}
+                  style={{fontSize: '1.2rem', padding: '0.25rem 0.5rem'}}
+                >
+                  <i className="bi bi-x-lg"></i>
+                </button>
               </div>
               <div className="modal-body">
                 {(() => {
@@ -1177,7 +1247,8 @@ export default function AuditorDashboard() {
                                   <th>SKU</th>
                                   <th>Nombre</th>
                                   <th>Cant. Doc</th>
-                                  <th>Estado</th>
+                                  <th style={{width: '120px'}}>Cant. Física</th>
+                                  <th style={{width: '80px'}}>Acción</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1187,7 +1258,39 @@ export default function AuditorDashboard() {
                                     <td>{p.nombre_articulo}</td>
                                     <td>{p.cantidad_documento}</td>
                                     <td>
-                                      <span className="badge bg-danger">Sin escanear</span>
+                                      <input
+                                        type="number"
+                                        className="form-control form-control-sm"
+                                        placeholder="0"
+                                        value={unscannedQuantities[p.id] ?? ''}
+                                        onChange={(e) => setUnscannedQuantities(prev => ({
+                                          ...prev,
+                                          [p.id]: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                                        }))}
+                                        style={{width: '100%'}}
+                                      />
+                                    </td>
+                                    <td>
+                                      <button
+                                        className="btn btn-sm btn-success"
+                                        onClick={async () => {
+                                          const qty = unscannedQuantities[p.id];
+                                          if (qty === '' || qty === undefined) {
+                                            toast.warning('Ingresa una cantidad');
+                                            return;
+                                          }
+                                          await handleQuantityChange(p.id, qty);
+                                          toast.success('Guardado');
+                                          setUnscannedQuantities(prev => {
+                                            const newState = {...prev};
+                                            delete newState[p.id];
+                                            return newState;
+                                          });
+                                        }}
+                                        disabled={unscannedQuantities[p.id] === '' || unscannedQuantities[p.id] === undefined}
+                                      >
+                                        <i className="bi bi-check"></i>
+                                      </button>
                                     </td>
                                   </tr>
                                 ))}
@@ -1218,6 +1321,18 @@ export default function AuditorDashboard() {
           setShowNovedadModal(false);
           setSelectedProduct(null);
           setTimeout(() => document.getElementById('scan-input')?.focus(), 100);
+        }}
+      />
+
+      <AddOtModal
+        show={showAddOtModal}
+        auditId={currentAudit?.id}
+        onClose={() => setShowAddOtModal(false)}
+        onSuccess={() => {
+          if (currentAudit) {
+            handleVerAuditoria(currentAudit.id);
+          }
+          loadAudits();
         }}
       />
 

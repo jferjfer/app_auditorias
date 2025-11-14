@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAllUsers, createUser, updateUser, deleteUser } from '../services/api';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive';
+import UbicacionesManager from '../components/UbicacionesManager';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 
@@ -123,7 +124,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-
+      {/* Gestión de ubicaciones */}
+      <div className="row g-3 mb-3">
+        <div className="col-12">
+          <UbicacionesManager />
+        </div>
+      </div>
 
       {/* Modal para agregar/editar usuario */}
       {showModal && (

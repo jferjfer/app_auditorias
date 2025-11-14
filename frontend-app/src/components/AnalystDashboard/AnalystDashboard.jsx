@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import Filters from './Filters'
 import KPIs from './KPIs'
 import Charts from './Charts'
+import AuditProductsModal from './AuditProductsModal'
 import useStats from '../../hooks/useStats'
 import { useSessionKeepAlive } from '../../hooks/useSessionKeepAlive'
 import { fetchReportData } from '../../services/api'
@@ -14,6 +15,7 @@ export default function AnalystDashboard(){
   const [audits, setAudits] = useState([])
   const [loadingAudits, setLoadingAudits] = useState(false)
   const [otSearch, setOtSearch] = useState('')
+  const [selectedAudit, setSelectedAudit] = useState(null)
 
   // Limpiar filtros al montar el componente
   useEffect(() => {
@@ -234,6 +236,7 @@ export default function AnalystDashboard(){
                             <th>Fecha</th>
                             <th>Estado</th>
                             <th className="text-end">Cumplimiento</th>
+                            <th>Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -251,6 +254,14 @@ export default function AnalystDashboard(){
                               <td className="text-end">
                                 {audit.porcentaje_cumplimiento ? `${audit.porcentaje_cumplimiento}%` : 'N/A'}
                               </td>
+                              <td>
+                                <button 
+                                  className="btn btn-sm btn-primary"
+                                  onClick={() => setSelectedAudit(audit)}
+                                >
+                                  <i className="bi bi-eye"></i> Ver
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -262,6 +273,13 @@ export default function AnalystDashboard(){
             </div>
           </div>
         </>
+      )}
+      
+      {selectedAudit && (
+        <AuditProductsModal 
+          audit={selectedAudit} 
+          onClose={() => setSelectedAudit(null)} 
+        />
       )}
       
       <ToastContainer />

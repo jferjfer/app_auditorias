@@ -66,14 +66,32 @@ class Product(ProductBase):
     class Config:
         from_attributes = True
 
+# Esquemas para Ubicaciones
+class UbicacionBase(BaseModel):
+    nombre: str
+    tipo: str  # 'origen' o 'destino'
+
+class UbicacionCreate(UbicacionBase):
+    pass
+
+class Ubicacion(UbicacionBase):
+    id: int
+    creado_en: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
 # Esquema para crear una auditoría (con productos anidados)
 class AuditCreate(BaseModel):
-    ubicacion_destino: str
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
     productos: List[ProductBase]
 
 # Esquema base para auditoría
 class AuditBase(BaseModel):
-    ubicacion_destino: str
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
     estado: str
     porcentaje_cumplimiento: Optional[int] = None
 
@@ -93,6 +111,8 @@ class AuditDetails(Audit):
     productos: List[Product]
     collaborators: List[User] = []
     auditor: Optional[User] = None
+    ubicacion_origen: Optional[Ubicacion] = None
+    ubicacion_destino: Optional[Ubicacion] = None
 
     class Config:
         from_attributes = True
@@ -162,7 +182,10 @@ class ProductCreate(ProductBase):
 # Esquema para respuesta de auditorías con información básica
 class AuditResponse(BaseModel):
     id: int
-    ubicacion_destino: str
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
+    ubicacion_origen: Optional[Ubicacion] = None
+    ubicacion_destino: Optional[Ubicacion] = None
     auditor_id: int
     auditor_nombre: Optional[str] = None
     creada_en: datetime

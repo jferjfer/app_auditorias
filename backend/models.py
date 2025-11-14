@@ -37,13 +37,28 @@ class User(Base):
     
     informes_generados = relationship("Report", back_populates="analista")
 
+# Tabla de sedes
+class Ubicacion(Base):
+    __tablename__ = "ubicaciones"
+
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, nullable=False, unique=True)
+    tipo = Column(String, nullable=False, default='sede')  # Siempre 'sede'
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    creado_en = Column(DateTime, default=datetime.utcnow)
+
+    creador = relationship("User")
+    auditorias_origen = relationship("Audit", back_populates="ubicacion_origen", foreign_keys='Audit.ubicacion_origen_id')
+    auditorias_destino = relationship("Audit", back_populates="ubicacion_destino", foreign_keys='Audit.ubicacion_destino_id')
+
 # La tabla "auditorias" del script SQL
 class Audit(Base):
     __tablename__ = "auditorias"
 
     id = Column(Integer, primary_key=True)
     auditor_id = Column(Integer, ForeignKey("usuarios.id"))
-    ubicacion_destino = Column(String, nullable=False)
+    ubicacion_origen_id = Column(Integer, ForeignKey("ubicaciones.id"), nullable=True)
+    ubicacion_destino_id = Column(Integer, ForeignKey("ubicaciones.id"), nullable=True)
     estado = Column(String, default="en_progreso")
     porcentaje_cumplimiento = Column(Integer)
     creada_en = Column(DateTime, default=datetime.utcnow)
@@ -51,6 +66,10 @@ class Audit(Base):
 
     # Auditor principal
     auditor = relationship("User", back_populates="auditorias", foreign_keys=[auditor_id])
+    
+    # Ubicaciones
+    ubicacion_origen = relationship("Ubicacion", back_populates="auditorias_origen", foreign_keys=[ubicacion_origen_id])
+    ubicacion_destino = relationship("Ubicacion", back_populates="auditorias_destino", foreign_keys=[ubicacion_destino_id])
     
     # Colaboradores de la auditoría
     collaborators = relationship(

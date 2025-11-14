@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 load_dotenv()
 
-from backend.routers import auth, audits, users, websockets, collaboration
+from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones
 from backend.database import engine
 from backend import models
 from backend.middleware.security import rate_limit_middleware
@@ -80,6 +80,7 @@ app.include_router(audits.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(websockets.router, prefix="/api")
 app.include_router(collaboration.router, prefix="/api")
+app.include_router(ubicaciones.router, prefix="/api")
 
 # Proteger directorio uploads
 @app.get("/uploads/{path:path}")

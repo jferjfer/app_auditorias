@@ -3,23 +3,51 @@ const API_BASE = import.meta.env.VITE_API_BASE || '';
 export async function login(email, password) {
   const url = `${API_BASE}/api/auth/login`;
   const body = new URLSearchParams({ username: email, password });
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Login fallido');
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    
+    if (!response.ok) {
+      // Intentar leer el error del servidor
+      try {
+        const error = await response.json();
+        
+        // Errores de autenticación (401, 429)
+        if (response.status === 401) {
+          throw new Error('❌ Credenciales incorrectas');
+        }
+        if (response.status === 429) {
+          throw new Error('⏱️ Demasiados intentos. Espera 1 minuto');
+        }
+        
+        throw new Error(error.detail || 'Error al iniciar sesión');
+      } catch (jsonError) {
+        // Si no puede leer JSON, es error de servidor
+        throw new Error('🔴 Error de servidor. Intenta más tarde');
+      }
+    }
+    
+    const data = await response.json();
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('current_user', JSON.stringify({
+      id: data.user_id,
+      nombre: data.user_name,
+      rol: data.user_role
+    }));
+    return data;
+    
+  } catch (error) {
+    // Error de red (servidor caído, sin internet, etc.)
+    if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+      throw new Error('🔴 No se puede conectar al servidor. Verifica tu conexión');
+    }
+    // Re-lanzar otros errores
+    throw error;
   }
-  const data = await response.json();
-  localStorage.setItem('access_token', data.access_token);
-  localStorage.setItem('current_user', JSON.stringify({
-    id: data.user_id,
-    nombre: data.user_name,
-    rol: data.user_role
-  }));
-  return data;
 }
 
 export function logout() {

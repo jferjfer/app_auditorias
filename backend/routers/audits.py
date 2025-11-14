@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
 import io
-from datetime import date, timedelta
+from datetime import date, timedelta, time
 from zoneinfo import ZoneInfo
 
 from backend import models, schemas, crud
@@ -47,6 +47,8 @@ async def create_audit(
 @router.post("/upload-multiple-files")
 async def upload_multiple_audit_files(
     files: List[UploadFile] = File(...),
+    ubicacion_origen_id: Optional[int] = None,
+    ubicacion_destino_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -141,13 +143,12 @@ async def upload_multiple_audit_files(
 
     processed_orders_list = list(ordenes_procesadas)
     num_orders = len(processed_orders_list)
-    ubicacion_destino = f"Auditoría OT {processed_orders_list[0]}" if num_orders == 1 else f"Auditoría Múltiple ({', '.join(processed_orders_list)})"
-    # Append Colombia local time to ubicacion_destino
-    bogota_tz = ZoneInfo("America/Bogota")
-    now_bogota = datetime.now(bogota_tz)
-    ubicacion_destino += f" - {now_bogota.strftime('%Y-%m-%d %H:%M')}"
 
-    audit_data = schemas.AuditCreate(ubicacion_destino=ubicacion_destino, productos=all_productos_data)
+    audit_data = schemas.AuditCreate(
+        ubicacion_origen_id=ubicacion_origen_id,
+        ubicacion_destino_id=ubicacion_destino_id,
+        productos=all_productos_data
+    )
     db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
     
     db.refresh(db_audit)
@@ -172,7 +173,14 @@ def get_audits(db: Session = Depends(get_db), current_user: models.User = Depend
         audits = crud.get_audits_by_auditor(db, auditor_id=current_user.id)
     else: # For analyst, admin and any other roles
         audits = crud.get_audits(db)
-    return [schemas.AuditResponse.from_orm(audit) for audit in audits]
+    
+    # Poblar auditor_nombre
+    result = []
+    for audit in audits:
+        audit_response = schemas.AuditResponse.from_orm(audit)
+        audit_response.auditor_nombre = audit.auditor.nombre if audit.auditor else None
+        result.append(audit_response)
+    return result
 
 @router.get("/auditor/{auditor_id}", response_model=List[schemas.AuditResponse])
 def get_audits_by_auditor(auditor_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -472,7 +480,7 @@ async def add_surplus_product_to_audit(
 
     return new_product
 
-@router.get("/report/details", response_model=List[schemas.AuditDetails])
+@router.get("/report/details")
 async def get_report_details(
     audit_status: Optional[str] = None,
     auditor_id: Optional[int] = None,
@@ -482,16 +490,44 @@ async def get_report_details(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Obtiene los detalles completos de las auditorías para la generación de informes en el frontend.
+    Obtiene las 7 auditorías más recientes del día actual.
     """
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
 
-    # Renombrar 'status' a 'state' si es necesario para que coincida con el modelo de BD
+    # Obtener rango del día actual en Colombia
+    bogota_tz = ZoneInfo("America/Bogota")
+    bogota_today = datetime.now(bogota_tz).date()
+    start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
+    end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = end_local.astimezone(timezone.utc)
+    
+    # Consulta optimizada: solo auditorías del día actual
+    query = db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+        models.Audit.auditor_id.isnot(None),
+        models.Audit.creada_en >= start_utc,
+        models.Audit.creada_en <= end_utc
+    )
+    
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
-    return audits
+    if db_status:
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    
+    # Solo las 7 más recientes del día
+    audits = query.order_by(models.Audit.creada_en.desc()).limit(7).all()
+    
+    # Retornar datos básicos con objeto auditor
+    return [{
+        "id": a.id,
+        "ubicacion_destino": a.ubicacion_destino,
+        "estado": a.estado,
+        "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
+        "creada_en": a.creada_en,
+        "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None
+    } for a in audits]
 
 @router.get("/report", response_class=StreamingResponse)
 async def download_audit_report(
@@ -738,6 +774,119 @@ async def get_top_novelty_skus_statistic(
             names[p.sku] = p.nombre_articulo
     items = sorted(counter.items(), key=lambda x: x[1], reverse=True)[:limit]
     return [{"sku": sku, "nombre_articulo": names.get(sku, ''), "total_novedades": count} for sku, count in items]
+
+@router.post("/{audit_id}/add-ot")
+async def add_ot_to_audit(
+    audit_id: int,
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Agrega productos de una OT adicional a una auditoría existente.
+    """
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit:
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada")
+    
+    if db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esta auditoría")
+    
+    if db_audit.estado == "finalizada":
+        raise HTTPException(status_code=400, detail="No se puede agregar OT a una auditoría finalizada")
+    
+    # Validar archivos
+    validate_files_batch(files)
+    
+    all_productos_data = []
+    ordenes_procesadas = set()
+    
+    for file_index, file in enumerate(files):
+        content = await file.read()
+        validate_excel_file(file, content)
+        
+        temp_file_path = f"temp_{file.filename}_{file_index}"
+        try:
+            with open(temp_file_path, "wb") as buffer:
+                buffer.write(content)
+            
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=None)
+            
+            header_row = None
+            target_patterns = [["número", "documento"], ["sku", "articulo"], ["nombre", "articulo"], ["cantidad"], ["un", "enviada"]]
+            for i in range(len(df)):
+                row_values = [str(cell).lower().strip() if pd.notna(cell) else "" for cell in df.iloc[i]]
+                matches = sum(1 for pattern in target_patterns if any(all(keyword in cell for keyword in pattern) for cell in row_values))
+                if matches >= 3:
+                    header_row = i
+                    break
+            
+            if header_row is None:
+                continue
+            
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=header_row)
+            
+            exact_mapping = {'Número de documento': 'número de documento', 'SKU ARTICULO': 'sku articulo', 'NOMBRE ARTICULO': 'nombre articulo', 'Cantidad': 'cantidad', 'Un Enviada': 'un enviada'}
+            column_mapping = {}
+            for original_col in df.columns:
+                original_col_str = str(original_col).strip().lower()
+                for key, val in exact_mapping.items():
+                    if original_col_str == key.lower():
+                        column_mapping[original_col] = val
+                        break
+            df = df.rename(columns=column_mapping)
+            
+            required_columns = ["número de documento", "sku articulo", "nombre articulo", "cantidad", "un enviada"]
+            if any(col not in df.columns for col in required_columns):
+                continue
+            
+            df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0).astype(int)
+            df["un enviada"] = pd.to_numeric(df["un enviada"], errors='coerce').fillna(0).astype(int)
+            
+            numero_documento = next((str(df.iloc[i][df.columns[0]]).strip() for i in range(len(df)) if pd.notna(df.iloc[i][df.columns[0]]) and "total" not in str(df.iloc[i][df.columns[0]]).lower()), f"Documento_{file_index}")
+            ordenes_procesadas.add(numero_documento)
+            
+            for i, row in df.iterrows():
+                sku_value = row.get("sku articulo")
+                if pd.isna(sku_value) or "total" in str(sku_value).lower():
+                    continue
+                
+                sku = str(sku_value).strip().split('.')[0]
+                orden_traslado = str(numero_documento).strip()
+                if "VE" in orden_traslado:
+                    match = re.search(r'VE\d+', orden_traslado)
+                    if match:
+                        orden_traslado = match.group(0)
+                
+                producto_data = models.Product(
+                    auditoria_id=audit_id,
+                    sku=sku,
+                    nombre_articulo=str(row.get("nombre articulo", "Sin nombre")).strip(),
+                    cantidad_documento=row.get("un enviada", 0),
+                    cantidad_enviada=row.get("cantidad", 0),
+                    orden_traslado_original=orden_traslado,
+                    novedad="sin_novedad"
+                )
+                all_productos_data.append(producto_data)
+        
+        finally:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+    
+    if not all_productos_data:
+        raise HTTPException(status_code=400, detail="No se encontraron productos válidos en los archivos")
+    
+    # Agregar productos a la auditoría
+    for producto in all_productos_data:
+        db.add(producto)
+    
+    db.commit()
+    
+    return {
+        "message": f"Se agregaron {len(all_productos_data)} productos de {len(ordenes_procesadas)} OT(s)",
+        "productos_agregados": len(all_productos_data),
+        "ordenes_agregadas": list(ordenes_procesadas)
+    }
 
 @router.get("/statistics/average-audit-duration", response_model=schemas.AverageAuditDurationStatistic)
 async def get_average_audit_duration_statistic(

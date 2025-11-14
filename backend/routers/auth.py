@@ -61,8 +61,8 @@ def login_for_access_token(
     if user:
         password_valid = verify_password(form_data.password, user.contrasena_hash)
     else:
-        # Fake hash check para timing constante
-        verify_password(form_data.password, "$2b$12$fake.hash.to.prevent.timing.attack.abcdefghijklmnopqrstuvwxy")
+        # Fake hash check para timing constante (hash válido de "dummy")
+        verify_password(form_data.password, "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5jtRPlaAduZem")
     
     if not user or not password_valid:
         login_attempts[email][0] += 1

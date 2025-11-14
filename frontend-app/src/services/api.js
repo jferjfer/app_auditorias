@@ -150,12 +150,19 @@ export async function fetchAuditsByAuditor(auditorId) {
     return fetchApi(`/api/audits/auditor/${auditorId}`, buildOptions('GET'));
 }
 
-export async function uploadAuditFiles(files) {
+export async function uploadAuditFiles(files, ubicacionOrigenId, ubicacionDestinoId) {
     const formData = new FormData();
     for (const file of files) {
         formData.append('files', file);
     }
-    return fetchApi('/api/audits/upload-multiple-files', buildOptions('POST', formData));
+    
+    let url = '/api/audits/upload-multiple-files';
+    const params = [];
+    if (ubicacionOrigenId) params.push(`ubicacion_origen_id=${ubicacionOrigenId}`);
+    if (ubicacionDestinoId) params.push(`ubicacion_destino_id=${ubicacionDestinoId}`);
+    if (params.length > 0) url += '?' + params.join('&');
+    
+    return fetchApi(url, buildOptions('POST', formData));
 }
 
 export async function iniciarAuditoria(auditId) {
@@ -283,6 +290,32 @@ export async function getTopNoveltySkusStatistic(filters = {}) {
 export async function getAverageAuditDurationStatistic(filters = {}) {
     const queryString = buildQueryString(filters);
     return fetchApi(`/api/audits/statistics/average-audit-duration${queryString}`, buildOptions('GET'));
+}
+
+// --- Ubicaciones ---
+export async function fetchUbicaciones(tipo = null) {
+    const queryString = tipo ? `?tipo=${tipo}` : '';
+    return fetchApi(`/api/ubicaciones/${queryString}`, buildOptions('GET'));
+}
+
+export async function createUbicacion(ubicacionData) {
+    return fetchApi('/api/ubicaciones/', buildOptions('POST', ubicacionData));
+}
+
+export async function deleteUbicacion(ubicacionId) {
+    return fetchApi(`/api/ubicaciones/${ubicacionId}`, buildOptions('DELETE'));
+}
+
+export async function createUbicacionesBulk(nombres) {
+    return fetchApi('/api/ubicaciones/bulk', buildOptions('POST', nombres));
+}
+
+export async function addOtToAudit(auditId, files) {
+    const formData = new FormData();
+    for (const file of files) {
+        formData.append('files', file);
+    }
+    return fetchApi(`/api/audits/${auditId}/add-ot`, buildOptions('POST', formData));
 }
 
 // Exportar todo como un objeto default para compatibilidad

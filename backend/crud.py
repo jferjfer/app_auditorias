@@ -83,7 +83,8 @@ def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     # Keep database timestamps in UTC (models.Audit.creada_en default uses datetime.utcnow)
     db_audit = models.Audit(
         auditor_id=auditor_id,
-        ubicacion_destino=audit_data.ubicacion_destino,
+        ubicacion_origen_id=audit_data.ubicacion_origen_id,
+        ubicacion_destino_id=audit_data.ubicacion_destino_id,
         estado="pendiente"
     )
 
@@ -113,7 +114,11 @@ def get_audits(db: Session, limit: int = 100, offset: int = 0) -> List[models.Au
     end_local = datetime.combine(bogota_today, time.max).replace(tzinfo=bogota_tz)
     start_utc = start_local.astimezone(timezone.utc)
     end_utc = end_local.astimezone(timezone.utc)
-    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+    return db.query(models.Audit).options(
+        joinedload(models.Audit.auditor),
+        joinedload(models.Audit.ubicacion_origen),
+        joinedload(models.Audit.ubicacion_destino)
+    ).filter(
         models.Audit.auditor_id.isnot(None),
         models.Audit.creada_en >= start_utc,
         models.Audit.creada_en <= end_utc
@@ -123,7 +128,9 @@ def get_audit_by_id(db: Session, audit_id: int):
     """Obtiene una auditoría por su ID, incluyendo sus productos y colaboradores."""
     return db.query(models.Audit).options(
         joinedload(models.Audit.productos).joinedload(models.Product.novelties),
-        joinedload(models.Audit.collaborators)
+        joinedload(models.Audit.collaborators),
+        joinedload(models.Audit.ubicacion_origen),
+        joinedload(models.Audit.ubicacion_destino)
     ).filter(models.Audit.id == audit_id).first()
 
 def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
@@ -141,7 +148,11 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
 
 def get_audits_by_auditor(db: Session, auditor_id: int):
     """Obtiene las últimas 6 auditorías donde el usuario es propietario O colaborador."""
-    return db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
+    return db.query(models.Audit).options(
+        joinedload(models.Audit.auditor),
+        joinedload(models.Audit.ubicacion_origen),
+        joinedload(models.Audit.ubicacion_destino)
+    ).filter(
         models.Audit.auditor_id.isnot(None),
         (
             (models.Audit.auditor_id == auditor_id) |
@@ -466,6 +477,31 @@ def search_audits_by_ot(db: Session, auditor_id: int, ot_query: str):
         (
             (models.Audit.auditor_id == auditor_id) |
             (models.Audit.collaborators.any(models.User.id == auditor_id))
-        ),
-        models.Audit.ubicacion_destino.contains(ot_query)
+        )
     ).order_by(models.Audit.creada_en.desc()).limit(1).all()
+
+# --- Funciones para Ubicaciones ---
+def create_ubicacion(db: Session, ubicacion: schemas.UbicacionCreate, user_id: int):
+    """Crea una nueva sede."""
+    db_ubicacion = models.Ubicacion(
+        nombre=ubicacion.nombre.strip(),
+        tipo='sede',
+        creado_por=user_id
+    )
+    db.add(db_ubicacion)
+    db.commit()
+    db.refresh(db_ubicacion)
+    return db_ubicacion
+
+def get_ubicaciones(db: Session, tipo: Optional[str] = None) -> List[models.Ubicacion]:
+    """Obtiene todas las sedes."""
+    return db.query(models.Ubicacion).order_by(models.Ubicacion.nombre).all()
+
+def delete_ubicacion(db: Session, ubicacion_id: int):
+    """Elimina una ubicación."""
+    db_ubicacion = db.query(models.Ubicacion).filter(models.Ubicacion.id == ubicacion_id).first()
+    if not db_ubicacion:
+        return None
+    db.delete(db_ubicacion)
+    db.commit()
+    return db_ubicacion
