@@ -97,6 +97,7 @@ export default function AuditorDashboard() {
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const autoSaveTimerRef = useRef(null);
   const user = getCurrentUser();
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
   useSessionKeepAlive(30000); // Ping cada 30 segundos
@@ -129,43 +130,117 @@ export default function AuditorDashboard() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // Auto-guardar último producto después de 15 segundos sin escanear
+  useEffect(() => {
+    if (!lastScanned || !currentAudit) return;
+    
+    // Limpiar timer anterior
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    
+    // Crear nuevo timer de 15 segundos
+    autoSaveTimerRef.current = setTimeout(() => {
+      const lastProduct = products.find(p => p.sku === lastScanned.sku);
+      if (lastProduct) {
+        const changes = {
+          cantidad_fisica: lastProduct.cantidad_documento,
+          novedad: 'sin_novedad',
+          observaciones: 'sin novedad'
+        };
+        setProducts(prev => prev.map(p => 
+          p.id === lastProduct.id ? { ...p, ...changes } : p
+        ));
+        
+        if (isOnline) {
+          updateProduct(currentAudit.id, lastProduct.id, changes).catch(err => console.error('Error:', err));
+        } else {
+          offlineDB.savePendingChange(currentAudit.id, lastProduct.id, changes).then(() => {
+            window.dispatchEvent(new Event('pendingChangesUpdated'));
+          });
+        }
+        speak('Guardado automático');
+        setLastScanned(null);
+      }
+    }, 15000); // 15 segundos
+    
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [lastScanned, currentAudit, products, isOnline]);
+
   useEffect(() => {
     if (!currentAudit) return;
     
-    const token = localStorage.getItem('access_token');
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname === 'localhost' ? '127.0.0.1:8000' : window.location.host;
-    const wsUrl = `${protocol}//${host}/api/ws/${currentAudit.id}?token=${token}`;
-    console.log('Connecting to WebSocket for audit:', currentAudit.id);
-    wsRef.current = new WebSocket(wsUrl);
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let reconnectTimer;
     
-    wsRef.current.onopen = () => console.log('✅ WebSocket connected');
-    wsRef.current.onerror = (err) => console.error('❌ WebSocket error:', err);
-    
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    const connectWebSocket = () => {
+      const token = localStorage.getItem('access_token');
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.hostname === 'localhost' ? '127.0.0.1:8000' : window.location.host;
+      const wsUrl = `${protocol}//${host}/api/ws/${currentAudit.id}?token=${token}`;
+      console.log('Connecting to WebSocket for audit:', currentAudit.id);
+      wsRef.current = new WebSocket(wsUrl);
       
-      if (data.type === 'ping') return;
+      wsRef.current.onopen = () => {
+        console.log('✅ WebSocket connected');
+        reconnectAttempts = 0;
+      };
       
-      // Throttle: agrupar mensajes cada 500ms
-      clearTimeout(wsThrottleRef.current);
-      wsThrottleRef.current = setTimeout(() => {
-        if (data.type === 'product_locked') {
-          setLockedProducts(prev => ({...prev, [data.product_id]: data.user}));
-          addNotification(`⚠️ ${data.user} está editando un producto`);
-        } else if (data.type === 'product_unlocked') {
-          setLockedProducts(prev => {const n = {...prev}; delete n[data.product_id]; return n;});
-        } else if (data.type === 'product_updated') {
-          setProducts(prev => prev.map(p => p.id === data.product.id ? data.product : p));
-          if (data.user !== user.nombre) {
-            addNotification(`✅ ${data.user} actualizó ${data.product.sku}`);
-          }
+      wsRef.current.onerror = (err) => console.error('❌ WebSocket error:', err);
+      
+      wsRef.current.onclose = () => {
+        console.log('WebSocket closed');
+        // Reconectar automáticamente en móviles
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+          reconnectTimer = setTimeout(connectWebSocket, delay);
         }
-      }, 500);
+      };
+      
+      wsRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ping') return;
+        
+        // Throttle: agrupar mensajes cada 500ms
+        clearTimeout(wsThrottleRef.current);
+        wsThrottleRef.current = setTimeout(() => {
+          if (data.type === 'product_locked') {
+            setLockedProducts(prev => ({...prev, [data.product_id]: data.user}));
+            addNotification(`⚠️ ${data.user} está editando un producto`);
+          } else if (data.type === 'product_unlocked') {
+            setLockedProducts(prev => {const n = {...prev}; delete n[data.product_id]; return n;});
+          } else if (data.type === 'product_updated') {
+            setProducts(prev => prev.map(p => p.id === data.product.id ? data.product : p));
+            if (data.user !== user.nombre) {
+              addNotification(`✅ ${data.user} actualizó ${data.product.sku}`);
+            }
+          }
+        }, 500);
+      };
     };
+    
+    connectWebSocket();
+    
+    // Reconectar al volver a la app en móviles
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && wsRef.current?.readyState !== WebSocket.OPEN) {
+        connectWebSocket();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       clearTimeout(wsThrottleRef.current);
+      clearTimeout(reconnectTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       wsRef.current?.close();
     };
   }, [currentAudit]);
@@ -355,7 +430,7 @@ export default function AuditorDashboard() {
         }
       }
 
-      // Caso 3: SKU ya tiene novedad previa - abrir modal para modificar
+      // Caso 3: SKU ya tiene novedad previa (faltante/sobrante/avería) - abrir modal para modificar
       const updatedProduct = products.find(p => p.id === product.id);
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
@@ -372,11 +447,24 @@ export default function AuditorDashboard() {
         return;
       }
 
+      // Caso 3.5: Producto ya escaneado SIN novedad - abrir modal para ajustar
+      if (updatedProduct && 
+          updatedProduct.cantidad_fisica !== null && 
+          updatedProduct.cantidad_fisica !== undefined &&
+          updatedProduct.novedad === 'sin_novedad') {
+        setScanInput('');
+        speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
+        setSelectedProduct(updatedProduct);
+        setShowNovedadModal(true);
+        return;
+      }
+
       // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
       setLastScanned({ sku: product.sku, id: product.id });
       setScannedCount(prev => prev + 1);
       speak(`${product.cantidad_documento}`);
       setScanInput('');
+      // El timer de auto-guardado se reinicia automáticamente por el useEffect
     }
   };
 
@@ -569,7 +657,7 @@ export default function AuditorDashboard() {
       }
     }
 
-    // Caso 3: SKU ya tiene novedad previa - abrir modal para modificar
+    // Caso 3: SKU ya tiene novedad previa (faltante/sobrante/avería) - abrir modal para modificar
     const updatedProduct = products.find(p => p.id === product.id);
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
@@ -580,6 +668,17 @@ export default function AuditorDashboard() {
       const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
                      updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
       speak(mensaje);
+      setSelectedProduct(updatedProduct);
+      setShowNovedadModal(true);
+      return;
+    }
+
+    // Caso 3.5: Producto ya escaneado SIN novedad - abrir modal para ajustar
+    if (updatedProduct && 
+        updatedProduct.cantidad_fisica !== null && 
+        updatedProduct.cantidad_fisica !== undefined &&
+        updatedProduct.novedad === 'sin_novedad') {
+      speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
       setSelectedProduct(updatedProduct);
       setShowNovedadModal(true);
       return;
@@ -845,32 +944,32 @@ export default function AuditorDashboard() {
                         <td>
                           {audit.estado === 'pendiente' && (
                             <>
-                              <button className="btn btn-sm btn-primary me-2" onClick={() => handleIniciar(audit.id)}>
+                              <button className="btn btn-sm btn-primary me-2" onClick={() => handleIniciar(audit.id)} style={{minHeight: '38px'}}>
                                 Iniciar
                               </button>
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)}>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)} style={{minHeight: '38px', minWidth: '38px'}}>
                                 <i className="bi bi-people"></i>
                               </button>
                             </>
                           )}
                           {audit.estado === 'en_progreso' && (
                             <>
-                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))}>
+                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))} style={{minHeight: '38px'}}>
                                 Ver
                               </button>
                               <button className="btn btn-sm btn-warning me-2" onClick={() => {
                                 setCurrentAudit(audit);
                                 setShowAddOtModal(true);
-                              }}>
+                              }} style={{minHeight: '38px'}}>
                                 <i className="bi bi-plus-circle"></i> OT
                               </button>
-                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)}>
+                              <button className="btn btn-sm btn-outline-secondary" onClick={() => handleOpenCollaboratorModal(audit)} style={{minHeight: '38px', minWidth: '38px'}}>
                                 <i className="bi bi-people"></i>
                               </button>
                             </>
                           )}
                           {audit.estado === 'finalizada' && (
-                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))}>
+                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))} style={{minHeight: '38px'}}>
                               <i className="bi bi-eye"></i> Ver
                             </button>
                           )}
@@ -905,12 +1004,18 @@ export default function AuditorDashboard() {
                     <input 
                       id="scan-input"
                       type="text" 
+                      inputMode="text"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
                       className="form-control" 
                       placeholder="Escanea el SKU..." 
                       value={scanInput}
                       onChange={(e) => setScanInput(e.target.value)}
                       onKeyDown={handleScan}
                       autoFocus
+                      onClick={(e) => e.target.select()}
                     />
                     {isMobile && (
                       <button 
@@ -1016,8 +1121,8 @@ export default function AuditorDashboard() {
                       )}
                     </div>
                   </div>
-                  <div className="table-responsive" style={{width: '100%', margin: '0 auto'}}>
-                    <table className="table table-sm table-hover" style={{fontSize: '0.85rem', width: '100%', marginBottom: '0'}}>
+                  <div className="table-responsive" style={{width: '100%', margin: '0 auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch'}}>
+                    <table className="table table-sm table-hover" style={{fontSize: '0.85rem', width: '100%', marginBottom: '0', minWidth: '600px'}}>
                       <thead>
                         <tr>
                           <th colSpan="6">
@@ -1153,7 +1258,7 @@ export default function AuditorDashboard() {
       {/* Modal de Verificación */}
       {showVerifyModal && (
         <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-          <div className="modal-dialog modal-xl modal-dialog-scrollable">
+          <div className="modal-dialog modal-xl modal-dialog-scrollable" style={{maxHeight: '90vh'}}>
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">

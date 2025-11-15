@@ -25,10 +25,10 @@ app = FastAPI(
     debug=DEBUG
 )
 
-# Security middleware
+# Middleware de seguridad
 app.middleware("http")(rate_limit_middleware)
 
-# Trusted hosts (solo en producción)
+# Hosts confiables (solo en producción)
 if not DEBUG:
     app.add_middleware(
         TrustedHostMiddleware,
@@ -64,7 +64,7 @@ app.add_middleware(
     max_age=600
 )
 
-# Security headers
+# Encabezados de seguridad
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)

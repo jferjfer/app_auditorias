@@ -5,6 +5,7 @@ import App from './App'
 import './styles.css'
 import './styles/themes-new.css'
 import './styles/force-fullwidth.css'
+import './styles/mobile.css'
 import 'flatpickr/dist/flatpickr.min.css'
 
 createRoot(document.getElementById('root')).render(

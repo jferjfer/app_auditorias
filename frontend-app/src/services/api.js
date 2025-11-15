@@ -2,10 +2,10 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 export const API_BASE_URL = API_BASE;
 
-// Helper para obtener el token de autenticación
+// Función auxiliar para obtener el token de autenticación
 const getToken = () => localStorage.getItem('access_token');
 
-// Helper para construir las opciones de fetch, incluyendo autenticación.
+// Función auxiliar para construir las opciones de fetch, incluyendo autenticación.
 function buildOptions(method = 'GET', body) {
   const options = {
     method,
@@ -25,7 +25,7 @@ function buildOptions(method = 'GET', body) {
   return options;
 }
 
-// Helper para construir query strings a partir de un objeto de parámetros.
+// Función auxiliar para construir query strings a partir de un objeto de parámetros.
 function buildQueryString(params) {
   if (!params) return '';
   const esc = encodeURIComponent;
@@ -44,7 +44,7 @@ function buildQueryString(params) {
   return query ? `?${query}` : '';
 }
 
-// Helper genérico para realizar las peticiones a la API.
+// Función auxiliar genérica para realizar las peticiones a la API.
 async function fetchApi(endpoint, options, auditContext = null) {
     const response = await fetch(`${API_BASE}${endpoint}`, options);
 
@@ -78,7 +78,7 @@ async function fetchApi(endpoint, options, auditContext = null) {
     }
 
     if (response.status === 204) {
-        return null; // No content
+        return null; // Sin contenido
     }
     // Para descargas de archivos
     if (options && options.headers && options.headers['Accept'] === 'application/octet-stream') {

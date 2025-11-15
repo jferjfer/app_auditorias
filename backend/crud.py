@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-# Configuración de password hashing
+# Configuración de hash de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_user_by_email(db: Session, email: str):
@@ -24,7 +24,7 @@ def create_user(db: Session, user: schemas.UserCreate):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
     
-    # Sanitizar inputs
+    # Sanitizar entradas
     nombre = user.nombre.strip()[:100] if user.nombre else ""
     correo = user.correo.strip().lower()[:255] if user.correo else ""
     
@@ -80,7 +80,7 @@ def delete_user(db: Session, user_id: int):
 # --- Funciones para Auditorías ---
 def create_audit(db: Session, audit_data: schemas.AuditCreate, auditor_id: int):
     """Crea una nueva auditoría y sus productos asociados."""
-    # Keep database timestamps in UTC (models.Audit.creada_en default uses datetime.utcnow)
+    # Mantener marcas de tiempo de la base de datos en UTC (models.Audit.creada_en usa datetime.utcnow por defecto)
     db_audit = models.Audit(
         auditor_id=auditor_id,
         ubicacion_origen_id=audit_data.ubicacion_origen_id,
@@ -327,7 +327,7 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     if auditor_id:
         query = query.filter(models.Audit.auditor_id == auditor_id)
 
-    # Interpret provided dates as local dates in America/Bogota and convert to UTC range
+    # Interpretar las fechas proporcionadas como fechas locales en America/Bogota y convertir a rango UTC
     bogota_tz = ZoneInfo("America/Bogota")
     if start_date and start_date.strip():
         try:
@@ -356,7 +356,7 @@ def get_audits_for_today(db: Session) -> List[models.Audit]:
     Obtiene todas las auditorías creadas en el día actual para el dashboard del admin.
     No se carga la lista de productos para mayor eficiencia.
     """
-    # Same behavior as get_audits: use Bogotá local day converted to UTC range
+    # Mismo comportamiento que get_audits: usar día local de Bogotá convertido a rango UTC
     bogota_tz = ZoneInfo("America/Bogota")
     bogota_today = datetime.now(bogota_tz).date()
     start_local = datetime.combine(bogota_today, time.min).replace(tzinfo=bogota_tz)
@@ -374,8 +374,8 @@ def get_audit_statistics_by_status(db: Session):
     """Obtiene el recuento de auditorías por estado.
     Ahora soporta filtros opcionales (status, auditor_id, start_date, end_date) aplicados a la tabla de auditorías.
     """
-    # Backwards compatible signature: accept filters via kwargs if provided
-    # We'll detect if caller passed extra args via attributes on db (not expected). Keep simple API by allowing explicit params later.
+    # Firma compatible con versiones anteriores: aceptar filtros vía kwargs si se proporcionan
+    # Detectaremos si el llamador pasó argumentos extra vía atributos en db (no esperado). Mantener API simple permitiendo parámetros explícitos después.
     return db.query(
         models.Audit.estado,
         func.count(models.Audit.id)
@@ -408,7 +408,7 @@ def get_compliance_by_auditor(db: Session):
 
 def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Obtiene el número de auditorías creadas por día dentro de un período dado."""
-    # We'll fetch audits within the requested period (interpreted in Bogotá local dates) and aggregate by Bogotá date in Python
+    # Obtendremos auditorías dentro del período solicitado (interpretado en fechas locales de Bogotá) y agregaremos por fecha de Bogotá en Python
     query = db.query(models.Audit).filter(models.Audit.auditor_id.isnot(None))
     bogota_tz = ZoneInfo("America/Bogota")
     if start_date:
@@ -431,7 +431,7 @@ def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date
     audits = query.all()
     counter = {}
     for a in audits:
-        # convert audit.created_en (assumed UTC or naive UTC) to Bogotá local date
+        # convertir audit.created_en (asumido UTC o UTC ingenuo) a fecha local de Bogotá
         dt = a.creada_en
         if dt is None:
             continue

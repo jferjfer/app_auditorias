@@ -18,7 +18,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 
 
-# Login attempt tracking (se limpia automáticamente)
+# Seguimiento de intentos de login (se limpia automáticamente)
 from collections import defaultdict
 login_attempts = defaultdict(lambda: [0, None])
 
@@ -33,7 +33,7 @@ def login_for_access_token(
     import time
     from datetime import datetime
     
-    # Rate limiting por email
+    # Limitación de tasa por email
     email = form_data.username.lower()
     now = datetime.utcnow()
     
@@ -54,20 +54,20 @@ def login_for_access_token(
             detail="Demasiados intentos. Intenta en 1 minuto"
         )
     
-    # Timing attack mitigation
+    # Mitigación de ataques de temporización
     user = crud.get_user_by_email(db, email=email)
     password_valid = False
     
     if user:
         password_valid = verify_password(form_data.password, user.contrasena_hash)
     else:
-        # Fake hash check para timing constante (hash válido de "dummy")
+        # Verificación de hash falso para temporización constante (hash válido de "dummy")
         verify_password(form_data.password, "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5jtRPlaAduZem")
     
     if not user or not password_valid:
         login_attempts[email][0] += 1
         login_attempts[email][1] = now
-        time.sleep(0.2)  # Delay reducido para prevenir fuerza bruta
+        time.sleep(0.2)  # Retraso reducido para prevenir fuerza bruta
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas"
