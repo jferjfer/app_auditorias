@@ -11,7 +11,10 @@ export function useOfflineSync(auditId) {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      if (auditId) syncPendingChanges();
+      if (auditId) {
+        syncPendingChanges();
+        window.dispatchEvent(new Event('reconnected'));
+      }
     };
     
     const handleOffline = () => setIsOnline(false);

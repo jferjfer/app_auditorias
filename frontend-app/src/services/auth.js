@@ -32,12 +32,31 @@ export async function login(email, password) {
     }
     
     const data = await response.json();
+    
+    // Validar que tenemos todos los datos necesarios
+    if (!data.access_token || !data.user_role || !data.user_name) {
+      console.error('Respuesta incompleta del servidor:', data);
+      throw new Error('Respuesta incompleta del servidor');
+    }
+    
+    // Guardar en localStorage
     localStorage.setItem('access_token', data.access_token);
     localStorage.setItem('current_user', JSON.stringify({
       id: data.user_id,
       nombre: data.user_name,
       rol: data.user_role
     }));
+    
+    // Verificar que se guardó correctamente
+    const savedToken = localStorage.getItem('access_token');
+    const savedUser = localStorage.getItem('current_user');
+    
+    if (!savedToken || !savedUser) {
+      console.error('Error guardando en localStorage');
+      throw new Error('Error guardando credenciales localmente');
+    }
+    
+    console.log('Credenciales guardadas exitosamente');
     return data;
     
   } catch (error) {

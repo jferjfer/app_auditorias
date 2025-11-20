@@ -61,15 +61,18 @@ uvicorn backend.main:app --reload
 1. **Iniciar Sesión** como usuario con rol "auditor"
 2. **Cargar Archivos Excel** de órdenes de traslado
 3. **Iniciar Auditoría** desde "Mis Auditorías"
-4. **Agregar Colaboradores** (opcional) para auditorías en equipo
-5. **Auditar Productos**:
+4. **Seleccionar Modo de Auditoría**:
+   - **Modo Normal**: Escaneo tradicional con validación inmediata
+   - **Modo Conteo Rápido**: Escaneo masivo optimizado, incrementa cantidades automáticamente
+5. **Agregar Colaboradores** (opcional) para auditorías en equipo
+6. **Auditar Productos**:
    - Escanear SKU con Enter o cámara 📷
    - Registrar cantidad física
    - Seleccionar novedad (Sin Novedad, Faltante, Sobrante, Avería, etc.)
    - Agregar observaciones
-6. **Guardar Cambios** automáticamente con sincronización en tiempo real
-7. **Ver Historial** de cambios realizados por todos los colaboradores
-8. **Finalizar Auditoría** y ver porcentaje de cumplimiento
+7. **Guardar Cambios** automáticamente con sincronización en tiempo real
+8. **Ver Historial** de cambios realizados por todos los colaboradores
+9. **Finalizar Auditoría** y ver porcentaje de cumplimiento
 
 ## 🛠️ Tecnologías
 
@@ -166,18 +169,60 @@ Si tienes problemas:
 
 ## 🎯 Características Principales
 
+### 📦 Gestión de Auditorías
 - ✅ **Carga de Archivos Excel**: Procesamiento automático de órdenes de traslado
-- ✅ **Escaneo de Productos Flexible**: Búsqueda inteligente de SKUs que tolera diferencias de mayúsculas/minúsculas y ceros iniciales (ej. `pd123` o `000123`)
+- ✅ **Búsqueda por OT**: Localiza auditorías específicas por número de orden de traslado
+- ✅ **Agregar OTs Dinámicamente**: Añade órdenes adicionales a auditorías en progreso
+- ✅ **Dos Modos de Auditoría**:
+  - **Modo Normal**: Escaneo tradicional con validación paso a paso
+  - **Modo Conteo Rápido**: Escaneo masivo optimizado para grandes volúmenes
+
+### 🔍 Escaneo Inteligente
+- ✅ **Búsqueda Flexible de SKUs**: Tolera mayúsculas/minúsculas y ceros iniciales (ej. `pd123` o `000123`)
+- ✅ **Búsqueda Optimizada**: Se detiene al encontrar el primer resultado (modo conteo rápido)
+- ✅ **Productos No Referenciados**: Busca descripciones en BD automáticamente
 - ✅ **Escaneo con Cámara**: Lector QR/código de barras para móviles y tablets
-- ✅ **Auditoría Colaborativa**: Múltiples auditores trabajando simultáneamente con sincronización en tiempo real
+- ✅ **Reconocimiento de Voz**: Confirmación auditiva de cantidades escaneadas
+
+### 👥 Colaboración en Tiempo Real
+- ✅ **Auditoría Colaborativa**: Múltiples auditores trabajando simultáneamente
+- ✅ **Sincronización WebSocket**: Actualizaciones en tiempo real entre colaboradores
 - ✅ **Lock de Productos**: Bloqueo temporal al editar para prevenir conflictos
-- ✅ **Historial de Cambios**: Tracking completo de modificaciones (quién, cuándo, qué)
-- ✅ **Notificaciones en Tiempo Real**: Alertas de ediciones y conflictos vía WebSocket
+- ✅ **Notificaciones en Vivo**: Alertas de ediciones y cambios de otros usuarios
+- ✅ **Historial de Cambios**: Tracking completo (quién, cuándo, qué)
+
+### 📴 Modo Offline
+- ✅ **Trabajo Sin Internet**: Continúa auditando sin conexión
+- ✅ **Almacenamiento Local**: IndexedDB guarda cambios pendientes
+- ✅ **Sincronización Automática**: Al reconectar, sincroniza todos los cambios
+- ✅ **Búsqueda Diferida**: Busca descripciones de SKUs al volver online
+- ✅ **Indicadores Visuales**: Muestra estado de conexión y cambios pendientes
+
+### 📊 Análisis y Reportes
+- ✅ **Dashboard Analítico**: Gráficos de cumplimiento, novedades y tendencias
+- ✅ **Filtros Avanzados**: Por auditor, fecha, estado, OT
+- ✅ **Exportación**: Genera reportes en Excel y PDF
+- ✅ **Estadísticas en Tiempo Real**: KPIs actualizados automáticamente
+
+### 🎨 Interfaz y UX
+- ✅ **Diseño Responsive**: Optimizado para móviles, tablets y desktop
+- ✅ **7 Temas de Color**: Personalización visual
+- ✅ **Modo Alto Contraste**: Accesibilidad mejorada
+- ✅ **Paginación Inteligente**: 10 items en modo rápido, 20 en modo normal
+
+### 🔐 Seguridad
 - ✅ **Múltiples Roles**: Auditor, Analista, Administrador
-- ✅ **Interfaz Moderna**: Diseño responsive con 7 temas de color y modo alto contraste
-- ✅ **Base de Datos**: PostgreSQL con persistencia segura
+- ✅ **Rate Limiting**: Protección contra ataques de fuerza bruta
+- ✅ **Validación de Archivos**: Solo Excel válidos, máx 10MB
+- ✅ **Contraseñas Fuertes**: Requisitos de complejidad
+- ✅ **Headers de Seguridad**: X-Frame-Options, HSTS, XSS Protection
+- ✅ **JWT Authentication**: Tokens seguros con expiración
+
+### 🏗️ Arquitectura
 - ✅ **API RESTful**: Endpoints documentados con FastAPI
-- ✅ **Seguridad Reforzada**: Rate limiting, validación de archivos, contraseñas fuertes, headers de seguridad
+- ✅ **Base de Datos**: PostgreSQL con migraciones Alembic
+- ✅ **WebSockets**: Comunicación bidireccional en tiempo real
+- ✅ **IndexedDB**: Persistencia local para modo offline
 
 ## 🔒 Seguridad
 

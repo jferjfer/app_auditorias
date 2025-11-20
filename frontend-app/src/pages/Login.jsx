@@ -13,8 +13,23 @@ const Login = () => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
+    console.log('Iniciando login para:', email);
+    
     try {
       const data = await login(email, password);
+      
+      console.log('Login exitoso:', { 
+        user_role: data.user_role, 
+        user_name: data.user_name,
+        token_guardado: !!localStorage.getItem('access_token')
+      });
+      
+      // Verificar que el token se guardó correctamente
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('Error guardando token de autenticación');
+      }
       
       // Verificar si hay cambios pendientes de sincronizar
       try {
@@ -29,6 +44,7 @@ const Login = () => {
       }
       
       // Redirigir según rol
+      console.log('Redirigiendo a:', data.user_role);
       if (data.user_role === 'auditor') {
         navigate('/auditor');
       } else if (data.user_role === 'analista') {
@@ -36,9 +52,11 @@ const Login = () => {
       } else if (data.user_role === 'administrador') {
         navigate('/admin');
       } else {
+        console.warn('Rol desconocido:', data.user_role);
         navigate('/');
       }
     } catch (err) {
+      console.error('Error en login:', err);
       setError(err.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);

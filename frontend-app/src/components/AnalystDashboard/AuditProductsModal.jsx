@@ -9,7 +9,7 @@ export default function AuditProductsModal({ audit, onClose }) {
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">
-              Productos - Auditoría #{audit.id} - {audit.ubicacion_destino}
+              Productos - Auditoría #{audit.id} - {audit.ubicacion_destino?.nombre || audit.ubicacion_destino || 'N/A'}
             </h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
@@ -18,31 +18,33 @@ export default function AuditProductsModal({ audit, onClose }) {
               <table className="table table-sm table-hover">
                 <thead>
                   <tr>
-                    <th>SKU</th>
-                    <th>Descripción</th>
-                    <th className="text-end">Cant. Esperada</th>
-                    <th className="text-end">Cant. Física</th>
-                    <th className="text-end">Diferencia</th>
-                    <th>Novedad</th>
-                    <th>Observaciones</th>
+                    <th style={{textAlign: 'center'}}>OT</th>
+                    <th style={{textAlign: 'center'}}>SKU</th>
+                    <th style={{textAlign: 'left'}}>Descripción</th>
+                    <th style={{textAlign: 'center'}}>Cant. Esperada</th>
+                    <th style={{textAlign: 'center'}}>Cant. Física</th>
+                    <th style={{textAlign: 'center'}}>Diferencia</th>
+                    <th style={{textAlign: 'center'}}>Novedad</th>
+                    <th style={{textAlign: 'left'}}>Observaciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {audit.productos?.map(prod => (
                     <tr key={prod.id}>
-                      <td><code>{prod.sku}</code></td>
-                      <td>{prod.descripcion}</td>
-                      <td className="text-end">{prod.cantidad_esperada}</td>
-                      <td className="text-end">{prod.cantidad_fisica ?? '-'}</td>
-                      <td className="text-end">
-                        {prod.cantidad_fisica !== null ? prod.cantidad_fisica - prod.cantidad_esperada : '-'}
+                      <td style={{textAlign: 'center'}}><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{prod.orden_traslado_original || 'N/A'}</span></td>
+                      <td style={{textAlign: 'center'}}><code>{prod.sku}</code></td>
+                      <td style={{textAlign: 'left'}}>{prod.nombre_articulo}</td>
+                      <td style={{textAlign: 'center'}}>{prod.cantidad_documento}</td>
+                      <td style={{textAlign: 'center'}}>{prod.cantidad_fisica ?? '-'}</td>
+                      <td style={{textAlign: 'center'}}>
+                        {prod.cantidad_fisica !== null ? prod.cantidad_fisica - prod.cantidad_documento : '-'}
                       </td>
-                      <td>
+                      <td style={{textAlign: 'center'}}>
                         <span className={`badge bg-${prod.novedad === 'sin_novedad' ? 'success' : 'warning'}`}>
                           {prod.novedad?.replace('_', ' ')}
                         </span>
                       </td>
-                      <td>{prod.observaciones || '-'}</td>
+                      <td style={{textAlign: 'left'}}>{prod.observaciones || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -319,6 +319,12 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     """
     Obtiene todas las auditorías con filtros opcionales, incluyendo rango de fechas.
     """
+    print(f"🔍 CRUD get_audits_with_filters llamado con:")
+    print(f"  status: {repr(status)}")
+    print(f"  auditor_id: {repr(auditor_id)}")
+    print(f"  start_date: {repr(start_date)}")
+    print(f"  end_date: {repr(end_date)}")
+    
     query = db.query(models.Audit).options(joinedload(models.Audit.auditor), joinedload(models.Audit.productos)).filter(models.Audit.auditor_id.isnot(None))
 
     if status and status != "Todos":
@@ -331,23 +337,29 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     bogota_tz = ZoneInfo("America/Bogota")
     if start_date and start_date.strip():
         try:
+            print(f"📅 Parseando start_date: {repr(start_date)}")
             sd = datetime.strptime(start_date, "%Y-%m-%d").date()
             start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
             start_utc = start_local.astimezone(timezone.utc)
             query = query.filter(models.Audit.creada_en >= start_utc)
+            print(f"✅ start_date parseado correctamente: {sd}")
         except (ValueError, Exception) as e:
+            print(f"❌ Error parseando start_date: {e}")
             from fastapi import HTTPException
-            raise HTTPException(status_code=422, detail=f"Fecha de inicio inválida: {start_date}")
+            raise HTTPException(status_code=422, detail=f"Fecha de inicio inválida: {start_date} - Error: {str(e)}")
 
     if end_date and end_date.strip():
         try:
+            print(f"📅 Parseando end_date: {repr(end_date)}")
             ed = datetime.strptime(end_date, "%Y-%m-%d").date()
             end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
             end_utc = end_local.astimezone(timezone.utc)
             query = query.filter(models.Audit.creada_en <= end_utc)
+            print(f"✅ end_date parseado correctamente: {ed}")
         except (ValueError, Exception) as e:
+            print(f"❌ Error parseando end_date: {e}")
             from fastapi import HTTPException
-            raise HTTPException(status_code=422, detail=f"Fecha de fin inválida: {end_date}")
+            raise HTTPException(status_code=422, detail=f"Fecha de fin inválida: {end_date} - Error: {str(e)}")
 
     return query.all()
 
@@ -469,6 +481,14 @@ def get_product_with_novelties(db: Session, product_id: int):
     return db.query(models.Product).options(
         joinedload(models.Product.novelties)
     ).filter(models.Product.id == product_id).first()
+
+def get_product_description_by_sku(db: Session, sku: str):
+    """Busca la descripción de un SKU en toda la base de datos."""
+    product = db.query(models.Product).filter(
+        models.Product.sku == sku,
+        models.Product.nombre_articulo != 'NO REFERENCIADO'
+    ).first()
+    return product.nombre_articulo if product else None
 
 def search_audits_by_ot(db: Session, auditor_id: int, ot_query: str):
     """Busca EXACTAMENTE una auditoría que contenga la OT especificada."""

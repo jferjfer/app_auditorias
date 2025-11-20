@@ -22,7 +22,7 @@ async function getImageBase64(imagePath) {
   }
 }
 
-export async function generatePdfReport(reportData, reportType, filters) {
+export async function generatePdfReport(reportData, reportType, filters, userName = 'Usuario') {
   const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
   const doc = new jsPDF();
 
@@ -69,13 +69,17 @@ export async function generatePdfReport(reportData, reportType, filters) {
 
   const addFooter = () => {
     const pageCount = doc.internal.getNumberOfPages();
-    doc.setFontSize(8);
-    doc.setTextColor('#888888');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       addWatermark();
-      const text = `Página ${i} de ${pageCount} | Generado el ${today}`;
-      doc.text(text, doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      
+      doc.setFontSize(8);
+      doc.setTextColor('#888888');
+      const pageText = `Página ${i} de ${pageCount} | Generado el ${today}`;
+      doc.text(pageText, pageWidth / 2, pageHeight - 10, { align: 'center' });
     }
   };
 
@@ -84,11 +88,12 @@ export async function generatePdfReport(reportData, reportType, filters) {
   doc.setFontSize(12);
   doc.setTextColor(textColor);
   doc.setFont('helvetica', 'bold');
-  doc.text('Resumen y Filtros Aplicados', 14, 35);
+  doc.text('Resumen y Filtros Aplicados', 14, 30);
   doc.autoTable({
-    startY: 38,
+    startY: 33,
     head: [['Concepto', 'Valor']],
     body: [
+      ['Analista de seguridad', userName],
       ['Fecha Inicio Filtro', filters.start_date || 'N/A'],
       ['Fecha Fin Filtro', filters.end_date || 'N/A'],
       ['Total de Pedidos (líneas)', totalPedidos],
@@ -97,7 +102,7 @@ export async function generatePdfReport(reportData, reportType, filters) {
     theme: 'grid',
     styles: { fontSize: 9, textColor: textColor },
     headStyles: { fillColor: tableHeaderColor, textColor: headerTextColor },
-    didDrawPage: addHeader,
+    margin: { top: 25 },
   });
 
   let finalY = doc.lastAutoTable.finalY || 80;
@@ -111,6 +116,7 @@ export async function generatePdfReport(reportData, reportType, filters) {
     offscreenCanvas.width = 400;
     offscreenCanvas.height = 250;
 
+    const total = Object.values(noveltyCounts).reduce((a, b) => a + b, 0);
     const chartImage = await new Promise((resolve) => {
       new Chart(offscreenCanvas.getContext('2d'), {
         type: 'doughnut',
@@ -118,7 +124,16 @@ export async function generatePdfReport(reportData, reportType, filters) {
           labels: Object.keys(noveltyCounts),
           datasets: [{
             data: Object.values(noveltyCounts),
-            backgroundColor: ['#a855f7', '#d8b4fe', '#c084fc', '#9333ea', '#7e22ce', '#581c87'],
+            backgroundColor: [
+              '#FF6384', // Rosa vibrante
+              '#36A2EB', // Azul cielo
+              '#FFCE56', // Amarillo dorado
+              '#4BC0C0', // Turquesa
+              '#9966FF', // Púrpura
+              '#FF9F40', // Naranja
+              '#FF6384', // Rosa (repetir si hay más)
+              '#C9CBCF'  // Gris
+            ],
           }]
         },
         options: {
@@ -131,7 +146,30 @@ export async function generatePdfReport(reportData, reportType, filters) {
           plugins: {
             legend: { position: 'right' }
           }
-        }
+        },
+        plugins: [{
+          id: 'percentageLabels',
+          afterDatasetsDraw: function(chart) {
+            const ctx = chart.ctx;
+            chart.data.datasets.forEach((dataset, i) => {
+              const meta = chart.getDatasetMeta(i);
+              meta.data.forEach((element, index) => {
+                const data = dataset.data[index];
+                const percentage = ((data / total) * 100).toFixed(0);
+                const position = element.tooltipPosition();
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                ctx.shadowBlur = 3;
+                ctx.fillText(`${percentage}%`, position.x, position.y);
+                ctx.shadowBlur = 0;
+              });
+            });
+          }
+        }]
       });
     });
 
@@ -160,7 +198,7 @@ export async function generatePdfReport(reportData, reportType, filters) {
     theme: 'striped',
     styles: { fontSize: 7, cellPadding: 1.5, textColor: textColor },
     headStyles: { fillColor: tableHeaderColor, textColor: headerTextColor, fontSize: 7 },
-    didDrawPage: addHeader,
+    margin: { top: 25, bottom: 25 },
   });
 
   addFooter();

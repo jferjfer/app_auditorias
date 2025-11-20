@@ -94,6 +94,7 @@ class AuditBase(BaseModel):
     ubicacion_destino_id: Optional[int] = None
     estado: str
     porcentaje_cumplimiento: Optional[int] = None
+    modo_auditoria: Optional[str] = "normal"
 
 # Esquema para la respuesta de una auditoría
 class Audit(AuditBase):
@@ -101,6 +102,7 @@ class Audit(AuditBase):
     auditor_id: int
     creada_en: datetime
     auditor_nombre: Optional[str] = None
+    modo_auditoria: Optional[str] = "normal"
     
     class Config:
         from_attributes = True

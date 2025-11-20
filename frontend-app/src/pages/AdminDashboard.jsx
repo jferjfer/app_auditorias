@@ -94,19 +94,19 @@ export default function AdminDashboard() {
                 <table className="table table-hover">
                   <thead>
                     <tr>
-                      <th>Nombre</th>
-                      <th>Correo</th>
-                      <th>Rol</th>
-                      <th>Acciones</th>
+                      <th style={{textAlign: 'left'}}>Nombre</th>
+                      <th style={{textAlign: 'left'}}>Correo</th>
+                      <th style={{textAlign: 'center'}}>Rol</th>
+                      <th style={{textAlign: 'center'}}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map(user => (
                       <tr key={user.id}>
-                        <td>{user.nombre}</td>
-                        <td>{user.correo}</td>
-                        <td><span className="badge bg-info">{user.rol}</span></td>
-                        <td>
+                        <td style={{textAlign: 'left'}}>{user.nombre}</td>
+                        <td style={{textAlign: 'left'}}>{user.correo}</td>
+                        <td style={{textAlign: 'center'}}><span className="badge bg-info">{user.rol}</span></td>
+                        <td style={{textAlign: 'center'}}>
                           <button className="btn btn-sm btn-warning me-2" onClick={() => handleOpenModal(user)}>
                             <i className="bi bi-pencil"></i>
                           </button>

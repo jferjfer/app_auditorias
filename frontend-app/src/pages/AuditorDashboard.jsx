@@ -14,6 +14,8 @@ import CameraScanner from '../components/CameraScanner';
 import AuditHistory from '../components/AuditHistory';
 import NovedadModal from '../components/NovedadModal';
 import AddOtModal from '../components/AddOtModal';
+import ModoAuditoriaModal from '../components/ModoAuditoriaModal';
+import VerificarConteoModal from '../components/VerificarConteoModal';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
@@ -94,6 +96,10 @@ export default function AuditorDashboard() {
   const [editingQuantity, setEditingQuantity] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const [otSearch, setOtSearch] = useState('');
+  const [modoConteoRapido, setModoConteoRapido] = useState(false);
+  const [showModoModal, setShowModoModal] = useState(false);
+  const [pendingAuditId, setPendingAuditId] = useState(null);
+  const [showVerificarConteoModal, setShowVerificarConteoModal] = useState(false);
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -102,7 +108,34 @@ export default function AuditorDashboard() {
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
   useSessionKeepAlive(30000); // Ping cada 30 segundos
   
-  const ITEMS_PER_PAGE = 20;
+  const ITEMS_PER_PAGE = modoConteoRapido ? 10 : 20;
+
+  // Buscar descripciones pendientes cuando se reconecta
+  useEffect(() => {
+    const handleReconnected = async () => {
+      const noReferenciadosProducts = products.filter(p => p.nombre_articulo === 'NO REFERENCIADO');
+      for (const p of noReferenciadosProducts) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/products/search-description/${p.sku}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.nombre_articulo !== 'NO REFERENCIADO') {
+              setProducts(prev => prev.map(prod => 
+                prod.sku === p.sku ? { ...prod, nombre_articulo: data.nombre_articulo } : prod
+              ));
+            }
+          }
+        } catch (err) {
+          console.error('Error buscando descripción:', err);
+        }
+      }
+    };
+    
+    window.addEventListener('reconnected', handleReconnected);
+    return () => window.removeEventListener('reconnected', handleReconnected);
+  }, [products]);
 
   useEffect(() => {
     loadAudits();
@@ -130,7 +163,7 @@ export default function AuditorDashboard() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Auto-guardar último producto después de 15 segundos sin escanear
+  // Auto-guardar último producto después de 10 segundos sin escanear (modo conteo rápido) o 15 segundos (modo normal)
   useEffect(() => {
     if (!lastScanned || !currentAudit) return;
     
@@ -139,15 +172,24 @@ export default function AuditorDashboard() {
       clearTimeout(autoSaveTimerRef.current);
     }
     
-    // Crear nuevo timer de 15 segundos
+    const timeout = modoConteoRapido ? 10000 : 15000;
+    
+    // Crear nuevo timer
     autoSaveTimerRef.current = setTimeout(() => {
       const lastProduct = products.find(p => p.sku === lastScanned.sku);
       if (lastProduct) {
+        if (modoConteoRapido) {
+          // En modo conteo rápido NO guardamos automáticamente, solo al verificar
+          setLastScanned(null);
+          return;
+        }
+        
         const changes = {
           cantidad_fisica: lastProduct.cantidad_documento,
           novedad: 'sin_novedad',
           observaciones: 'sin novedad'
         };
+        
         setProducts(prev => prev.map(p => 
           p.id === lastProduct.id ? { ...p, ...changes } : p
         ));
@@ -162,14 +204,14 @@ export default function AuditorDashboard() {
         speak('Guardado automático');
         setLastScanned(null);
       }
-    }, 15000); // 15 segundos
+    }, timeout);
     
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [lastScanned, currentAudit, products, isOnline]);
+  }, [lastScanned, currentAudit, products, isOnline, modoConteoRapido]);
 
   useEffect(() => {
     if (!currentAudit) return;
@@ -319,9 +361,17 @@ export default function AuditorDashboard() {
   };
 
   const handleIniciar = async (auditId) => {
+    setPendingAuditId(auditId);
+    setShowModoModal(true);
+  };
+
+  const handleModoSelected = async (modo) => {
+    setModoConteoRapido(modo === 'conteo_rapido');
+    setShowModoModal(false);
     try {
-      await iniciarAuditoria(auditId);
+      await iniciarAuditoria(pendingAuditId, modo === 'conteo_rapido' ? 'conteo_rapido' : 'normal');
       loadAudits();
+      setPendingAuditId(null);
     } catch (err) {
       toast.error('Error: ' + err.message);
     }
@@ -370,6 +420,13 @@ export default function AuditorDashboard() {
       setProducts(prods);
       setCurrentPage(0);
       
+      // Establecer modo según la auditoría
+      if (data.modo_auditoria === 'conteo_rapido') {
+        setModoConteoRapido(true);
+      } else {
+        setModoConteoRapido(false);
+      }
+      
       const index = {};
       prods.forEach(p => {
         const normalizedSku = String(p.sku).toUpperCase().replace(/^0+/, '').substring(0, 50);
@@ -388,6 +445,70 @@ export default function AuditorDashboard() {
       
       if (!scannedSku) return;
       
+      if (modoConteoRapido) {
+        // MODO CONTEO RÁPIDO: Solo incrementar cantidad, sin guardar automáticamente
+        let product = skuIndex[scannedSku];
+        if (!product) {
+          for (const p of products) {
+            if (String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku) {
+              product = p;
+              break;
+            }
+          }
+        }
+        
+        if (!product) {
+          // Producto no referenciado - crear con descripción temporal
+          const newProduct = {
+            id: `temp_${Date.now()}`,
+            auditoria_id: currentAudit.id,
+            sku: scannedSku,
+            nombre_articulo: 'NO REFERENCIADO',
+            cantidad_documento: 0,
+            cantidad_enviada: 0,
+            cantidad_fisica: 1,
+            novedad: 'sin_novedad',
+            observaciones: '',
+            orden_traslado_original: 'N/A',
+            isNew: true
+          };
+          setProducts(prev => [...prev, newProduct]);
+          setSkuIndex(prev => ({...prev, [scannedSku]: newProduct}));
+          
+          // Buscar descripción en BD solo si está online
+          if (isOnline) {
+            (async () => {
+              try {
+                const response = await fetch(`${API_BASE_URL}/api/products/search-description/${scannedSku}`, {
+                  headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data.nombre_articulo !== 'NO REFERENCIADO') {
+                    setProducts(prev => prev.map(p => 
+                      p.sku === scannedSku ? { ...p, nombre_articulo: data.nombre_articulo } : p
+                    ));
+                  }
+                }
+              } catch (err) {
+                console.error('Error buscando descripción:', err);
+              }
+            })();
+          }
+        } else {
+          // Producto existente - incrementar cantidad
+          const newQty = (product.cantidad_fisica || 0) + 1;
+          setProducts(prev => prev.map(p => 
+            p.id === product.id ? { ...p, cantidad_fisica: newQty } : p
+          ));
+        }
+        
+        setScannedCount(prev => prev + 1);
+        setScanInput('');
+        return;
+      }
+      
+      // MODO NORMAL (código original)
       const product = skuIndex[scannedSku];
       
       if (!product) {
@@ -396,7 +517,6 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 1: Escaneo repetido del mismo SKU consecutivo = ABRIR MODAL
       if (lastScanned && lastScanned.sku === product.sku) {
         setLastScanned(null);
         setScanInput('');
@@ -406,7 +526,6 @@ export default function AuditorDashboard() {
         return;
       }
 
-      // Caso 2: Escaneo de SKU diferente = guardar anterior
       if (lastScanned && lastScanned.sku !== product.sku) {
         const lastProduct = products.find(p => p.sku === lastScanned.sku);
         if (lastProduct) {
@@ -426,11 +545,10 @@ export default function AuditorDashboard() {
               window.dispatchEvent(new Event('pendingChangesUpdated'));
             });
           }
-          speak('Guardado');
+          if (!modoConteoRapido) speak('Guardado');
         }
       }
 
-      // Caso 3: SKU ya tiene novedad previa (faltante/sobrante/avería) - abrir modal para modificar
       const updatedProduct = products.find(p => p.id === product.id);
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
@@ -441,30 +559,27 @@ export default function AuditorDashboard() {
         const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
         const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
                        updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
-        speak(mensaje);
+        if (!modoConteoRapido) speak(mensaje);
         setSelectedProduct(updatedProduct);
         setShowNovedadModal(true);
         return;
       }
 
-      // Caso 3.5: Producto ya escaneado SIN novedad - abrir modal para ajustar
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
           updatedProduct.cantidad_fisica !== undefined &&
           updatedProduct.novedad === 'sin_novedad') {
         setScanInput('');
-        speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
+        if (!modoConteoRapido) speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
         setSelectedProduct(updatedProduct);
         setShowNovedadModal(true);
         return;
       }
 
-      // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
       setLastScanned({ sku: product.sku, id: product.id });
       setScannedCount(prev => prev + 1);
-      speak(`${product.cantidad_documento}`);
+      if (!modoConteoRapido) speak(`${product.cantidad_documento}`);
       setScanInput('');
-      // El timer de auto-guardado se reinicia automáticamente por el useEffect
     }
   };
 
@@ -495,7 +610,7 @@ export default function AuditorDashboard() {
       p.id === productId ? { ...p, ...changes } : p
     ));
 
-    speak('Guardado');
+    if (!modoConteoRapido) speak('Guardado');
     
     if (isOnline) {
       updateProduct(currentAudit.id, productId, changes).catch(err => console.error('Error:', err));
@@ -563,6 +678,7 @@ export default function AuditorDashboard() {
       toast.success('Auditoría finalizada');
       setCurrentAudit(null);
       setProducts([]);
+      setModoConteoRapido(false);
       loadAudits();
     } catch (err) {
       toast.error('Error: ' + err.message);
@@ -598,7 +714,7 @@ export default function AuditorDashboard() {
       p.id === selectedProduct.id ? { ...p, ...changes } : p
     ));
 
-    speak('Guardado');
+    if (!modoConteoRapido) speak('Guardado');
     
     if (isOnline) {
       updateProduct(currentAudit.id, selectedProduct.id, changes).catch(err => console.error('Error:', err));
@@ -618,13 +734,75 @@ export default function AuditorDashboard() {
     const scannedSku = decodedText.trim().toUpperCase().replace(/^0+/, '');
     if (!scannedSku) return;
     
+    if (modoConteoRapido) {
+      // MODO CONTEO RÁPIDO: Solo incrementar cantidad
+      let product = skuIndex[scannedSku];
+      if (!product) {
+        for (const p of products) {
+          if (String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku) {
+            product = p;
+            break;
+          }
+        }
+      }
+      
+      if (!product) {
+        // Producto no referenciado - crear con descripción temporal
+        const newProduct = {
+          id: `temp_${Date.now()}`,
+          auditoria_id: currentAudit.id,
+          sku: scannedSku,
+          nombre_articulo: 'NO REFERENCIADO',
+          cantidad_documento: 0,
+          cantidad_enviada: 0,
+          cantidad_fisica: 1,
+          novedad: 'sin_novedad',
+          observaciones: '',
+          orden_traslado_original: 'N/A',
+          isNew: true
+        };
+        setProducts(prev => [...prev, newProduct]);
+        setSkuIndex(prev => ({...prev, [scannedSku]: newProduct}));
+        
+        // Buscar descripción en BD solo si está online
+        if (isOnline) {
+          (async () => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/products/search-description/${scannedSku}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if (data.nombre_articulo !== 'NO REFERENCIADO') {
+                  setProducts(prev => prev.map(p => 
+                    p.sku === scannedSku ? { ...p, nombre_articulo: data.nombre_articulo } : p
+                  ));
+                }
+              }
+            } catch (err) {
+              console.error('Error buscando descripción:', err);
+            }
+          })();
+        }
+      } else {
+        // Producto existente - incrementar cantidad
+        const newQty = (product.cantidad_fisica || 0) + 1;
+        setProducts(prev => prev.map(p => 
+          p.id === product.id ? { ...p, cantidad_fisica: newQty } : p
+        ));
+      }
+      
+      setScannedCount(prev => prev + 1);
+      return;
+    }
+    
+    // MODO NORMAL
     const product = skuIndex[scannedSku];
     if (!product) {
       speak('Producto no encontrado');
       return;
     }
 
-    // Caso 1: Escaneo repetido del mismo SKU consecutivo = ABRIR MODAL
     if (lastScanned && lastScanned.sku === product.sku) {
       setLastScanned(null);
       speak('Ingrese novedad');
@@ -633,7 +811,6 @@ export default function AuditorDashboard() {
       return;
     }
 
-    // Caso 2: Escaneo de SKU diferente = guardar anterior
     if (lastScanned && lastScanned.sku !== product.sku) {
       const lastProduct = products.find(p => p.sku === lastScanned.sku);
       if (lastProduct) {
@@ -657,7 +834,6 @@ export default function AuditorDashboard() {
       }
     }
 
-    // Caso 3: SKU ya tiene novedad previa (faltante/sobrante/avería) - abrir modal para modificar
     const updatedProduct = products.find(p => p.id === product.id);
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
@@ -673,7 +849,6 @@ export default function AuditorDashboard() {
       return;
     }
 
-    // Caso 3.5: Producto ya escaneado SIN novedad - abrir modal para ajustar
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
         updatedProduct.cantidad_fisica !== undefined &&
@@ -684,7 +859,6 @@ export default function AuditorDashboard() {
       return;
     }
 
-    // Caso 4: Primera vez o sin novedad especial - anunciar cantidad
     setLastScanned({ sku: product.sku, id: product.id });
     setScannedCount(prev => prev + 1);
     speak(`${product.cantidad_documento}`);
@@ -721,7 +895,7 @@ export default function AuditorDashboard() {
   const filteredProducts = useMemo(() => {
     let filtered = products;
     
-    if (debouncedSearch || filterNovedad !== 'all') {
+    if (!modoConteoRapido && (debouncedSearch || filterNovedad !== 'all')) {
       const searchLower = debouncedSearch.toLowerCase();
       filtered = products.filter(p => {
         if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) {
@@ -735,13 +909,14 @@ export default function AuditorDashboard() {
     }
     
     // Paginación
-    const start = currentPage * ITEMS_PER_PAGE;
-    return filtered.slice(start, start + ITEMS_PER_PAGE);
-  }, [products, debouncedSearch, filterNovedad, currentPage]);
+    const itemsPerPage = modoConteoRapido ? 10 : 20;
+    const start = currentPage * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage);
+  }, [products, debouncedSearch, filterNovedad, currentPage, modoConteoRapido]);
   
   const totalPages = useMemo(() => {
     let count = products.length;
-    if (debouncedSearch || filterNovedad !== 'all') {
+    if (!modoConteoRapido && (debouncedSearch || filterNovedad !== 'all')) {
       const searchLower = debouncedSearch.toLowerCase();
       count = products.filter(p => {
         if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) return false;
@@ -749,8 +924,9 @@ export default function AuditorDashboard() {
         return true;
       }).length;
     }
-    return Math.ceil(count / ITEMS_PER_PAGE);
-  }, [products, debouncedSearch, filterNovedad]);
+    const itemsPerPage = modoConteoRapido ? 10 : 20;
+    return Math.ceil(count / itemsPerPage);
+  }, [products, debouncedSearch, filterNovedad, modoConteoRapido]);
 
   const cumplimientoActual = useMemo(() => {
     if (!products.length) return 0;
@@ -921,27 +1097,27 @@ export default function AuditorDashboard() {
                 <table className="table table-hover">
                   <thead>
                     <tr style={{textAlign: 'center'}}>
-                      <th>ID</th>
-                      <th>Origen</th>
-                      <th>Destino</th>
-                      <th>Fecha</th>
-                      <th>Estado</th>
-                      <th>Acciones</th>
+                      <th style={{textAlign: 'center'}}>ID</th>
+                      <th style={{textAlign: 'left'}}>Origen</th>
+                      <th style={{textAlign: 'left'}}>Destino</th>
+                      <th style={{textAlign: 'center'}}>Fecha</th>
+                      <th style={{textAlign: 'center'}}>Estado</th>
+                      <th style={{textAlign: 'center'}}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {audits.map(audit => (
                       <tr key={audit.id}>
-                        <td>{audit.id}</td>
-                        <td>{audit.ubicacion_origen?.nombre || 'N/A'}</td>
-                        <td>{audit.ubicacion_destino?.nombre || 'N/A'}</td>
-                        <td>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
-                        <td>
+                        <td style={{textAlign: 'center'}}>{audit.id}</td>
+                        <td style={{textAlign: 'left'}}>{audit.ubicacion_origen?.nombre || 'N/A'}</td>
+                        <td style={{textAlign: 'left'}}>{audit.ubicacion_destino?.nombre || 'N/A'}</td>
+                        <td style={{textAlign: 'center'}}>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
+                        <td style={{textAlign: 'center'}}>
                           <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
                             {audit.estado}
                           </span>
                         </td>
-                        <td>
+                        <td style={{textAlign: 'center'}}>
                           {audit.estado === 'pendiente' && (
                             <>
                               <button className="btn btn-sm btn-primary me-2" onClick={() => handleIniciar(audit.id)} style={{minHeight: '38px'}}>
@@ -987,18 +1163,19 @@ export default function AuditorDashboard() {
       {/* Productos de auditoría activa */}
       {currentAudit && (
         <>
-          <div style={{width: '100%', marginBottom: '15px'}}>
-            <div>
-              <div className="card">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h5 className="card-title mb-0">Escanear Producto</h5>
-                    {scannedCount > 0 && (
-                      <span className="badge bg-success">
-                        <i className="bi bi-check-circle"></i> {scannedCount} escaneados
-                      </span>
-                    )}
-                  </div>
+          {currentAudit.estado !== 'finalizada' && (
+            <div style={{width: '100%', marginBottom: '15px'}}>
+              <div>
+                <div className="card">
+                  <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <h5 className="card-title mb-0">Escanear Producto</h5>
+                      {scannedCount > 0 && (
+                        <span className="badge bg-success">
+                          <i className="bi bi-check-circle"></i> {scannedCount} escaneados
+                        </span>
+                      )}
+                    </div>
                   <div className="input-group">
                     <span className="input-group-text"><i className="bi bi-qr-code-scan"></i></span>
                     <input 
@@ -1042,7 +1219,8 @@ export default function AuditorDashboard() {
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           <div style={{width: '100%', marginBottom: '15px'}}>
             <div>
@@ -1070,47 +1248,51 @@ export default function AuditorDashboard() {
                             <i className="bi bi-save"></i> Guardar
                           </button>
                           <button className="btn btn-warning me-2" onClick={() => {
-                            setShowVerifyModal(true);
-                            
-                            // Combinar novedades del array Y del campo único
-                            const localNovelties = products
-                              .filter(p => 
-                                (p.novelties && p.novelties.length > 0) || 
-                                (p.novedad && p.novedad !== 'sin_novedad')
-                              )
-                              .reduce((acc, p) => {
-                                if (!acc[p.sku]) {
-                                  acc[p.sku] = {
-                                    sku: p.sku,
-                                    nombre_articulo: p.nombre_articulo,
-                                    cantidad_documento: p.cantidad_documento,
-                                    novelties: []
-                                  };
-                                }
-                                
-                                // Agregar novedades del array (avería, vencido, etc.)
-                                if (p.novelties && p.novelties.length > 0) {
-                                  p.novelties.forEach(nov => {
-                                    acc[p.sku].novelties.push({
-                                      tipo: nov.novedad_tipo,
-                                      cantidad: nov.cantidad,
-                                      observaciones: nov.observaciones
+                            if (modoConteoRapido) {
+                              setShowVerificarConteoModal(true);
+                            } else {
+                              setShowVerifyModal(true);
+                              
+                              // Combinar novedades del array Y del campo único
+                              const localNovelties = products
+                                .filter(p => 
+                                  (p.novelties && p.novelties.length > 0) || 
+                                  (p.novedad && p.novedad !== 'sin_novedad')
+                                )
+                                .reduce((acc, p) => {
+                                  if (!acc[p.sku]) {
+                                    acc[p.sku] = {
+                                      sku: p.sku,
+                                      nombre_articulo: p.nombre_articulo,
+                                      cantidad_documento: p.cantidad_documento,
+                                      novelties: []
+                                    };
+                                  }
+                                  
+                                  // Agregar novedades del array (avería, vencido, etc.)
+                                  if (p.novelties && p.novelties.length > 0) {
+                                    p.novelties.forEach(nov => {
+                                      acc[p.sku].novelties.push({
+                                        tipo: nov.novedad_tipo,
+                                        cantidad: nov.cantidad,
+                                        observaciones: nov.observaciones
+                                      });
                                     });
-                                  });
-                                }
-                                
-                                // Agregar novedad del campo único (faltante/sobrante)
-                                if (p.novedad && p.novedad !== 'sin_novedad') {
-                                  acc[p.sku].novelties.push({
-                                    tipo: p.novedad,
-                                    cantidad: p.cantidad_fisica,
-                                    observaciones: p.observaciones
-                                  });
-                                }
-                                
-                                return acc;
-                              }, {});
-                            setNoveltiesBySku(Object.values(localNovelties));
+                                  }
+                                  
+                                  // Agregar novedad del campo único (faltante/sobrante)
+                                  if (p.novedad && p.novedad !== 'sin_novedad') {
+                                    acc[p.sku].novelties.push({
+                                      tipo: p.novedad,
+                                      cantidad: p.cantidad_fisica,
+                                      observaciones: p.observaciones
+                                    });
+                                  }
+                                  
+                                  return acc;
+                                }, {});
+                              setNoveltiesBySku(Object.values(localNovelties));
+                            }
                           }}>
                             <i className="bi bi-exclamation-triangle"></i> Verificar
                           </button>
@@ -1124,80 +1306,84 @@ export default function AuditorDashboard() {
                   <div className="table-responsive" style={{width: '100%', margin: '0 auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch'}}>
                     <table className="table table-sm table-hover" style={{fontSize: '0.85rem', width: '100%', marginBottom: '0', minWidth: '600px'}}>
                       <thead>
-                        <tr>
-                          <th colSpan="6">
-                            <div className="d-flex gap-2 mb-2">
-                              <input 
-                                type="text"
-                                className="form-control form-control-sm"
-                                placeholder="🔍 Buscar por SKU o nombre..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                              />
-                              <select 
-                                className="form-select form-select-sm"
-                                style={{maxWidth: '200px'}}
-                                value={filterNovedad}
-                                onChange={(e) => setFilterNovedad(e.target.value)}
-                              >
-                                <option value="all">Todas las novedades</option>
-                                <option value="sin_novedad">Sin Novedad</option>
-                                <option value="faltante">Faltante</option>
-                                <option value="sobrante">Sobrante</option>
-                                <option value="averia">Avería</option>
-                              </select>
-                            </div>
-                          </th>
-                        </tr>
+                        {!modoConteoRapido && (
+                          <tr>
+                            <th colSpan="6">
+                              <div className="d-flex gap-2 mb-2">
+                                <input 
+                                  type="text"
+                                  className="form-control form-control-sm"
+                                  placeholder="🔍 Buscar por SKU o nombre..."
+                                  value={searchTerm}
+                                  onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                <select 
+                                  className="form-select form-select-sm"
+                                  style={{maxWidth: '200px'}}
+                                  value={filterNovedad}
+                                  onChange={(e) => setFilterNovedad(e.target.value)}
+                                >
+                                  <option value="all">Todas las novedades</option>
+                                  <option value="sin_novedad">Sin Novedad</option>
+                                  <option value="faltante">Faltante</option>
+                                  <option value="sobrante">Sobrante</option>
+                                  <option value="averia">Avería</option>
+                                </select>
+                              </div>
+                            </th>
+                          </tr>
+                        )}
                         <tr style={{textAlign: 'center'}}>
-                          <th style={{width: '80px'}}>OT</th>
-                          <th style={{width: '120px'}}>SKU</th>
-                          <th>Nombre</th>
-                          <th style={{width: '80px'}}>Doc</th>
-                          <th style={{width: '80px'}}>Física</th>
+                          <th style={{width: '80px', textAlign: 'center'}}>OT</th>
+                          <th style={{width: '120px', textAlign: 'center'}}>SKU</th>
+                          <th style={{textAlign: 'left'}}>Nombre</th>
+                          <th style={{width: '80px', textAlign: 'center'}}>Doc</th>
+                          {!modoConteoRapido && <th style={{width: '80px', textAlign: 'center'}}>Física</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {filteredProducts.map(product => (
                           <tr key={product.id} data-product-id={product.id}>
-                            <td style={{fontSize: '0.75rem'}}><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{product.orden_traslado_original}</span></td>
-                            <td style={{fontWeight: '500'}}>{product.sku}</td>
-                            <td style={{fontSize: '0.8rem'}}>{product.nombre_articulo}</td>
+                            <td style={{fontSize: '0.75rem', textAlign: 'center'}}><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{product.orden_traslado_original}</span></td>
+                            <td style={{fontWeight: '500', textAlign: 'center'}}>{product.sku}</td>
+                            <td style={{fontSize: '0.8rem', textAlign: 'left'}}>{product.nombre_articulo}</td>
                             <td style={{textAlign: 'center'}}>{product.cantidad_documento}</td>
-                            <td style={{textAlign: 'center'}}>
-                              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
-                                <input
-                                  type="number"
-                                  className="form-control form-control-sm"
-                                  key={product.id}
-                                  defaultValue={product.cantidad_fisica ?? ''}
-                                  onBlur={(e) => {
-                                    const value = e.target.value;
-                                    const newQuantity = value === '' ? null : parseInt(value, 10);
-                                    if (newQuantity !== product.cantidad_fisica) {
-                                      handleQuantityChange(product.id, newQuantity);
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      e.target.blur();
-                                    }
-                                  }}
-                                  disabled={currentAudit.estado === 'finalizada'}
-                                  style={{ width: '80px', margin: 'auto' }}
-                                />
-                                {product.novedad && product.novedad !== 'sin_novedad' && (
-                                  <span className={`badge bg-${
-                                    product.novedad === 'faltante' ? 'danger' :
-                                    product.novedad === 'sobrante' ? 'warning' :
-                                    product.novedad === 'averia' ? 'dark' : 'secondary'
-                                  } ms-1`} style={{fontSize: '10px'}}>
-                                    ⚠️
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                            {!modoConteoRapido && (
+                              <td style={{textAlign: 'center'}}>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'}}>
+                                  <input
+                                    type="number"
+                                    className="form-control form-control-sm"
+                                    key={product.id}
+                                    defaultValue={product.cantidad_fisica ?? ''}
+                                    onBlur={(e) => {
+                                      const value = e.target.value;
+                                      const newQuantity = value === '' ? null : parseInt(value, 10);
+                                      if (newQuantity !== product.cantidad_fisica) {
+                                        handleQuantityChange(product.id, newQuantity);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.target.blur();
+                                      }
+                                    }}
+                                    disabled={currentAudit.estado === 'finalizada'}
+                                    style={{ width: '80px', margin: 'auto' }}
+                                  />
+                                  {product.novedad && product.novedad !== 'sin_novedad' && (
+                                    <span className={`badge bg-${
+                                      product.novedad === 'faltante' ? 'danger' :
+                                      product.novedad === 'sobrante' ? 'warning' :
+                                      product.novedad === 'averia' ? 'dark' : 'secondary'
+                                    } ms-1`} style={{fontSize: '10px'}}>
+                                      ⚠️
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -1438,6 +1624,134 @@ export default function AuditorDashboard() {
             handleVerAuditoria(currentAudit.id);
           }
           loadAudits();
+        }}
+      />
+
+      <ModoAuditoriaModal
+        show={showModoModal}
+        onClose={() => {
+          setShowModoModal(false);
+          setPendingAuditId(null);
+        }}
+        onSelect={handleModoSelected}
+      />
+
+      <VerificarConteoModal
+        show={showVerificarConteoModal}
+        products={products}
+        currentAudit={currentAudit}
+        onClose={() => setShowVerificarConteoModal(false)}
+        onSave={async () => {
+          // Calcular y guardar novedades para cada producto
+          for (const p of products) {
+            const fisico = p.cantidad_fisica || 0;
+            const documento = p.cantidad_documento || 0;
+            
+            let novedad = 'sin_novedad';
+            let observaciones = '';
+            
+            // Si es producto nuevo (no referenciado)
+            if (p.isNew) {
+              novedad = 'no_referenciado';
+              observaciones = 'Producto no referenciado';
+            } else if (fisico < documento) {
+              novedad = 'faltante';
+              observaciones = `Faltante ${documento - fisico} unidades`;
+            } else if (fisico > documento) {
+              novedad = 'sobrante';
+              observaciones = `Sobrante ${fisico - documento} unidades`;
+            }
+            
+            const changes = {
+              cantidad_fisica: fisico,
+              novedad: novedad,
+              observaciones: observaciones
+            };
+            
+            // Actualizar estado local
+            setProducts(prev => prev.map(prod => 
+              prod.id === p.id ? { ...prod, ...changes } : prod
+            ));
+            
+            // Guardar en servidor o offline
+            if (p.isNew) {
+              // Producto nuevo no referenciado - crear con endpoint de sobrante
+              try {
+                const { addSurplusProduct } = await import('../services/api');
+                await addSurplusProduct(currentAudit.id, {
+                  sku: p.sku,
+                  cantidad_fisica: fisico,
+                  observaciones: observaciones
+                });
+              } catch (err) {
+                console.error('Error creando producto:', err);
+              }
+            } else {
+              // Producto existente - actualizar
+              if (isOnline) {
+                await updateProduct(currentAudit.id, p.id, changes).catch(err => console.error('Error:', err));
+              } else {
+                await offlineDB.savePendingChange(currentAudit.id, p.id, changes);
+                window.dispatchEvent(new Event('pendingChangesUpdated'));
+              }
+            }
+          }
+          
+          setShowVerificarConteoModal(false);
+          toast.success('Novedades guardadas correctamente');
+          // Recargar auditoría
+          await handleVerAuditoria(currentAudit.id);
+        }}
+        onFinish={async () => {
+          // Primero guardar todo
+          for (const p of products) {
+            const fisico = p.cantidad_fisica || 0;
+            const documento = p.cantidad_documento || 0;
+            
+            let novedad = 'sin_novedad';
+            let observaciones = '';
+            
+            // Si es producto nuevo (no referenciado)
+            if (p.isNew) {
+              novedad = 'no_referenciado';
+              observaciones = 'Producto no referenciado';
+            } else if (fisico < documento) {
+              novedad = 'faltante';
+              observaciones = `Faltante ${documento - fisico} unidades`;
+            } else if (fisico > documento) {
+              novedad = 'sobrante';
+              observaciones = `Sobrante ${fisico - documento} unidades`;
+            }
+            
+            const changes = {
+              cantidad_fisica: fisico,
+              novedad: novedad,
+              observaciones: observaciones
+            };
+            
+            if (p.isNew) {
+              try {
+                const { addSurplusProduct } = await import('../services/api');
+                await addSurplusProduct(currentAudit.id, {
+                  sku: p.sku,
+                  cantidad_fisica: fisico,
+                  observaciones: observaciones
+                });
+              } catch (err) {
+                console.error('Error creando producto:', err);
+              }
+            } else {
+              if (isOnline) {
+                await updateProduct(currentAudit.id, p.id, changes).catch(err => console.error('Error:', err));
+              } else {
+                await offlineDB.savePendingChange(currentAudit.id, p.id, changes);
+              }
+            }
+          }
+          
+          // Luego finalizar
+          setShowVerificarConteoModal(false);
+          await handleFinish();
         }}
       />
 

@@ -204,16 +204,16 @@ def search_audit_by_exact_ot(
     # Construir filtro según el rol
     if current_user.rol in ["analista", "administrador"]:
         # Analistas y admins pueden ver todas las auditorías
-        audit = db.query(models.Audit).options(
+        audit = db.query(models.Audit).join(models.Product).options(
             joinedload(models.Audit.auditor),
             joinedload(models.Audit.collaborators)
         ).filter(
             models.Audit.auditor_id.isnot(None),
-            models.Audit.ubicacion_destino.contains(ot_number)
+            models.Product.orden_traslado_original == ot_number
         ).order_by(models.Audit.creada_en.desc()).first()
     else:
         # Auditores solo ven sus auditorías o donde son colaboradores
-        audit = db.query(models.Audit).options(
+        audit = db.query(models.Audit).join(models.Product).options(
             joinedload(models.Audit.auditor),
             joinedload(models.Audit.collaborators)
         ).filter(
@@ -222,7 +222,7 @@ def search_audit_by_exact_ot(
                 (models.Audit.auditor_id == current_user.id) |
                 (models.Audit.collaborators.any(models.User.id == current_user.id))
             ),
-            models.Audit.ubicacion_destino.contains(ot_number)
+            models.Product.orden_traslado_original == ot_number
         ).order_by(models.Audit.creada_en.desc()).first()
     
     if not audit:
@@ -253,13 +253,14 @@ def search_audit_by_exact_ot(
     return schemas.AuditDetails(**audit_dict)
 
 @router.put("/{audit_id}/iniciar", response_model=schemas.Audit)
-async def iniciar_auditoria(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def iniciar_auditoria(audit_id: int, modo: str = "normal", db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
     if db_audit.estado != "pendiente":
         raise HTTPException(status_code=400, detail=f"No se puede iniciar una auditoría en estado '{db_audit.estado}'")
     db_audit.estado = "en_progreso"
+    db_audit.modo_auditoria = modo
     db.commit()
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
@@ -490,96 +491,98 @@ async def get_report_details(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Obtiene las 7 auditorías más recientes del día actual.
+    Obtiene auditorías según filtros.
+    Sin filtros: 7 más recientes del día actual.
+    Con filtros: todas las que cumplan los criterios.
     """
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
 
-    # Obtener rango del día actual en Colombia
-    bogota_tz = ZoneInfo("America/Bogota")
-    bogota_today = datetime.now(bogota_tz).date()
-    start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
-    end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
-    start_utc = start_local.astimezone(timezone.utc)
-    end_utc = end_local.astimezone(timezone.utc)
+    # Detectar si hay filtros aplicados
+    has_filters = any([
+        audit_status and audit_status != 'Todos',
+        auditor_id,
+        start_date and start_date.strip(),
+        end_date and end_date.strip()
+    ])
     
-    # Consulta optimizada: solo auditorías del día actual
-    query = db.query(models.Audit).options(joinedload(models.Audit.auditor)).filter(
-        models.Audit.auditor_id.isnot(None),
-        models.Audit.creada_en >= start_utc,
-        models.Audit.creada_en <= end_utc
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(models.Audit).options(
+        joinedload(models.Audit.auditor),
+        joinedload(models.Audit.productos),
+        joinedload(models.Audit.ubicacion_origen),
+        joinedload(models.Audit.ubicacion_destino)
+    ).filter(
+        models.Audit.auditor_id.isnot(None)
     )
     
+    # Si NO hay filtros, limitar al día actual
+    if not has_filters:
+        bogota_today = datetime.now(bogota_tz).date()
+        start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
+        end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
+        start_utc = start_local.astimezone(timezone.utc)
+        end_utc = end_local.astimezone(timezone.utc)
+        query = query.filter(
+            models.Audit.creada_en >= start_utc,
+            models.Audit.creada_en <= end_utc
+        )
+    
+    # Aplicar filtros si existen
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
     if db_status:
         query = query.filter(models.Audit.estado == db_status)
     if auditor_id:
         query = query.filter(models.Audit.auditor_id == auditor_id)
     
-    # Solo las 7 más recientes del día
-    audits = query.order_by(models.Audit.creada_en.desc()).limit(7).all()
+    # Aplicar filtros de fecha si existen
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
     
-    # Retornar datos básicos con objeto auditor
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    # Limitar a 7 solo si NO hay filtros
+    query = query.order_by(models.Audit.creada_en.desc())
+    if not has_filters:
+        query = query.limit(7)
+    
+    audits = query.all()
+    
+    # Retornar datos con productos
     return [{
         "id": a.id,
+        "ubicacion_origen": a.ubicacion_origen,
         "ubicacion_destino": a.ubicacion_destino,
         "estado": a.estado,
         "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
         "creada_en": a.creada_en,
-        "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None
+        "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None,
+        "productos": [{
+            "id": p.id,
+            "sku": p.sku,
+            "nombre_articulo": p.nombre_articulo,
+            "cantidad_documento": p.cantidad_documento,
+            "cantidad_fisica": p.cantidad_fisica,
+            "novedad": p.novedad,
+            "observaciones": p.observaciones,
+            "orden_traslado_original": p.orden_traslado_original
+        } for p in a.productos]
     } for a in audits]
 
-@router.get("/report", response_class=StreamingResponse)
-async def download_audit_report(
-    audit_status: Optional[str] = None,
-    auditor_id: Optional[int] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    """
-    Genera y descarga un informe de auditorías en formato Excel.
-    """
-    if current_user.rol not in ["analista", "administrador"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para descargar informes")
 
-    # Normalizar el estado si viene como texto legible
-    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-
-    try:
-        audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, start_date=start_date, end_date=end_date)
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error getting audits: {e}")
-        audits = []
-
-    if not audits:
-        # Si no hay auditorías, devolver Excel vacío
-        df = pd.DataFrame(columns=["ID", "Ubicación", "Auditor", "Fecha", "Estado", "Productos", "% Cumplimiento"])
-    else:
-        data = []
-        for audit in audits:
-            data.append({
-                "ID": audit.id,
-                "Ubicación": audit.ubicacion_destino,
-                "Auditor": audit.auditor.nombre if audit.auditor else "",
-                "Fecha": audit.creada_en.strftime("%Y-%m-%d %H:%M:%S"),
-                "Estado": audit.estado,
-                "Productos": len(audit.productos),
-                "% Cumplimiento": audit.porcentaje_cumplimiento
-            })
-        df = pd.DataFrame(data)
-
-    stream = io.BytesIO()
-    df.to_excel(stream, index=False, sheet_name='Auditorias')
-    stream.seek(0)
-    
-    response = StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response.headers["Content-Disposition"] = "attachment; filename=reporte_auditorias.xlsx"
-    
-    return response
 
 @router.get("/statistics/status", response_model=List[schemas.AuditStatusStatistic])
 async def get_audit_status_statistics(

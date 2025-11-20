@@ -165,8 +165,8 @@ export async function uploadAuditFiles(files, ubicacionOrigenId, ubicacionDestin
     return fetchApi(url, buildOptions('POST', formData));
 }
 
-export async function iniciarAuditoria(auditId) {
-    return fetchApi(`/api/audits/${auditId}/iniciar`, buildOptions('PUT'));
+export async function iniciarAuditoria(auditId, modo = 'normal') {
+    return fetchApi(`/api/audits/${auditId}/iniciar?modo=${modo}`, buildOptions('PUT'));
 }
 
 export async function finishAudit(auditId) {
@@ -199,35 +199,50 @@ export async function fetchProductNovelties(auditId, productId) {
 
 export async function fetchStats(filters = {}) {
     const queryString = buildQueryString(filters);
-    const statsPromises = [
-        getAuditStatusStatistics(filters).catch(e => { console.error('Error status:', e); return null; }),
-        getAverageComplianceStatistic(filters).catch(e => { console.error('Error compliance:', e); return null; }),
-        getNoveltyDistributionStatistic(filters).catch(e => { console.error('Error novelty:', e); return null; }),
-        getComplianceByAuditorStatistic(filters).catch(e => { console.error('Error by auditor:', e); return null; }),
-        getAuditsByPeriodStatistic(filters).catch(e => { console.error('Error by period:', e); return null; }),
-        getTopNoveltySkusStatistic(filters).catch(e => { console.error('Error top skus:', e); return null; }),
-        getAverageAuditDurationStatistic(filters).catch(e => { console.error('Error duration:', e); return null; })
-    ];
+    
+    try {
+        const statsPromises = [
+            getAuditStatusStatistics(filters).catch(e => { console.error('Error status:', e); return { total: 0, pendientes: 0, en_progreso: 0, finalizadas: 0 }; }),
+            getAverageComplianceStatistic(filters).catch(e => { console.error('Error compliance:', e); return { average_compliance: 0 }; }),
+            getNoveltyDistributionStatistic(filters).catch(e => { console.error('Error novelty:', e); return []; }),
+            getComplianceByAuditorStatistic(filters).catch(e => { console.error('Error by auditor:', e); return []; }),
+            getAuditsByPeriodStatistic(filters).catch(e => { console.error('Error by period:', e); return []; }),
+            getTopNoveltySkusStatistic(filters).catch(e => { console.error('Error top skus:', e); return []; }),
+            getAverageAuditDurationStatistic(filters).catch(e => { console.error('Error duration:', e); return { average_duration_hours: 0 }; })
+        ];
 
-    const [
-        status,
-        averageCompliance,
-        noveltyDistribution,
-        complianceByAuditor,
-        auditsByPeriod,
-        topNoveltySkus,
-        averageAuditDuration
-    ] = await Promise.all(statsPromises);
+        const [
+            status,
+            averageCompliance,
+            noveltyDistribution,
+            complianceByAuditor,
+            auditsByPeriod,
+            topNoveltySkus,
+            averageAuditDuration
+        ] = await Promise.all(statsPromises);
 
-    return {
-        status,
-        averageCompliance,
-        noveltyDistribution,
-        complianceByAuditor,
-        auditsByPeriod,
-        topNoveltySkus,
-        averageAuditDuration
-    };
+        return {
+            status: status || { total: 0, pendientes: 0, en_progreso: 0, finalizadas: 0 },
+            averageCompliance: averageCompliance || { average_compliance: 0 },
+            noveltyDistribution: noveltyDistribution || [],
+            complianceByAuditor: complianceByAuditor || [],
+            auditsByPeriod: auditsByPeriod || [],
+            topNoveltySkus: topNoveltySkus || [],
+            averageAuditDuration: averageAuditDuration || { average_duration_hours: 0 }
+        };
+    } catch (error) {
+        console.error('Error crítico en fetchStats:', error);
+        // Retornar estructura vacía pero válida en caso de error total
+        return {
+            status: { total: 0, pendientes: 0, en_progreso: 0, finalizadas: 0 },
+            averageCompliance: { average_compliance: 0 },
+            noveltyDistribution: [],
+            complianceByAuditor: [],
+            auditsByPeriod: [],
+            topNoveltySkus: [],
+            averageAuditDuration: { average_duration_hours: 0 }
+        };
+    }
 }
 
 export async function fetchReportData(filters = {}) {
@@ -318,6 +333,10 @@ export async function addOtToAudit(auditId, files) {
     return fetchApi(`/api/audits/${auditId}/add-ot`, buildOptions('POST', formData));
 }
 
+export async function addSurplusProduct(auditId, productData) {
+    return fetchApi(`/api/audits/${auditId}/products`, buildOptions('POST', productData));
+}
+
 // Exportar todo como un objeto default para compatibilidad
 const api = {
     loginUser,
@@ -349,6 +368,12 @@ const api = {
     getAuditsByPeriodStatistic,
     getTopNoveltySkusStatistic,
     getAverageAuditDurationStatistic,
+    fetchUbicaciones,
+    createUbicacion,
+    deleteUbicacion,
+    createUbicacionesBulk,
+    addOtToAudit,
+    addSurplusProduct
 };
 
 export default api;

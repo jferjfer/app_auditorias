@@ -16,11 +16,19 @@ export default function AnalystDashboard(){
   const [loadingAudits, setLoadingAudits] = useState(false)
   const [otSearch, setOtSearch] = useState('')
   const [selectedAudit, setSelectedAudit] = useState(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const ITEMS_PER_PAGE = 4
 
   // Limpiar filtros al montar el componente
   useEffect(() => {
+    console.log('AnalystDashboard montado')
     setFilters({})
   }, [])
+  
+  // Debug: Log cuando cambian los datos
+  useEffect(() => {
+    console.log('Estado del dashboard:', { data, loading, error })
+  }, [data, loading, error])
 
   useEffect(() => {
     loadAudits()
@@ -29,10 +37,14 @@ export default function AnalystDashboard(){
   const loadAudits = async () => {
     setLoadingAudits(true)
     try {
+      console.log('Cargando auditorías con filtros:', filters)
       const data = await fetchReportData(filters)
+      console.log('Auditorías cargadas:', data?.length || 0)
       setAudits(data || [])
+      setCurrentPage(0) // Reset a primera página
     } catch (err) {
       console.error('Error cargando auditorías:', err)
+      toast.error('Error cargando auditorías: ' + err.message)
     } finally {
       setLoadingAudits(false)
     }
@@ -74,61 +86,13 @@ export default function AnalystDashboard(){
     }
   }
 
-  const handleDownloadExcel = async (type) => {
-    try {
-      if (!audits || audits.length === 0) {
-        toast.warning('No hay auditorías para exportar')
-        return
-      }
-      toast.info('Generando reporte...')
-      
-      console.log('Filters before download:', filters)
-      
-      // Construir URL manualmente con solo filtros válidos
-      const params = new URLSearchParams()
-      if (filters.audit_status && filters.audit_status !== 'Todos' && filters.audit_status.trim()) {
-        params.append('audit_status', filters.audit_status)
-      }
-      if (filters.auditor_id) {
-        params.append('auditor_id', filters.auditor_id)
-      }
-      if (filters.start_date && typeof filters.start_date === 'string' && filters.start_date.trim()) {
-        params.append('start_date', filters.start_date.trim())
-      }
-      if (filters.end_date && typeof filters.end_date === 'string' && filters.end_date.trim()) {
-        params.append('end_date', filters.end_date.trim())
-      }
-      
-      const queryString = params.toString()
-      const url = `${API_BASE_URL}/api/audits/report${queryString ? '?' + queryString : ''}`
-      
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-      })
-      
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Error desconocido' }))
-        throw new Error(error.detail || 'Error al generar reporte')
-      }
-      
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = downloadUrl
-      a.download = `reporte_${type}_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(downloadUrl)
-      document.body.removeChild(a)
-      toast.success('Reporte descargado exitosamente')
-    } catch (err) {
-      toast.error(err.message || 'Error descargando reporte')
-    }
-  }
+
 
   const handleDownloadPDF = async (type) => {
     try {
       const { generatePdfReport, prepareReportData } = await import('../../utils/pdfGenerator')
+      const { getCurrentUser } = await import('../../services/auth')
+      const user = getCurrentUser()
       let reportData;
       
       if (type === 'novedades') {
@@ -142,9 +106,32 @@ export default function AnalystDashboard(){
         reportData = prepareReportData(audits);
       }
       
-      await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters)
+      await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters, user?.nombre || 'Usuario')
+      toast.success('Reporte PDF generado exitosamente')
     } catch (err) {
       toast.error('Error generando PDF: ' + err.message)
+    }
+  }
+
+  const handleDownloadExcel = async (type) => {
+    try {
+      const { generateExcelReport, prepareReportData } = await import('../../utils/excelGenerator')
+      let reportData;
+      
+      if (type === 'novedades') {
+        const auditsWithNovelties = audits.map(audit => ({
+          ...audit,
+          productos: audit.productos?.filter(p => p.novedad !== 'sin_novedad') || []
+        })).filter(audit => audit.productos.length > 0);
+        reportData = prepareReportData(auditsWithNovelties);
+      } else {
+        reportData = prepareReportData(audits);
+      }
+      
+      generateExcelReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters)
+      toast.success('Reporte Excel generado exitosamente')
+    } catch (err) {
+      toast.error('Error generando Excel: ' + err.message)
     }
   }
 
@@ -163,7 +150,17 @@ export default function AnalystDashboard(){
           </div>
         </div>
       ) : error ? (
-        <div className="alert alert-danger">Error cargando estadísticas: {String(error)}</div>
+        <div className="alert alert-danger">
+          <h5>Error cargando estadísticas</h5>
+          <p>{String(error)}</p>
+          <button className="btn btn-primary" onClick={reload}>Reintentar</button>
+        </div>
+      ) : !data ? (
+        <div className="alert alert-warning">
+          <h5>No hay datos disponibles</h5>
+          <p>No se pudieron cargar las estadísticas. Intenta recargar la página.</p>
+          <button className="btn btn-primary" onClick={reload}>Recargar</button>
+        </div>
       ) : (
         <>
           <KPIs data={data} />
@@ -203,14 +200,14 @@ export default function AnalystDashboard(){
                         )}
                       </form>
                       <div className="btn-group">
-                      <button className="btn btn-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-                        <i className="bi bi-file-pdf"></i> PDF
-                      </button>
-                      <ul className="dropdown-menu">
-                        <li><button className="dropdown-item" onClick={() => handleDownloadPDF('general')}>Reporte General</button></li>
-                        <li><button className="dropdown-item" onClick={() => handleDownloadPDF('novedades')}>Reporte de Novedades</button></li>
-                      </ul>
-                      
+                        <button className="btn btn-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                          <i className="bi bi-file-pdf"></i> PDF
+                        </button>
+                        <ul className="dropdown-menu">
+                          <li><button className="dropdown-item" onClick={() => handleDownloadPDF('general')}>Reporte General</button></li>
+                          <li><button className="dropdown-item" onClick={() => handleDownloadPDF('novedades')}>Reporte de Novedades</button></li>
+                        </ul>
+                        
                         <button className="btn btn-success btn-sm dropdown-toggle ms-2" data-bs-toggle="dropdown">
                           <i className="bi bi-file-excel"></i> Excel
                         </button>
@@ -226,35 +223,38 @@ export default function AnalystDashboard(){
                       <div className="spinner-border spinner-border-sm" role="status"></div>
                     </div>
                   ) : (
+                    <>
                     <div className="table-responsive">
                       <table className="table table-hover">
                         <thead>
                           <tr>
-                            <th>ID</th>
-                            <th>Ubicación</th>
-                            <th>Auditor</th>
-                            <th>Fecha</th>
-                            <th>Estado</th>
-                            <th className="text-end">Cumplimiento</th>
-                            <th>Acciones</th>
+                            <th style={{textAlign: 'center'}}>ID</th>
+                            <th style={{textAlign: 'left'}}>Origen</th>
+                            <th style={{textAlign: 'left'}}>Destino</th>
+                            <th style={{textAlign: 'left'}}>Auditor</th>
+                            <th style={{textAlign: 'center'}}>Fecha</th>
+                            <th style={{textAlign: 'center'}}>Estado</th>
+                            <th style={{textAlign: 'center'}}>Cumplimiento</th>
+                            <th style={{textAlign: 'center'}}>Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {audits.map(audit => (
+                          {audits.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE).map(audit => (
                             <tr key={audit.id}>
-                              <td>{audit.id}</td>
-                              <td>{audit.ubicacion_destino}</td>
-                              <td>{audit.auditor?.nombre || 'N/A'}</td>
-                              <td>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
-                              <td>
+                              <td style={{textAlign: 'center'}}>{audit.id}</td>
+                              <td style={{textAlign: 'left'}}>{audit.ubicacion_origen?.nombre || 'N/A'}</td>
+                              <td style={{textAlign: 'left'}}>{audit.ubicacion_destino?.nombre || 'N/A'}</td>
+                              <td style={{textAlign: 'left'}}>{audit.auditor?.nombre || 'N/A'}</td>
+                              <td style={{textAlign: 'center'}}>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
+                              <td style={{textAlign: 'center'}}>
                                 <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
                                   {audit.estado}
                                 </span>
                               </td>
-                              <td className="text-end">
+                              <td style={{textAlign: 'center'}}>
                                 {audit.porcentaje_cumplimiento ? `${audit.porcentaje_cumplimiento}%` : 'N/A'}
                               </td>
-                              <td>
+                              <td style={{textAlign: 'center'}}>
                                 <button 
                                   className="btn btn-sm btn-primary"
                                   onClick={() => setSelectedAudit(audit)}
@@ -267,6 +267,30 @@ export default function AnalystDashboard(){
                         </tbody>
                       </table>
                     </div>
+                    
+                    {/* Paginación */}
+                    {audits.length > ITEMS_PER_PAGE && (
+                      <div className="d-flex justify-content-between align-items-center mt-3">
+                        <button 
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                          disabled={currentPage === 0}
+                        >
+                          <i className="bi bi-chevron-left"></i> Anterior
+                        </button>
+                        <span className="text-muted">
+                          Página {currentPage + 1} de {Math.ceil(audits.length / ITEMS_PER_PAGE)} ({audits.length} auditorías)
+                        </span>
+                        <button 
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(audits.length / ITEMS_PER_PAGE) - 1, p + 1))}
+                          disabled={currentPage >= Math.ceil(audits.length / ITEMS_PER_PAGE) - 1}
+                        >
+                          Siguiente <i className="bi bi-chevron-right"></i>
+                        </button>
+                      </div>
+                    )}
+                    </>
                   )}
                 </div>
               </div>
