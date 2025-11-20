@@ -36,11 +36,6 @@ async def create_audit(
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
     audit_response.productos_count = len(db_audit.productos)
-    payload = {"type": "new_audit", "data": audit_response.dict()}
-    try:
-        await manager.broadcast_to_all(json.dumps(payload, default=str))
-    except Exception as e:
-        print(f"Error broadcasting new audit: {e}")
     return audit_response
 
 
@@ -153,11 +148,6 @@ async def upload_multiple_audit_files(
     
     db.refresh(db_audit)
     audit_response = schemas.AuditResponse.from_orm(db_audit)
-    payload = {"type": "new_audit", "data": audit_response.dict()}
-    try:
-        await manager.broadcast_to_all(json.dumps(payload, default=str))
-    except Exception as e:
-        print(f"Error broadcasting new audit: {e}")
 
     return {
         "message": f"Auditoría creada con {num_orders} orden(es) de traslado.",
@@ -263,12 +253,6 @@ async def iniciar_auditoria(audit_id: int, modo: str = "normal", db: Session = D
     db_audit.modo_auditoria = modo
     db.commit()
     db.refresh(db_audit)
-    audit_response = schemas.AuditResponse.from_orm(db_audit)
-    payload = {"type": "audit_updated", "data": audit_response.dict()}
-    try:
-        await manager.broadcast_to_all(json.dumps(payload, default=str))
-    except Exception as e:
-        print(f"Error broadcasting audit update: {e}")
     return db_audit
 
 @router.get("/{audit_id}", response_model=schemas.AuditDetails)
@@ -344,14 +328,7 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
         except Exception as e:
             print(f"Error broadcasting product update for audit {audit_id}: {e}")
 
-        # Broadcast the general audit update to everyone
-        if updated_audit:
-            try:
-                audit_response = schemas.AuditResponse.from_orm(updated_audit)
-                payload = {"type": "audit_updated", "data": audit_response.dict()}
-                await manager.broadcast_to_all(json.dumps(payload, default=str))
-            except Exception as e:
-                print(f"Error broadcasting audit update: {e}")
+        # Audit updated (no broadcast needed)
 
         return {"message": "Producto actualizado", "product": updated_product}
     except Exception as e:
@@ -403,12 +380,6 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     db_audit.finalizada_en = datetime.utcnow()
     db.commit()
     db.refresh(db_audit)
-    audit_response = schemas.AuditResponse.from_orm(db_audit)
-    payload = {"type": "audit_updated", "data": audit_response.dict()}
-    try:
-        await manager.broadcast_to_all(json.dumps(payload, default=str))
-    except Exception as e:
-        print(f"Error broadcasting audit finish: {e}")
     return db_audit
 
 @router.post("/{audit_id}/collaborators", status_code=status.HTTP_200_OK)
@@ -469,15 +440,8 @@ async def add_surplus_product_to_audit(
     except Exception as e:
         print(f"Error broadcasting new surplus product for audit {audit_id}: {e}")
 
-    # Recalcular y notificar la actualización general de la auditoría
-    updated_audit = crud.recalculate_and_update_audit_percentage(db, audit_id)
-    if updated_audit:
-        try:
-            audit_response = schemas.AuditResponse.from_orm(updated_audit)
-            payload = {"type": "audit_updated", "data": audit_response.dict()}
-            await manager.broadcast_to_all(json.dumps(payload, default=str))
-        except Exception as e:
-            print(f"Error broadcasting audit update after adding surplus: {e}")
+    # Recalcular porcentaje
+    crud.recalculate_and_update_audit_percentage(db, audit_id)
 
     return new_product
 

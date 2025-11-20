@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
-export default function CameraScanner({ onScan, onClose }) {
+export default function CameraScanner({ onScan, onClose, continuousMode = false }) {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
+  const lastScanRef = useRef(0);
+  const [scanCount, setScanCount] = React.useState(0);
+  const [flashVisible, setFlashVisible] = React.useState(false);
 
   useEffect(() => {
     const config = { 
@@ -23,9 +26,23 @@ export default function CameraScanner({ onScan, onClose }) {
       { facingMode: "environment" },
       config,
       (decodedText) => {
+        // Prevenir escaneos duplicados (1 segundo de bloqueo)
+        const now = Date.now();
+        if (now - lastScanRef.current < 1000) return;
+        lastScanRef.current = now;
+        
+        // Feedback: Beep + Vibración + Flash
+        playBeep();
         if (navigator.vibrate) navigator.vibrate(200);
+        showFlash();
+        
+        setScanCount(prev => prev + 1);
         onScan(decodedText);
-        stopScanner();
+        
+        // Solo cerrar si NO es modo continuo
+        if (!continuousMode) {
+          stopScanner();
+        }
       },
       (errorMessage) => {
         // Ignorar errores de escaneo continuo
@@ -45,6 +62,27 @@ export default function CameraScanner({ onScan, onClose }) {
     if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
       html5QrCodeRef.current.stop().catch(err => console.error(err));
     }
+  };
+  
+  const playBeep = () => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    gainNode.gain.value = 0.3;
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+  };
+  
+  const showFlash = () => {
+    setFlashVisible(true);
+    setTimeout(() => setFlashVisible(false), 300);
   };
 
   return (
@@ -71,6 +109,35 @@ export default function CameraScanner({ onScan, onClose }) {
       }}>
         <div id="reader" ref={scannerRef}></div>
       </div>
+      {continuousMode && (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '15px',
+          borderRadius: '8px',
+          marginTop: '15px',
+          textAlign: 'center',
+          width: '100%',
+          maxWidth: '500px'
+        }}>
+          <h5 style={{margin: 0, color: '#28a745'}}>
+            ✅ {scanCount} productos escaneados
+          </h5>
+        </div>
+      )}
+      
+      {flashVisible && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 255, 0, 0.3)',
+          pointerEvents: 'none',
+          zIndex: 10000
+        }} />
+      )}
+      
       <button 
         className="btn btn-danger mt-3"
         onClick={() => {

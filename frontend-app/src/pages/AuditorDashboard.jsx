@@ -498,9 +498,22 @@ export default function AuditorDashboard() {
         } else {
           // Producto existente - incrementar cantidad
           const newQty = (product.cantidad_fisica || 0) + 1;
+          const updatedProduct = { ...product, cantidad_fisica: newQty };
           setProducts(prev => prev.map(p => 
-            p.id === product.id ? { ...p, cantidad_fisica: newQty } : p
+            p.id === product.id ? updatedProduct : p
           ));
+          // Actualizar índice con el producto actualizado
+          setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
+          
+          // Guardar inmediatamente en BD
+          const changes = { cantidad_fisica: newQty };
+          if (isOnline) {
+            updateProduct(currentAudit.id, product.id, changes).catch(err => console.error('Error:', err));
+          } else {
+            offlineDB.savePendingChange(currentAudit.id, product.id, changes).then(() => {
+              window.dispatchEvent(new Event('pendingChangesUpdated'));
+            });
+          }
         }
         
         setScannedCount(prev => prev + 1);
@@ -729,7 +742,10 @@ export default function AuditorDashboard() {
   };
 
   const handleCameraScan = (decodedText) => {
-    setShowCameraScanner(false);
+    // En modo normal cierra la cámara, en modo rápido continúa
+    if (!modoConteoRapido) {
+      setShowCameraScanner(false);
+    }
     
     const scannedSku = decodedText.trim().toUpperCase().replace(/^0+/, '');
     if (!scannedSku) return;
@@ -787,9 +803,22 @@ export default function AuditorDashboard() {
       } else {
         // Producto existente - incrementar cantidad
         const newQty = (product.cantidad_fisica || 0) + 1;
+        const updatedProduct = { ...product, cantidad_fisica: newQty };
         setProducts(prev => prev.map(p => 
-          p.id === product.id ? { ...p, cantidad_fisica: newQty } : p
+          p.id === product.id ? updatedProduct : p
         ));
+        // Actualizar índice con el producto actualizado
+        setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
+        
+        // Guardar inmediatamente en BD
+        const changes = { cantidad_fisica: newQty };
+        if (isOnline) {
+          updateProduct(currentAudit.id, product.id, changes).catch(err => console.error('Error:', err));
+        } else {
+          offlineDB.savePendingChange(currentAudit.id, product.id, changes).then(() => {
+            window.dispatchEvent(new Event('pendingChangesUpdated'));
+          });
+        }
       }
       
       setScannedCount(prev => prev + 1);
@@ -1432,6 +1461,7 @@ export default function AuditorDashboard() {
         <CameraScanner 
           onScan={handleCameraScan}
           onClose={() => setShowCameraScanner(false)}
+          continuousMode={modoConteoRapido}
         />
       )}
 
