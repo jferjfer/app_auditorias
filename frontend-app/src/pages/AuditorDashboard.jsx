@@ -1377,9 +1377,11 @@ export default function AuditorDashboard() {
                           }}>
                             <i className="bi bi-exclamation-triangle"></i> Verificar
                           </button>
-                          <button className="btn btn-success" onClick={handleFinish}>
-                            <i className="bi bi-check-circle"></i> Finalizar
-                          </button>
+                          {currentAudit.auditor_id === user.id && (
+                            <button className="btn btn-success" onClick={handleFinish}>
+                              <i className="bi bi-check-circle"></i> Finalizar
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
