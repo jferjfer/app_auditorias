@@ -100,6 +100,7 @@ export default function AuditorDashboard() {
   const [showModoModal, setShowModoModal] = useState(false);
   const [pendingAuditId, setPendingAuditId] = useState(null);
   const [showVerificarConteoModal, setShowVerificarConteoModal] = useState(false);
+  const [creatingProducts, setCreatingProducts] = useState(new Set());
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -472,9 +473,9 @@ export default function AuditorDashboard() {
             ));
             setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
             
-            // Guardar en BD si no es temporal
+            // Guardar en BD (incluso si es temporal, se guardará cuando se convierta en real)
+            const changes = { cantidad_fisica: newQty };
             if (!String(existingProduct.id).startsWith('temp_')) {
-              const changes = { cantidad_fisica: newQty };
               if (isOnline) {
                 updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
               } else {
@@ -484,6 +485,13 @@ export default function AuditorDashboard() {
               }
             }
           } else {
+            // Evitar crear duplicados si ya se está creando
+            if (creatingProducts.has(scannedSku)) {
+              setScannedCount(prev => prev + 1);
+              setScanInput('');
+              return;
+            }
+            
             // Producto no referenciado - crear temporal y guardar inmediatamente
             const tempProduct = {
               id: `temp_${Date.now()}`,
@@ -500,6 +508,7 @@ export default function AuditorDashboard() {
             };
             setProducts(prev => [...prev, tempProduct]);
             setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+            setCreatingProducts(prev => new Set(prev).add(scannedSku));
           
             // Guardar inmediatamente en BD en background
             (async () => {
@@ -518,6 +527,12 @@ export default function AuditorDashboard() {
                 setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
               } catch (err) {
                 console.error('Error creando producto:', err);
+              } finally {
+                setCreatingProducts(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(scannedSku);
+                  return newSet;
+                });
               }
             })();
           }
@@ -803,9 +818,9 @@ export default function AuditorDashboard() {
           ));
           setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
           
-          // Guardar en BD si no es temporal
+          // Guardar en BD (incluso si es temporal, se guardará cuando se convierta en real)
+          const changes = { cantidad_fisica: newQty };
           if (!String(existingProduct.id).startsWith('temp_')) {
-            const changes = { cantidad_fisica: newQty };
             if (isOnline) {
               updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
             } else {
@@ -815,6 +830,12 @@ export default function AuditorDashboard() {
             }
           }
         } else {
+          // Evitar crear duplicados si ya se está creando
+          if (creatingProducts.has(scannedSku)) {
+            setScannedCount(prev => prev + 1);
+            return;
+          }
+          
           // Producto no referenciado - crear temporal y guardar inmediatamente
           const tempProduct = {
             id: `temp_${Date.now()}`,
@@ -831,6 +852,7 @@ export default function AuditorDashboard() {
           };
           setProducts(prev => [...prev, tempProduct]);
           setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+          setCreatingProducts(prev => new Set(prev).add(scannedSku));
         
           // Guardar inmediatamente en BD en background
           (async () => {
@@ -849,6 +871,12 @@ export default function AuditorDashboard() {
               setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
             } catch (err) {
               console.error('Error creando producto:', err);
+            } finally {
+              setCreatingProducts(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(scannedSku);
+                return newSet;
+              });
             }
           })();
         }
@@ -1758,8 +1786,8 @@ export default function AuditorDashboard() {
             ));
             
             // Guardar en servidor o offline
-            if (p.isNew) {
-              // Producto nuevo no referenciado - crear con endpoint de sobrante
+            if (p.isNew && String(p.id).startsWith('temp_')) {
+              // Producto temporal - crear con endpoint de sobrante
               try {
                 const { addSurplusProduct } = await import('../services/api');
                 await addSurplusProduct(currentAudit.id, {
@@ -1813,7 +1841,8 @@ export default function AuditorDashboard() {
               observaciones: observaciones
             };
             
-            if (p.isNew) {
+            if (p.isNew && String(p.id).startsWith('temp_')) {
+              // Producto temporal - crear con endpoint de sobrante
               try {
                 const { addSurplusProduct } = await import('../services/api');
                 await addSurplusProduct(currentAudit.id, {
