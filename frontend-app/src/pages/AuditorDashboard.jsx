@@ -782,6 +782,41 @@ export default function AuditorDashboard() {
     setTimeout(() => document.getElementById('scan-input')?.focus(), 100);
   };
 
+  const playBeep = () => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+  };
+
+  const showFlashEffect = () => {
+    const flash = document.createElement('div');
+    flash.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 255, 0, 0.3);
+      z-index: 99999;
+      pointer-events: none;
+      animation: flashFade 0.3s ease-out;
+    `;
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 300);
+  };
+
   const handleCameraScan = (decodedText) => {
     // En modo normal cierra la cámara, en modo rápido continúa
     if (!modoConteoRapido) {
@@ -911,6 +946,10 @@ export default function AuditorDashboard() {
       speak('Producto no encontrado');
       return;
     }
+
+    // Efectos visuales y sonoros para modo normal
+    playBeep();
+    showFlashEffect();
 
     if (lastScanned && lastScanned.sku === product.sku) {
       setLastScanned(null);
@@ -1073,6 +1112,10 @@ export default function AuditorDashboard() {
         @keyframes slideIn {
           from { transform: translateX(400px); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes flashFade {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
         }
       `}</style>
       <div className="d-flex justify-content-between align-items-center mb-3">
