@@ -458,42 +458,69 @@ export default function AuditorDashboard() {
         }
         
         if (!product) {
-          // Producto no referenciado - crear temporal y guardar inmediatamente
-          const tempProduct = {
-            id: `temp_${Date.now()}`,
-            auditoria_id: currentAudit.id,
-            sku: scannedSku,
-            nombre_articulo: 'NO REFERENCIADO',
-            cantidad_documento: 0,
-            cantidad_enviada: 0,
-            cantidad_fisica: 1,
-            novedad: 'sin_novedad',
-            observaciones: '',
-            orden_traslado_original: 'N/A',
-            isNew: true
-          };
-          setProducts(prev => [...prev, tempProduct]);
-          setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+          // Verificar si ya existe en el estado (incluso con ID temporal)
+          const existingProduct = products.find(p => 
+            String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku
+          );
           
-          // Guardar inmediatamente en BD en background
-          (async () => {
-            try {
-              const { addSurplusProduct } = await import('../services/api');
-              const createdProduct = await addSurplusProduct(currentAudit.id, {
-                sku: scannedSku,
-                cantidad_fisica: 1,
-                observaciones: 'Producto no referenciado'
-              });
-              
-              // Reemplazar producto temporal con el real de la BD
-              setProducts(prev => prev.map(p => 
-                p.id === tempProduct.id ? createdProduct : p
-              ));
-              setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
-            } catch (err) {
-              console.error('Error creando producto:', err);
+          if (existingProduct) {
+            // Ya existe, solo incrementar cantidad
+            const newQty = (existingProduct.cantidad_fisica || 0) + 1;
+            const updatedProduct = { ...existingProduct, cantidad_fisica: newQty };
+            setProducts(prev => prev.map(p => 
+              p.id === existingProduct.id ? updatedProduct : p
+            ));
+            setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
+            
+            // Guardar en BD si no es temporal
+            if (!String(existingProduct.id).startsWith('temp_')) {
+              const changes = { cantidad_fisica: newQty };
+              if (isOnline) {
+                updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
+              } else {
+                offlineDB.savePendingChange(currentAudit.id, existingProduct.id, changes).then(() => {
+                  window.dispatchEvent(new Event('pendingChangesUpdated'));
+                });
+              }
             }
-          })();
+          } else {
+            // Producto no referenciado - crear temporal y guardar inmediatamente
+            const tempProduct = {
+              id: `temp_${Date.now()}`,
+              auditoria_id: currentAudit.id,
+              sku: scannedSku,
+              nombre_articulo: 'NO REFERENCIADO',
+              cantidad_documento: 0,
+              cantidad_enviada: 0,
+              cantidad_fisica: 1,
+              novedad: 'sin_novedad',
+              observaciones: '',
+              orden_traslado_original: 'N/A',
+              isNew: true
+            };
+            setProducts(prev => [...prev, tempProduct]);
+            setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+          
+            // Guardar inmediatamente en BD en background
+            (async () => {
+              try {
+                const { addSurplusProduct } = await import('../services/api');
+                const createdProduct = await addSurplusProduct(currentAudit.id, {
+                  sku: scannedSku,
+                  cantidad_fisica: 1,
+                  observaciones: 'Producto no referenciado'
+                });
+                
+                // Reemplazar producto temporal con el real de la BD
+                setProducts(prev => prev.map(p => 
+                  p.id === tempProduct.id ? createdProduct : p
+                ));
+                setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
+              } catch (err) {
+                console.error('Error creando producto:', err);
+              }
+            })();
+          }
         } else {
           // Producto existente - incrementar cantidad
           const newQty = (product.cantidad_fisica || 0) + 1;
@@ -762,42 +789,69 @@ export default function AuditorDashboard() {
       }
       
       if (!product) {
-        // Producto no referenciado - crear temporal y guardar inmediatamente
-        const tempProduct = {
-          id: `temp_${Date.now()}`,
-          auditoria_id: currentAudit.id,
-          sku: scannedSku,
-          nombre_articulo: 'NO REFERENCIADO',
-          cantidad_documento: 0,
-          cantidad_enviada: 0,
-          cantidad_fisica: 1,
-          novedad: 'sin_novedad',
-          observaciones: '',
-          orden_traslado_original: 'N/A',
-          isNew: true
-        };
-        setProducts(prev => [...prev, tempProduct]);
-        setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+        // Verificar si ya existe en el estado (incluso con ID temporal)
+        const existingProduct = products.find(p => 
+          String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku
+        );
         
-        // Guardar inmediatamente en BD en background
-        (async () => {
-          try {
-            const { addSurplusProduct } = await import('../services/api');
-            const createdProduct = await addSurplusProduct(currentAudit.id, {
-              sku: scannedSku,
-              cantidad_fisica: 1,
-              observaciones: 'Producto no referenciado'
-            });
-            
-            // Reemplazar producto temporal con el real de la BD
-            setProducts(prev => prev.map(p => 
-              p.id === tempProduct.id ? createdProduct : p
-            ));
-            setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
-          } catch (err) {
-            console.error('Error creando producto:', err);
+        if (existingProduct) {
+          // Ya existe, solo incrementar cantidad
+          const newQty = (existingProduct.cantidad_fisica || 0) + 1;
+          const updatedProduct = { ...existingProduct, cantidad_fisica: newQty };
+          setProducts(prev => prev.map(p => 
+            p.id === existingProduct.id ? updatedProduct : p
+          ));
+          setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
+          
+          // Guardar en BD si no es temporal
+          if (!String(existingProduct.id).startsWith('temp_')) {
+            const changes = { cantidad_fisica: newQty };
+            if (isOnline) {
+              updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
+            } else {
+              offlineDB.savePendingChange(currentAudit.id, existingProduct.id, changes).then(() => {
+                window.dispatchEvent(new Event('pendingChangesUpdated'));
+              });
+            }
           }
-        })();
+        } else {
+          // Producto no referenciado - crear temporal y guardar inmediatamente
+          const tempProduct = {
+            id: `temp_${Date.now()}`,
+            auditoria_id: currentAudit.id,
+            sku: scannedSku,
+            nombre_articulo: 'NO REFERENCIADO',
+            cantidad_documento: 0,
+            cantidad_enviada: 0,
+            cantidad_fisica: 1,
+            novedad: 'sin_novedad',
+            observaciones: '',
+            orden_traslado_original: 'N/A',
+            isNew: true
+          };
+          setProducts(prev => [...prev, tempProduct]);
+          setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
+        
+          // Guardar inmediatamente en BD en background
+          (async () => {
+            try {
+              const { addSurplusProduct } = await import('../services/api');
+              const createdProduct = await addSurplusProduct(currentAudit.id, {
+                sku: scannedSku,
+                cantidad_fisica: 1,
+                observaciones: 'Producto no referenciado'
+              });
+              
+              // Reemplazar producto temporal con el real de la BD
+              setProducts(prev => prev.map(p => 
+                p.id === tempProduct.id ? createdProduct : p
+              ));
+              setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
+            } catch (err) {
+              console.error('Error creando producto:', err);
+            }
+          })();
+        }
       } else {
         // Producto existente - incrementar cantidad
         const newQty = (product.cantidad_fisica || 0) + 1;

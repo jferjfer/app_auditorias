@@ -26,9 +26,9 @@ export default function CameraScanner({ onScan, onClose, continuousMode = false 
       { facingMode: "environment" },
       config,
       (decodedText) => {
-        // Prevenir escaneos duplicados (1 segundo de bloqueo)
+        // Prevenir escaneos duplicados (2 segundos de bloqueo)
         const now = Date.now();
-        if (now - lastScanRef.current < 1000) return;
+        if (now - lastScanRef.current < 2000) return;
         lastScanRef.current = now;
         
         // Feedback: Beep + Vibración + Flash
