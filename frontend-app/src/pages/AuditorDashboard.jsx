@@ -458,8 +458,8 @@ export default function AuditorDashboard() {
         }
         
         if (!product) {
-          // Producto no referenciado - crear con descripción temporal
-          const newProduct = {
+          // Producto no referenciado - crear temporal y guardar inmediatamente
+          const tempProduct = {
             id: `temp_${Date.now()}`,
             auditoria_id: currentAudit.id,
             sku: scannedSku,
@@ -472,29 +472,28 @@ export default function AuditorDashboard() {
             orden_traslado_original: 'N/A',
             isNew: true
           };
-          setProducts(prev => [...prev, newProduct]);
-          setSkuIndex(prev => ({...prev, [scannedSku]: newProduct}));
+          setProducts(prev => [...prev, tempProduct]);
+          setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
           
-          // Buscar descripción en BD solo si está online
-          if (isOnline) {
-            (async () => {
-              try {
-                const response = await fetch(`${API_BASE_URL}/api/products/search-description/${scannedSku}`, {
-                  headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-                });
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data.nombre_articulo !== 'NO REFERENCIADO') {
-                    setProducts(prev => prev.map(p => 
-                      p.sku === scannedSku ? { ...p, nombre_articulo: data.nombre_articulo } : p
-                    ));
-                  }
-                }
-              } catch (err) {
-                console.error('Error buscando descripción:', err);
-              }
-            })();
-          }
+          // Guardar inmediatamente en BD en background
+          (async () => {
+            try {
+              const { addSurplusProduct } = await import('../services/api');
+              const createdProduct = await addSurplusProduct(currentAudit.id, {
+                sku: scannedSku,
+                cantidad_fisica: 1,
+                observaciones: 'Producto no referenciado'
+              });
+              
+              // Reemplazar producto temporal con el real de la BD
+              setProducts(prev => prev.map(p => 
+                p.id === tempProduct.id ? createdProduct : p
+              ));
+              setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
+            } catch (err) {
+              console.error('Error creando producto:', err);
+            }
+          })();
         } else {
           // Producto existente - incrementar cantidad
           const newQty = (product.cantidad_fisica || 0) + 1;
@@ -763,8 +762,8 @@ export default function AuditorDashboard() {
       }
       
       if (!product) {
-        // Producto no referenciado - crear con descripción temporal
-        const newProduct = {
+        // Producto no referenciado - crear temporal y guardar inmediatamente
+        const tempProduct = {
           id: `temp_${Date.now()}`,
           auditoria_id: currentAudit.id,
           sku: scannedSku,
@@ -777,29 +776,28 @@ export default function AuditorDashboard() {
           orden_traslado_original: 'N/A',
           isNew: true
         };
-        setProducts(prev => [...prev, newProduct]);
-        setSkuIndex(prev => ({...prev, [scannedSku]: newProduct}));
+        setProducts(prev => [...prev, tempProduct]);
+        setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
         
-        // Buscar descripción en BD solo si está online
-        if (isOnline) {
-          (async () => {
-            try {
-              const response = await fetch(`${API_BASE_URL}/api/products/search-description/${scannedSku}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
-              });
-              if (response.ok) {
-                const data = await response.json();
-                if (data.nombre_articulo !== 'NO REFERENCIADO') {
-                  setProducts(prev => prev.map(p => 
-                    p.sku === scannedSku ? { ...p, nombre_articulo: data.nombre_articulo } : p
-                  ));
-                }
-              }
-            } catch (err) {
-              console.error('Error buscando descripción:', err);
-            }
-          })();
-        }
+        // Guardar inmediatamente en BD en background
+        (async () => {
+          try {
+            const { addSurplusProduct } = await import('../services/api');
+            const createdProduct = await addSurplusProduct(currentAudit.id, {
+              sku: scannedSku,
+              cantidad_fisica: 1,
+              observaciones: 'Producto no referenciado'
+            });
+            
+            // Reemplazar producto temporal con el real de la BD
+            setProducts(prev => prev.map(p => 
+              p.id === tempProduct.id ? createdProduct : p
+            ));
+            setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
+          } catch (err) {
+            console.error('Error creando producto:', err);
+          }
+        })();
       } else {
         // Producto existente - incrementar cantidad
         const newQty = (product.cantidad_fisica || 0) + 1;
