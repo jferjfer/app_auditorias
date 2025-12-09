@@ -6,7 +6,7 @@ from datetime import datetime
 
 from .database import Base
 
-# --- Tabla de Asociación para Auditorías Colaborativas ---
+# --- Tabla de Asociacion pa Auditorias Colaborativas ---
 audit_collaborators = Table(
     'audit_collaborators',
     Base.metadata,
@@ -16,6 +16,7 @@ audit_collaborators = Table(
 
 # La tabla "usuarios" del script SQL
 class User(Base):
+    """Modelo de usuario del sistema con roles de auditor, analista o administrador"""
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True)
@@ -25,10 +26,10 @@ class User(Base):
     rol = Column(String, nullable=False)
     creado_en = Column(DateTime, default=datetime.utcnow)
 
-    # Auditorías donde el usuario es el principal
+    # Auditorias donde el usuario es el principal
     auditorias = relationship("Audit", back_populates="auditor", foreign_keys='Audit.auditor_id')
     
-    # Auditorías en las que el usuario colabora
+    # Auditorias en las q el usuario colabora
     collaborative_audits = relationship(
         "Audit",
         secondary=audit_collaborators,
@@ -37,8 +38,9 @@ class User(Base):
     
     informes_generados = relationship("Report", back_populates="analista")
 
-# Tabla de sedes
+# Tabla de sedes y ubicaciones
 class Ubicacion(Base):
+    """Modelo de ubicaciones (sedes, bodegas, centros de distribucion)"""
     __tablename__ = "ubicaciones"
 
     id = Column(Integer, primary_key=True)
@@ -53,6 +55,7 @@ class Ubicacion(Base):
 
 # La tabla "auditorias" del script SQL
 class Audit(Base):
+    """Modelo de auditoria con soporte pa modo normal y conteo rapido"""
     __tablename__ = "auditorias"
 
     id = Column(Integer, primary_key=True)
@@ -68,11 +71,11 @@ class Audit(Base):
     # Auditor principal
     auditor = relationship("User", back_populates="auditorias", foreign_keys=[auditor_id])
     
-    # Ubicaciones
+    # Ubicaciones de origen y destino
     ubicacion_origen = relationship("Ubicacion", back_populates="auditorias_origen", foreign_keys=[ubicacion_origen_id])
     ubicacion_destino = relationship("Ubicacion", back_populates="auditorias_destino", foreign_keys=[ubicacion_destino_id])
     
-    # Colaboradores de la auditoría
+    # Colaboradores de la auditoria
     collaborators = relationship(
         "User",
         secondary=audit_collaborators,
@@ -84,6 +87,7 @@ class Audit(Base):
 
 # La tabla "productos_auditados" del script SQL
 class NovedadEnum(str, enum.Enum):
+    """Tipos de novedades q pueden tener los productos"""
     sin_novedad = "sin_novedad"
     sobrante = "sobrante"
     faltante = "faltante"
@@ -93,6 +97,7 @@ class NovedadEnum(str, enum.Enum):
     vencido = "vencido"
 
 class Product(Base):
+    """Modelo de producto auditado con soporte pa colaboracion en tiempo real"""
     __tablename__ = "productos_auditados"
 
     id = Column(Integer, primary_key=True)
@@ -107,7 +112,7 @@ class Product(Base):
     orden_traslado_original = Column(String)
     registrado_en = Column(DateTime, default=datetime.utcnow)
     
-    # Campos para colaboración
+    # Campos pa colaboracion en tiempo real
     locked_by_user_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     locked_at = Column(DateTime, nullable=True)
     last_modified_by_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
@@ -120,6 +125,7 @@ class Product(Base):
 
 # La tabla "archivos_auditoria" del script SQL
 class File(Base):
+    """Modelo de archivos Excel subidos pa las auditorias"""
     __tablename__ = "archivos_auditoria"
 
     id = Column(Integer, primary_key=True)
@@ -132,6 +138,7 @@ class File(Base):
 
 # La tabla "informes_generados" del script SQL
 class Report(Base):
+    """Modelo de informes generados por los analistas"""
     __tablename__ = "informes_generados"
 
     id = Column(Integer, primary_key=True)
@@ -143,6 +150,7 @@ class Report(Base):
     analista = relationship("User", back_populates="informes_generados")
 
 class ProductHistory(Base):
+    """Historial de cambios en productos pa auditoria colaborativa"""
     __tablename__ = "product_history"
     
     id = Column(Integer, primary_key=True)
@@ -157,6 +165,7 @@ class ProductHistory(Base):
     user = relationship("User")
 
 class ProductNovelty(Base):
+    """Novedades multiples por producto (averias, vencidos, etc)"""
     __tablename__ = "product_novelties"
     
     id = Column(Integer, primary_key=True)

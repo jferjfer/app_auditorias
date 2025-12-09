@@ -14,7 +14,7 @@ from backend.middleware.security import rate_limit_middleware
 from backend.services.auth_service import get_current_user
 
 
-# --- Configuración de la Aplicación ---
+# --- Configuracion de la Aplicacion ---
 import os
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
@@ -25,17 +25,17 @@ app = FastAPI(
     debug=DEBUG
 )
 
-# Middleware de seguridad
+# Middleware de seguridad pa proteger la app
 app.middleware("http")(rate_limit_middleware)
 
-# Hosts confiables (solo en producción)
+# Hosts confiables (solo en produccion)
 if not DEBUG:
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["app-auditorias.onrender.com", "*.onrender.com"]
     )
 
-# CORS (solo orígenes permitidos)
+# CORS (solo origenes permitidos)
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -43,15 +43,15 @@ allowed_origins = [
     "http://127.0.0.1:5173",
 ]
 
-# Agregar dominio de producción desde variable de entorno
+# Agregar dominio de produccion desde variable de entorno
 production_url = os.getenv("PRODUCTION_URL")
 if production_url:
     allowed_origins.append(production_url)
-    # También permitir sin www si tiene www
+    # Tambien permitir sin www si tiene www
     if production_url.startswith("https://www."):
         allowed_origins.append(production_url.replace("https://www.", "https://"))
 else:
-    # Fallback: permitir cualquier subdominio de Render en producción
+    # Fallback: permitir cualquier subdominio de Render en produccion
     if not DEBUG:
         allowed_origins.append("https://app-auditorias.onrender.com")
 
@@ -64,7 +64,7 @@ app.add_middleware(
     max_age=600
 )
 
-# Encabezados de seguridad
+# Encabezados de seguridad pa proteger contra ataques
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -74,7 +74,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-# Incluir los routers
+# Incluir los routers de la API
 app.include_router(auth.router, prefix="/api")
 app.include_router(audits.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
@@ -83,7 +83,7 @@ app.include_router(collaboration.router, prefix="/api")
 app.include_router(ubicaciones.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 
-# Proteger directorio uploads
+# Proteger directorio uploads pa q solo usuarios autorizados accedan
 @app.get("/uploads/{path:path}")
 async def serve_upload(path: str, request: Request, current_user: models.User = Depends(get_current_user)):
     if current_user.rol not in ["auditor", "administrador", "analista"]:
@@ -93,7 +93,7 @@ async def serve_upload(path: str, request: Request, current_user: models.User = 
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(file_path)
 
-# Servir el frontend
+# Servir el frontend de React
 frontend_dir = "frontend-app/dist"
 if os.path.exists(frontend_dir):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
