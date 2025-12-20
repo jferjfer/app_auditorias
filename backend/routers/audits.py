@@ -4,7 +4,7 @@ import pandas as pd
 import re
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
@@ -50,11 +50,19 @@ async def upload_multiple_audit_files(
     """
     Carga múltiples archivos de Excel para crear una sola auditoría con todas las OTs.
     """
+    import logging
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Carga de archivos iniciada por {current_user.correo}")
+    
     if current_user.rol != "auditor":
         raise HTTPException(status_code=403, detail="No tienes permiso para cargar archivos.")
 
-    # Validar lote de archivos
-    validate_files_batch(files)
+    try:
+        # Validar lote de archivos
+        validate_files_batch(files)
+    except Exception as e:
+        logger.error(f"Error validando archivos: {e}")
+        raise HTTPException(status_code=400, detail=f"Error en validación: {str(e)}")
 
     all_productos_data = []
     ordenes_procesadas = set()
@@ -134,20 +142,26 @@ async def upload_multiple_audit_files(
                 os.remove(temp_file_path)
 
     if not all_productos_data:
+        logger.warning("No se encontraron productos válidos")
         raise HTTPException(status_code=400, detail="No se encontraron productos válidos en los archivos.")
 
     processed_orders_list = list(ordenes_procesadas)
     num_orders = len(processed_orders_list)
+    logger.info(f"Procesados {len(all_productos_data)} productos de {num_orders} OTs")
 
-    audit_data = schemas.AuditCreate(
-        ubicacion_origen_id=ubicacion_origen_id,
-        ubicacion_destino_id=ubicacion_destino_id,
-        productos=all_productos_data
-    )
-    db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
-    
-    db.refresh(db_audit)
-    audit_response = schemas.AuditResponse.from_orm(db_audit)
+    try:
+        audit_data = schemas.AuditCreate(
+            ubicacion_origen_id=ubicacion_origen_id,
+            ubicacion_destino_id=ubicacion_destino_id,
+            productos=all_productos_data
+        )
+        db_audit = crud.create_audit(db, audit_data, auditor_id=current_user.id)
+        db.refresh(db_audit)
+        logger.info(f"Auditoría {db_audit.id} creada exitosamente")
+    except Exception as e:
+        logger.error(f"Error creando auditoría: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al crear auditoría: {str(e)}")
 
     return {
         "message": f"Auditoría creada con {num_orders} orden(es) de traslado.",
@@ -260,6 +274,21 @@ def get_audit_details(audit_id: int, db: Session = Depends(get_db), current_user
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators and current_user.rol not in ["analista", "administrador"]):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
+    
+    # Combinar novedades de ambas tablas para cada producto
+    for producto in db_audit.productos:
+        novedades = []
+        if producto.novedad and producto.novedad != 'sin_novedad':
+            novedades.append(producto.novedad)
+        
+        if hasattr(producto, 'novelties') and producto.novelties:
+            for nov in producto.novelties:
+                tipo = nov.novedad_tipo.value if hasattr(nov.novedad_tipo, 'value') else str(nov.novedad_tipo)
+                if tipo not in novedades:
+                    novedades.append(tipo)
+        
+        producto.novedad = ', '.join(novedades) if novedades else 'sin_novedad'
+    
     return schemas.AuditDetails.from_orm(db_audit)
 
 @router.put("/{audit_id}/products/{product_id}", response_model=schemas.ProductUpdateResponse)
@@ -300,7 +329,18 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
         
         # Crear novedades si se proporcionaron
         if 'novelties' in product_dict and product_dict['novelties']:
-            crud.create_product_novelties(db, product_id, product_dict['novelties'], current_user.id)
+            try:
+                success = crud.create_product_novelties(
+                    db, 
+                    product_id, 
+                    product_dict['novelties'], 
+                    current_user.id
+                )
+                if not success:
+                    print(f"⚠️ Advertencia: No se pudieron guardar todas las novedades para producto {product_id}")
+            except Exception as novelty_error:
+                print(f"❌ Error guardando novedades: {novelty_error}")
+                # No fallar todo el update por error en novedades
         
         updated_product.last_modified_by_id = current_user.id
         updated_product.last_modified_at = datetime.utcnow()
@@ -365,18 +405,10 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user.rol != "administrador"):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
 
-    products = crud.get_products_by_audit(db, audit_id=audit_id)
-    total_productos = len(products)
-    if total_productos > 0:
-        correctos = sum(1 for p in products if p.cantidad_fisica == p.cantidad_documento and p.novedad == 'sin_novedad')
-        cumplimiento = round((correctos / total_productos) * 100)
-    else:
-        cumplimiento = 0
+    # Usar la función correcta que calcula basándose en unidades
+    crud.recalculate_and_update_audit_percentage(db, audit_id)
     
     db_audit.estado = "finalizada"
-    db_audit.porcentaje_cumplimiento = cumplimiento
-    # Establecer la fecha de finalización en la zona horaria de Colombia
-    # Store finalization time in UTC
     db_audit.finalizada_en = datetime.utcnow()
     db.commit()
     db.refresh(db_audit)
@@ -473,24 +505,32 @@ async def get_report_details(
     bogota_tz = ZoneInfo("America/Bogota")
     query = db.query(models.Audit).options(
         joinedload(models.Audit.auditor),
-        joinedload(models.Audit.productos),
+        selectinload(models.Audit.productos).selectinload(models.Product.novelties),
+        selectinload(models.Audit.productos).joinedload(models.Product.last_modified_by),
         joinedload(models.Audit.ubicacion_origen),
         joinedload(models.Audit.ubicacion_destino)
     ).filter(
         models.Audit.auditor_id.isnot(None)
     )
     
-    # Si NO hay filtros, limitar al día actual
-    if not has_filters:
-        bogota_today = datetime.now(bogota_tz).date()
-        start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
-        end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
-        start_utc = start_local.astimezone(timezone.utc)
-        end_utc = end_local.astimezone(timezone.utc)
-        query = query.filter(
-            models.Audit.creada_en >= start_utc,
-            models.Audit.creada_en <= end_utc
-        )
+    # Límite temporal inteligente: Si NO hay fechas especificadas, limitar a últimos 30 días
+    if not (start_date and start_date.strip()) and not (end_date and end_date.strip()):
+        if not has_filters:
+            # Sin filtros: solo día actual
+            bogota_today = datetime.now(bogota_tz).date()
+            start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
+            end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(
+                models.Audit.creada_en >= start_utc,
+                models.Audit.creada_en <= end_utc
+            )
+        else:
+            # Con filtros pero sin fechas: últimos 30 días
+            default_start = datetime.now(bogota_tz) - timedelta(days=30)
+            start_utc = default_start.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
     
     # Aplicar filtros si existen
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
@@ -518,33 +558,81 @@ async def get_report_details(
         except ValueError:
             pass
     
-    # Limitar a 7 solo si NO hay filtros
+    # Ordenar por fecha descendente
     query = query.order_by(models.Audit.creada_en.desc())
+    
+    # Límite de seguridad: máximo 500 auditorías para prevenir queries masivas
+    MAX_AUDITS = 500
     if not has_filters:
-        query = query.limit(7)
+        query = query.limit(7)  # Sin filtros: solo 7 más recientes del día
+    else:
+        query = query.limit(MAX_AUDITS)  # Con filtros: máximo 500
     
     audits = query.all()
     
+    # Log si se alcanzó el límite
+    if len(audits) >= MAX_AUDITS:
+        logger.info(f"⚠️ Query alcanzó límite de {MAX_AUDITS} auditorías. Considerar filtros más específicos.")
+    
+    import logging
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"📊 Auditorías encontradas: {len(audits)}")
+    if audits:
+        logger.info(f"📦 Primera auditoría ID: {audits[0].id}, Productos: {len(audits[0].productos)}")
+    
     # Retornar datos con productos
-    return [{
-        "id": a.id,
-        "ubicacion_origen": a.ubicacion_origen,
-        "ubicacion_destino": a.ubicacion_destino,
-        "estado": a.estado,
-        "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
-        "creada_en": a.creada_en,
-        "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None,
-        "productos": [{
-            "id": p.id,
-            "sku": p.sku,
-            "nombre_articulo": p.nombre_articulo,
-            "cantidad_documento": p.cantidad_documento,
-            "cantidad_fisica": p.cantidad_fisica,
-            "novedad": p.novedad,
-            "observaciones": p.observaciones,
-            "orden_traslado_original": p.orden_traslado_original
-        } for p in a.productos]
-    } for a in audits]
+    result = []
+    for a in audits:
+        productos_serializados = []
+        for p in a.productos:
+            # Combinar novedades de ambas tablas
+            novedades = []
+            if p.novedad and p.novedad != 'sin_novedad':
+                novedades.append(p.novedad)
+            
+            # Agregar novedades de product_novelties
+            if hasattr(p, 'novelties') and p.novelties:
+                for nov in p.novelties:
+                    tipo = nov.novedad_tipo.value if hasattr(nov.novedad_tipo, 'value') else str(nov.novedad_tipo)
+                    if tipo not in novedades:
+                        novedades.append(tipo)
+            
+            # Combinar en un solo string
+            novedad_combinada = ', '.join(novedades) if novedades else 'sin_novedad'
+            
+            # Determinar quién auditó este producto
+            auditado_por = None
+            if p.last_modified_by_id and p.last_modified_by:
+                auditado_por = p.last_modified_by.nombre
+            elif a.auditor:
+                auditado_por = a.auditor.nombre
+            
+            productos_serializados.append({
+                "id": p.id,
+                "sku": p.sku,
+                "nombre_articulo": p.nombre_articulo,
+                "cantidad_documento": p.cantidad_documento,
+                "cantidad_fisica": p.cantidad_fisica,
+                "novedad": novedad_combinada,
+                "observaciones": p.observaciones,
+                "orden_traslado_original": p.orden_traslado_original,
+                "auditado_por": auditado_por
+            })
+        
+        audit_dict = {
+            "id": a.id,
+            "ubicacion_origen": a.ubicacion_origen,
+            "ubicacion_destino": a.ubicacion_destino,
+            "estado": a.estado,
+            "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
+            "creada_en": a.creada_en,
+            "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None,
+            "productos": productos_serializados
+        }
+        logger.info(f"✅ Auditoría {a.id}: {len(audit_dict['productos'])} productos serializados")
+        result.append(audit_dict)
+    
+    return result
 
 
 
@@ -854,6 +942,36 @@ async def add_ot_to_audit(
         "productos_agregados": len(all_productos_data),
         "ordenes_agregadas": list(ordenes_procesadas)
     }
+
+@router.delete("/{audit_id}")
+async def delete_audit(
+    audit_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Elimina una auditoría en estado pendiente.
+    Solo el auditor que la creó puede eliminarla.
+    """
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    
+    if not db_audit:
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada")
+    
+    if db_audit.auditor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo el auditor que creó la auditoría puede eliminarla")
+    
+    if db_audit.estado != "pendiente":
+        raise HTTPException(status_code=400, detail="Solo se pueden eliminar auditorías en estado pendiente")
+    
+    # Eliminar productos asociados
+    db.query(models.Product).filter(models.Product.auditoria_id == audit_id).delete()
+    
+    # Eliminar auditoría
+    db.delete(db_audit)
+    db.commit()
+    
+    return {"message": "Auditoría eliminada exitosamente"}
 
 @router.get("/statistics/average-audit-duration", response_model=schemas.AverageAuditDurationStatistic)
 async def get_average_audit_duration_statistic(

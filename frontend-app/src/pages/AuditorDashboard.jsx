@@ -16,6 +16,7 @@ import NovedadModal from '../components/NovedadModal';
 import AddOtModal from '../components/AddOtModal';
 import ModoAuditoriaModal from '../components/ModoAuditoriaModal';
 import VerificarConteoModal from '../components/VerificarConteoModal';
+import AuditConfirmModal from '../components/AuditConfirmModal';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
@@ -101,6 +102,8 @@ export default function AuditorDashboard() {
   const [pendingAuditId, setPendingAuditId] = useState(null);
   const [showVerificarConteoModal, setShowVerificarConteoModal] = useState(false);
   const [creatingProducts, setCreatingProducts] = useState(new Set());
+  const [showAuditConfirmModal, setShowAuditConfirmModal] = useState(false);
+  const [pendingAuditData, setPendingAuditData] = useState(null);
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -348,16 +351,59 @@ export default function AuditorDashboard() {
     setLoading(true);
     try {
       const result = await uploadAuditFiles(selectedFiles, ubicacionOrigenId, ubicacionDestinoId);
-      toast.success(`Auditoría #${result.audit_id} creada exitosamente`);
-      setSelectedFiles([]);
-      setUbicacionOrigenId('');
-      setUbicacionDestinoId('');
-      e.target.reset();
-      loadAudits();
+      
+      // Obtener nombres de ubicaciones
+      const origen = sedes.find(s => s.id === parseInt(ubicacionOrigenId));
+      const destino = sedes.find(s => s.id === parseInt(ubicacionDestinoId));
+      
+      // Mostrar modal de confirmación
+      setPendingAuditData({
+        ...result,
+        origen: origen?.nombre,
+        destino: destino?.nombre,
+        files: selectedFiles,
+        origenId: ubicacionOrigenId,
+        destinoId: ubicacionDestinoId,
+        form: e.target
+      });
+      setShowAuditConfirmModal(true);
     } catch (err) {
       toast.error('Error: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const handleConfirmAudit = () => {
+    toast.success(`Auditoría #${pendingAuditData.audit_id} confirmada`);
+    setSelectedFiles([]);
+    setUbicacionOrigenId('');
+    setUbicacionDestinoId('');
+    if (pendingAuditData.form) pendingAuditData.form.reset();
+    setShowAuditConfirmModal(false);
+    setPendingAuditData(null);
+    loadAudits();
+  };
+  
+  const handleDeleteAudit = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/api/audits/${pendingAuditData.audit_id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Error al eliminar');
+      }
+      
+      toast.success('Auditoría eliminada. Puedes volver a cargar los archivos correctos');
+      setShowAuditConfirmModal(false);
+      setPendingAuditData(null);
+      loadAudits();
+    } catch (err) {
+      toast.error('Error: ' + err.message);
     }
   };
 
@@ -1118,26 +1164,26 @@ export default function AuditorDashboard() {
           100% { opacity: 0; }
         }
       `}</style>
-      <div className="d-flex justify-content-between align-items-center mb-3">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
         <h1 className="h3 mb-0">Dashboard del Auditor</h1>
         
         {/* Indicador Online/Offline */}
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2">
           {isOnline ? (
-            <span className="badge bg-success" style={{fontSize: '14px', padding: '8px 12px'}}>
+            <span className="badge bg-success" style={{fontSize: '12px', padding: '6px 10px', whiteSpace: 'nowrap'}}>
               <i className="bi bi-wifi"></i> Online
             </span>
           ) : (
-            <span className="badge bg-danger" style={{fontSize: '14px', padding: '8px 12px'}}>
+            <span className="badge bg-danger" style={{fontSize: '12px', padding: '6px 10px', whiteSpace: 'nowrap'}}>
               <i className="bi bi-wifi-off"></i> Offline
             </span>
           )}
           
           {/* Contador de cambios pendientes */}
           {pendingCount > 0 && (
-            <span className="badge bg-warning text-dark" style={{fontSize: '14px', padding: '8px 12px'}}>
-              <i className="bi bi-cloud-upload"></i> {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
-              {isSyncing && <span className="spinner-border spinner-border-sm ms-2"></span>}
+            <span className="badge bg-warning text-dark" style={{fontSize: '12px', padding: '6px 10px', whiteSpace: 'nowrap'}}>
+              <i className="bi bi-cloud-upload"></i> {pendingCount}
+              {isSyncing && <span className="spinner-border spinner-border-sm ms-1" style={{width: '12px', height: '12px'}}></span>}
             </span>
           )}
           
@@ -1147,8 +1193,9 @@ export default function AuditorDashboard() {
               className="btn btn-sm btn-warning" 
               onClick={syncNow}
               disabled={isSyncing}
+              style={{whiteSpace: 'nowrap', fontSize: '12px', padding: '6px 12px'}}
             >
-              <i className="bi bi-arrow-repeat"></i> Sincronizar
+              <i className="bi bi-arrow-repeat"></i> <span className="d-none d-sm-inline">Sincronizar</span>
             </button>
           )}
         </div>
@@ -1909,6 +1956,13 @@ export default function AuditorDashboard() {
           setShowVerificarConteoModal(false);
           await handleFinish();
         }}
+      />
+
+      <AuditConfirmModal
+        show={showAuditConfirmModal}
+        auditData={pendingAuditData}
+        onConfirm={handleConfirmAudit}
+        onDelete={handleDeleteAudit}
       />
 
       <ToastContainer />

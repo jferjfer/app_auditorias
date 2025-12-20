@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime, date, timezone
 from zoneinfo import ZoneInfo
+from enum import Enum
 
 
 def datetime_to_bogota(dt: datetime):
@@ -149,8 +150,18 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+class NovedadTipoEnum(str, Enum):
+    sin_novedad = "sin_novedad"
+    sobrante = "sobrante"
+    faltante = "faltante"
+    averia = "averia"
+    fecha_corta = "fecha_corta"
+    contaminado = "contaminado"
+    vencido = "vencido"
+    no_salio = "no_salio"
+
 class ProductNoveltyBase(BaseModel):
-    novedad_tipo: str
+    novedad_tipo: NovedadTipoEnum
     cantidad: int
     observaciones: Optional[str] = None
 

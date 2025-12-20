@@ -1,6 +1,6 @@
 import uuid
 import enum
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Table, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Table, Enum, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -84,6 +84,12 @@ class Audit(Base):
     
     productos = relationship("Product", back_populates="auditoria")
     archivos = relationship("File", back_populates="auditoria")
+    
+    __table_args__ = (
+        Index('idx_auditorias_auditor', 'auditor_id'),
+        Index('idx_auditorias_fecha', 'creada_en'),
+        Index('idx_auditorias_estado', 'estado'),
+    )
 
 # La tabla "productos_auditados" del script SQL
 class NovedadEnum(str, enum.Enum):
@@ -95,6 +101,7 @@ class NovedadEnum(str, enum.Enum):
     fecha_corta = "fecha_corta"
     contaminado = "contaminado"
     vencido = "vencido"
+    no_salio = "no_salio"
 
 class Product(Base):
     """Modelo de producto auditado con soporte pa colaboracion en tiempo real"""
@@ -122,6 +129,12 @@ class Product(Base):
     locked_by = relationship("User", foreign_keys=[locked_by_user_id])
     last_modified_by = relationship("User", foreign_keys=[last_modified_by_id])
     novelties = relationship("ProductNovelty", back_populates="product", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_productos_auditoria', 'auditoria_id'),
+        Index('idx_productos_sku', 'sku'),
+        Index('idx_productos_novedad', 'novedad'),
+    )
 
 # La tabla "archivos_auditoria" del script SQL
 class File(Base):
@@ -178,3 +191,8 @@ class ProductNovelty(Base):
     
     product = relationship("Product", back_populates="novelties")
     user = relationship("User")
+    
+    __table_args__ = (
+        Index('idx_novelties_product', 'product_id'),
+        Index('idx_novelties_tipo', 'novedad_tipo'),
+    )

@@ -219,8 +219,17 @@ export function prepareReportData(audits) {
         });
         totalProductos += product.cantidad_fisica || 0;
         
+        // Contar novedad del campo principal (faltante/sobrante)
         const novedad = product.novedad || 'sin_novedad';
         noveltyCounts[novedad] = (noveltyCounts[novedad] || 0) + 1;
+        
+        // Contar novedades de la tabla novelties (averías, vencidos, etc.)
+        if (product.novelties && product.novelties.length > 0) {
+          product.novelties.forEach(nov => {
+            const tipo = nov.novedad_tipo || nov.tipo;
+            noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + 1;
+          });
+        }
       });
     }
   });

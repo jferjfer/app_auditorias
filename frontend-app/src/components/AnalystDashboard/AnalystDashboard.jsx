@@ -40,6 +40,7 @@ export default function AnalystDashboard(){
       console.log('Cargando auditorías con filtros:', filters)
       const data = await fetchReportData(filters)
       console.log('Auditorías cargadas:', data?.length || 0)
+      console.log('Primera auditoría:', data?.[0])
       setAudits(data || [])
       setCurrentPage(0) // Reset a primera página
     } catch (err) {
@@ -257,7 +258,20 @@ export default function AnalystDashboard(){
                               <td style={{textAlign: 'center'}}>
                                 <button 
                                   className="btn btn-sm btn-primary"
-                                  onClick={() => setSelectedAudit(audit)}
+                                  onClick={async () => {
+                                    try {
+                                      const token = localStorage.getItem('access_token')
+                                      const response = await fetch(`${API_BASE_URL}/api/audits/${audit.id}`, {
+                                        headers: { 'Authorization': `Bearer ${token}` }
+                                      })
+                                      const fullAudit = await response.json()
+                                      console.log('Auditoría completa:', fullAudit)
+                                      console.log('Productos:', fullAudit.productos?.length)
+                                      setSelectedAudit(fullAudit)
+                                    } catch (err) {
+                                      toast.error('Error cargando productos: ' + err.message)
+                                    }
+                                  }}
                                 >
                                   <i className="bi bi-eye"></i> Ver
                                 </button>

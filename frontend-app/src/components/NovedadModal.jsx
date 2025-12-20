@@ -34,10 +34,11 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
     // Construir array de novedades
     const noveltiesArray = [];
     Object.entries(novelties).forEach(([tipo, cantidad]) => {
-      if (cantidad > 0) {
+      const cantidadNum = parseInt(cantidad, 10);
+      if (cantidadNum > 0 && !isNaN(cantidadNum)) {
         noveltiesArray.push({
           novedad_tipo: tipo,
-          cantidad: cantidad,
+          cantidad: cantidadNum,
           observaciones: observaciones
         });
       }

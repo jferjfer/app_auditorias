@@ -40,9 +40,13 @@ export function generateExcelReport(reportData, reportType, filters) {
   const productsData = [
     ['DETALLE DE PRODUCTOS'],
     [],
-    ['#', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
+    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
     ...products.map((p, index) => [
       index + 1,
+      p.audit_id || 'N/A',
+      p.fecha_auditoria || 'N/A',
+      p.auditor_nombre || 'N/A',
+      p.auditado_por || p.auditor_nombre || 'N/A',
       p.orden_traslado_original || 'N/A',
       p.sku,
       p.nombre_articulo,
@@ -61,6 +65,10 @@ export function generateExcelReport(reportData, reportType, filters) {
   // Aplicar estilos básicos (ancho de columnas)
   wsProductos['!cols'] = [
     { wch: 5 },   // #
+    { wch: 12 },  // ID Auditoría
+    { wch: 18 },  // Fecha
+    { wch: 20 },  // Auditor Principal
+    { wch: 20 },  // Auditado Por
     { wch: 12 },  // Orden T.
     { wch: 15 },  // SKU
     { wch: 40 },  // Descripción
@@ -89,13 +97,25 @@ export function prepareReportData(audits) {
       audit.productos.forEach(product => {
         products.push({
           ...product,
+          audit_id: audit.id,
+          fecha_auditoria: audit.creada_en ? new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : 'N/A',
+          auditor_nombre: audit.auditor?.nombre || 'N/A',
           ubicacion_origen: audit.ubicacion_origen?.nombre || 'N/A',
           ubicacion_destino: audit.ubicacion_destino?.nombre || 'N/A'
         });
         totalProductos += product.cantidad_fisica || 0;
         
+        // Contar novedad del campo principal (faltante/sobrante)
         const novedad = product.novedad || 'sin_novedad';
         noveltyCounts[novedad] = (noveltyCounts[novedad] || 0) + 1;
+        
+        // Contar novedades de la tabla novelties (averías, vencidos, etc.)
+        if (product.novelties && product.novelties.length > 0) {
+          product.novelties.forEach(nov => {
+            const tipo = nov.novedad_tipo || nov.tipo;
+            noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + 1;
+          });
+        }
       });
     }
   });

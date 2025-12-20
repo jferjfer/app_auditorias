@@ -4,30 +4,45 @@ Sistema completo para la gestión de auditorías de inventario con carga de arch
 
 ## 🚀 Inicio Rápido (Desarrollo Local)
 
-### 1. Prerrequisitos
-- Python 3.11+
-- Un editor de código como VS Code
-- Git
-
-### 2. Instalación y Ejecución
+### Opción 1: Configuración Rápida (Recomendada)
 
 ```bash
-# 1. Clona el repositorio (si aún no lo has hecho)
-# git clone <url-del-repositorio>
-# cd app_auditorias
+# 1. Clonar y configurar
+git clone <url-del-repositorio>
+cd app_auditorias
 
-# 2. Crea y activa un entorno virtual
+# 2. Crear entorno virtual e instalar dependencias
 python -m venv venv
 .\venv\Scripts\activate.bat
-
-# 3. Instala las dependencias
 pip install -r requirements.txt
 
-# 4. Ejecuta el servidor
-# El servidor de FastAPI sirve tanto el backend como el frontend.
-# No necesitas un segundo servidor.
+# 3. Configurar variables de entorno
+copy .env.example .env
+# Editar .env con tu configuración (ver LOCAL_SETUP.md)
+
+# 4. Verificar configuración
+python verify_setup.py
+
+# 5. Ejecutar backend
 uvicorn backend.main:app --reload
+
+# 6. Ejecutar frontend (nueva terminal)
+cd frontend-app
+npm install
+npm run dev
 ```
+
+### Opción 2: Conectar a Base de Datos de Render
+
+Para trabajar localmente con la BD de producción:
+
+```bash
+# Editar .env y usar la URL de PostgreSQL de Render
+DATABASE_URL=postgresql://usuario:password@host.render.com/database?sslmode=require
+DEBUG=True
+```
+
+📖 **Documentación completa**: Ver [LOCAL_SETUP.md](LOCAL_SETUP.md)
 
 ## 🌐 URLs de Acceso
 
@@ -128,16 +143,34 @@ app_auditorias/
 
 ### Requisitos del Sistema
 - Python 3.11+
-- PostgreSQL (opcional, puede usar SQLite)
+- Node.js 18+ (para frontend)
+- PostgreSQL (opcional, puede usar SQLite o conectar a Render)
 - Navegador web moderno
+
+### Variables de Entorno
+
+El proyecto usa un archivo `.env` para configuración local:
+
+```env
+# Desarrollo local con BD de Render
+SECRET_KEY=tu_clave_secreta
+DATABASE_URL=postgresql://user:pass@host.render.com/db?sslmode=require
+DEBUG=True
+```
+
+⚠️ **IMPORTANTE**: 
+- El archivo `.env` está en `.gitignore` y NO se sube a Git
+- Render usa sus propias variables de entorno (configuradas en el dashboard)
+- Tu configuración local NO afecta el despliegue en Render
 
 ### Instalación de Dependencias
 ```bash
-# Activar entorno virtual
-.\venv\Scripts\activate.bat
-
-# Instalar dependencias (si es necesario)
+# Backend
 pip install -r requirements.txt
+
+# Frontend
+cd frontend-app
+npm install
 ```
 
 ## 🚨 Solución de Problemas
