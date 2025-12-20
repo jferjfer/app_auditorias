@@ -103,6 +103,13 @@ def login_for_access_token(
             data={"sub": user.correo, "rol": user.rol}, 
             expires_delta=access_token_expires
         )
+        
+        # Crear refresh token (expira en 7 días)
+        refresh_token_expires = timedelta(days=7)
+        refresh_token = create_access_token(
+            data={"sub": user.correo, "rol": user.rol, "type": "refresh"}, 
+            expires_delta=refresh_token_expires
+        )
     except Exception as e:
         logger.error(f"Error generando token para {email}: {e}")
         raise HTTPException(
@@ -113,8 +120,51 @@ def login_for_access_token(
     logger.info(f"Login exitoso: {email}")
     return {
         "access_token": access_token, 
+        "refresh_token": refresh_token,
         "token_type": "bearer", 
         "user_name": user.nombre,
         "user_role": user.rol,
         "user_id": user.id
     }
+
+@router.post("/refresh")
+def refresh_access_token(
+    request_body: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Renueva el access token usando un refresh token válido.
+    """
+    from jose import JWTError, jwt
+    import os
+    
+    refresh_token = request_body.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="refresh_token requerido")
+    
+    try:
+        SECRET_KEY = os.getenv("SECRET_KEY")
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=["HS256"])
+        email: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        
+        if email is None or token_type != "refresh":
+            raise HTTPException(status_code=401, detail="Token inválido")
+        
+        user = crud.get_user_by_email(db, email=email)
+        if not user:
+            raise HTTPException(status_code=401, detail="Usuario no encontrado")
+        
+        # Crear nuevo access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        new_access_token = create_access_token(
+            data={"sub": user.correo, "rol": user.rol},
+            expires_delta=access_token_expires
+        )
+        
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer"
+        }
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token expirado o inválido")

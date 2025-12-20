@@ -141,6 +141,7 @@ class File(FileUpload):
 # Esquema de token JWT
 class Token(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user_name: str
     user_role: str

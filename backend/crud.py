@@ -346,13 +346,14 @@ def create_surplus_product(db: Session, audit_id: int, product_data: schemas.Sur
     db.refresh(new_product)
     return new_product
 
-def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[models.Audit]:
+def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_id: Optional[int] = None, ubicacion_origen_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[models.Audit]:
     """
-    Obtiene todas las auditorías con filtros opcionales, incluyendo rango de fechas.
+    Obtiene todas las auditorías con filtros opcionales, incluyendo rango de fechas y ubicación origen.
     """
     print(f"🔍 CRUD get_audits_with_filters llamado con:")
     print(f"  status: {repr(status)}")
     print(f"  auditor_id: {repr(auditor_id)}")
+    print(f"  ubicacion_origen_id: {repr(ubicacion_origen_id)}")
     print(f"  start_date: {repr(start_date)}")
     print(f"  end_date: {repr(end_date)}")
     
@@ -363,6 +364,9 @@ def get_audits_with_filters(db: Session, status: Optional[str] = None, auditor_i
     
     if auditor_id:
         query = query.filter(models.Audit.auditor_id == auditor_id)
+    
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
 
     # Interpretar las fechas proporcionadas como fechas locales en America/Bogota y convertir a rango UTC
     bogota_tz = ZoneInfo("America/Bogota")

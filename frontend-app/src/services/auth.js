@@ -41,6 +41,7 @@ export async function login(email, password) {
     
     // Guardar en localStorage
     localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('refresh_token', data.refresh_token || '');
     localStorage.setItem('current_user', JSON.stringify({
       id: data.user_id,
       nombre: data.user_name,
@@ -71,6 +72,7 @@ export async function login(email, password) {
 
 export function logout() {
   localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
   localStorage.removeItem('current_user');
 }
 

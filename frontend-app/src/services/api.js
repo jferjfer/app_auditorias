@@ -44,9 +44,59 @@ function buildQueryString(params) {
   return query ? `?${query}` : '';
 }
 
+// Función para renovar token
+async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) throw new Error('No refresh token');
+    
+    const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    
+    if (!response.ok) {
+        localStorage.clear();
+        window.location.href = '/login';
+        throw new Error('Sesión expirada');
+    }
+    
+    const data = await response.json();
+    localStorage.setItem('access_token', data.access_token);
+    return data.access_token;
+}
+
 // Función auxiliar genérica para realizar las peticiones a la API.
 async function fetchApi(endpoint, options, auditContext = null) {
-    const response = await fetch(`${API_BASE}${endpoint}`, options);
+    let response = await fetch(`${API_BASE}${endpoint}`, options);
+
+    // Si es 401, intentar renovar token
+    if (response.status === 401) {
+        try {
+            const newToken = await refreshAccessToken();
+            if (options.headers) {
+                options.headers['Authorization'] = `Bearer ${newToken}`;
+            }
+            response = await fetch(`${API_BASE}${endpoint}`, options);
+        } catch (refreshError) {
+            if (auditContext) {
+                try {
+                    const { offlineDB } = await import('../utils/offlineDB');
+                    await offlineDB.init();
+                    await offlineDB.savePendingChange(
+                        auditContext.auditId,
+                        auditContext.productId,
+                        auditContext.changes
+                    );
+                    window.dispatchEvent(new Event('pendingChangesUpdated'));
+                    throw new Error('⚠️ Sesión expirada. Cambios guardados localmente.');
+                } catch (offlineError) {
+                    console.error('Error guardando offline:', offlineError);
+                }
+            }
+            throw refreshError;
+        }
+    }
 
     if (!response.ok) {
         let errorDetail = 'La petición a la API falló';
@@ -56,31 +106,10 @@ async function fetchApi(endpoint, options, auditContext = null) {
         } catch (e) {
             errorDetail = response.statusText;
         }
-        
-        // Si es error 401 y hay contexto de auditoría, guardar en offline
-        if (response.status === 401 && auditContext) {
-            try {
-                const { offlineDB } = await import('../utils/offlineDB');
-                await offlineDB.init();
-                await offlineDB.savePendingChange(
-                    auditContext.auditId,
-                    auditContext.productId,
-                    auditContext.changes
-                );
-                window.dispatchEvent(new Event('pendingChangesUpdated'));
-                throw new Error('⚠️ Sesión expirada. Cambios guardados localmente. Inicia sesión para sincronizar.');
-            } catch (offlineError) {
-                console.error('Error guardando offline:', offlineError);
-            }
-        }
-        
         throw new Error(errorDetail);
     }
 
-    if (response.status === 204) {
-        return null; // Sin contenido
-    }
-    // Para descargas de archivos
+    if (response.status === 204) return null;
     if (options && options.headers && options.headers['Accept'] === 'application/octet-stream') {
         return response.blob();
     }

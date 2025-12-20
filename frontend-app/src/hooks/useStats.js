@@ -18,12 +18,15 @@ export default function useStats(initialFilters = {}){
   }, [filters])
 
   async function loadStats(f){
+    console.log('📊 Cargando estadísticas con filtros:', f)
     setLoading(true)
     setError(null)
     try{
       const res = await fetchStats(f)
+      console.log('✅ Estadísticas cargadas:', res)
       setData(res)
     }catch(err){
+      console.error('❌ Error cargando estadísticas:', err)
       setError(err)
     }finally{ setLoading(false) }
   }

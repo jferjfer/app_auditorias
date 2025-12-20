@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import Flatpickr from 'react-flatpickr'
 import 'flatpickr/dist/flatpickr.min.css'
-import { fetchAuditors } from '../../services/api'
+import { fetchAuditors, fetchUbicaciones } from '../../services/api'
 
 export default function Filters({ onChange, initial = {} }){
   const [start, setStart] = useState(initial.start_date || '')
   const [end, setEnd] = useState(initial.end_date || '')
   const [status, setStatus] = useState(initial.audit_status || '')
   const [auditor, setAuditor] = useState(initial.auditor_id || '')
+  const [ubicacionOrigen, setUbicacionOrigen] = useState(initial.ubicacion_origen_id || '')
   const [auditors, setAuditors] = useState([])
+  const [ubicaciones, setUbicaciones] = useState([])
 
-  useEffect(() => { populateAuditors() }, [])
+  useEffect(() => { 
+    populateAuditors()
+    populateUbicaciones()
+  }, [])
 
   async function populateAuditors(){
     try{
@@ -19,13 +24,25 @@ export default function Filters({ onChange, initial = {} }){
     }catch(e){ console.error('Error cargando auditores:', e) }
   }
 
+  async function populateUbicaciones(){
+    try{
+      const data = await fetchUbicaciones()
+      setUbicaciones(Array.isArray(data) ? data : [])
+    }catch(e){ 
+      console.error('Error cargando ubicaciones:', e)
+      setUbicaciones([])
+    }
+  }
+
   function submit(e){
     e && e.preventDefault()
     const filters = {}
     if(status) filters.audit_status = status
     if(auditor) filters.auditor_id = auditor
+    if(ubicacionOrigen) filters.ubicacion_origen_id = ubicacionOrigen
     if(start) filters.start_date = formatYMD(start)
     if(end) filters.end_date = formatYMD(end)
+    console.log('🔍 Aplicando filtros:', filters)
     onChange && onChange(filters)
   }
 
@@ -34,6 +51,8 @@ export default function Filters({ onChange, initial = {} }){
     setEnd('')
     setStatus('')
     setAuditor('')
+    setUbicacionOrigen('')
+    console.log('🧹 Limpiando filtros')
     onChange && onChange({})
   }
 
@@ -87,6 +106,13 @@ export default function Filters({ onChange, initial = {} }){
             <select className="form-select" value={auditor} onChange={e=>setAuditor(e.target.value)}>
               <option value="">Todos</option>
               {auditors.map(a=> <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label">Ubicación Origen</label>
+            <select className="form-select" value={ubicacionOrigen} onChange={e=>setUbicacionOrigen(e.target.value)}>
+              <option value="">Todas</option>
+              {ubicaciones.map(u=> <option key={u.id} value={u.id}>{u.nombre}</option>)}
             </select>
           </div>
           <div className="col-md-6">

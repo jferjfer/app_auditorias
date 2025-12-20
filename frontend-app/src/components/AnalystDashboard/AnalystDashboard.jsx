@@ -22,7 +22,7 @@ export default function AnalystDashboard(){
   // Limpiar filtros al montar el componente
   useEffect(() => {
     console.log('AnalystDashboard montado')
-    setFilters({})
+    // NO limpiar filtros automáticamente, dejar que el usuario los configure
   }, [])
   
   // Debug: Log cuando cambian los datos
@@ -107,7 +107,16 @@ export default function AnalystDashboard(){
         reportData = prepareReportData(audits);
       }
       
-      await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filters, user?.nombre || 'Usuario')
+      // Agregar nombre de ubicación origen si existe
+      const filtersWithNames = { ...filters }
+      if (filters.ubicacion_origen_id && audits.length > 0) {
+        const ubicacion = audits[0]?.ubicacion_origen?.nombre
+        if (ubicacion) {
+          filtersWithNames.ubicacion_origen_nombre = ubicacion
+        }
+      }
+      
+      await generatePdfReport(reportData, type === 'novedades' ? 'novedades' : 'general', filtersWithNames, user?.nombre || 'Usuario')
       toast.success('Reporte PDF generado exitosamente')
     } catch (err) {
       toast.error('Error generando PDF: ' + err.message)
@@ -140,6 +149,11 @@ export default function AnalystDashboard(){
     <div className="container-fluid" style={{padding: '0', maxWidth: '100%'}}>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h1 className="h3 mb-0">Dashboard del Analista</h1>
+        {Object.keys(filters).length > 0 && (
+          <span className="badge bg-info" style={{fontSize: '14px'}}>
+            <i className="bi bi-funnel-fill"></i> {Object.keys(filters).length} filtro(s) activo(s)
+          </span>
+        )}
       </div>
 
       <Filters onChange={setFilters} initial={filters} />

@@ -96,6 +96,7 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
       ['Analista de seguridad', userName],
       ['Fecha Inicio Filtro', filters.start_date || 'N/A'],
       ['Fecha Fin Filtro', filters.end_date || 'N/A'],
+      ['Ubicación Origen', filters.ubicacion_origen_nombre || 'Todas'],
       ['Total de Pedidos (líneas)', totalPedidos],
       ['Total de Productos (unidades)', totalProductos],
     ],
