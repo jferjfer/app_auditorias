@@ -5,6 +5,7 @@ import re
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import cast, Date, func
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi.responses import StreamingResponse
@@ -693,14 +694,45 @@ async def get_average_compliance_statistic(
         average_compliance = crud.get_average_compliance(db)
         return {"average_compliance": average_compliance}
 
+    # OPTIMIZADO: Usar agregaciones en BD
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    # compute avg over finalized audits (same logic as before)
-    values = [a.porcentaje_cumplimiento for a in audits if a.estado == 'finalizada' and a.porcentaje_cumplimiento is not None]
-    if not values:
-        return {"average_compliance": 0}
-    avg = sum(values) / len(values)
-    return {"average_compliance": round(avg)}
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        func.avg(models.Audit.porcentaje_cumplimiento)
+    ).filter(
+        models.Audit.estado == 'finalizada',
+        models.Audit.porcentaje_cumplimiento.isnot(None),
+        models.Audit.auditor_id.isnot(None)
+    )
+    
+    if db_status and db_status != 'finalizada':
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    result = query.scalar()
+    return {"average_compliance": round(result) if result else 0}
 
 @router.get("/statistics/novelty-distribution", response_model=List[schemas.NoveltyDistributionStatistic])
 async def get_novelty_distribution_statistic(
@@ -724,16 +756,44 @@ async def get_novelty_distribution_statistic(
         stats = crud.get_novelty_distribution(db)
         return [{"novedad": s[0], "count": s[1]} for s in stats]
 
+    # OPTIMIZADO: Usar agregaciones en BD en lugar de cargar todo en memoria
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    counter = {}
-    for a in audits:
-        if not a.productos:
-            continue
-        for p in a.productos:
-            key = p.novedad or 'sin_novedad'
-            counter[key] = counter.get(key, 0) + 1
-    return [{"novedad": k, "count": v} for k, v in counter.items()]
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        models.Product.novedad,
+        func.count(models.Product.id)
+    ).join(models.Audit).filter(
+        models.Audit.auditor_id.isnot(None)
+    )
+    
+    if db_status:
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    results = query.group_by(models.Product.novedad).all()
+    return [{"novedad": s[0] or 'sin_novedad', "count": s[1]} for s in results]
 
 @router.get("/statistics/compliance-by-auditor", response_model=List[schemas.ComplianceByAuditorStatistic])
 async def get_compliance_by_auditor_statistic(
@@ -756,21 +816,45 @@ async def get_compliance_by_auditor_statistic(
         stats = crud.get_compliance_by_auditor(db)
         return [{"auditor_nombre": s[0], "average_compliance": round(s[1], 2) if s[1] else 0.0} for s in stats]
 
+    # OPTIMIZADO: Usar agregaciones en BD
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    # compute average per auditor
-    sums = {}
-    counts = {}
-    for a in audits:
-        if a.auditor and a.porcentaje_cumplimiento is not None:
-            name = a.auditor.nombre
-            sums[name] = sums.get(name, 0) + a.porcentaje_cumplimiento
-            counts[name] = counts.get(name, 0) + 1
-    result = []
-    for name in sums:
-        avg = sums[name] / counts[name]
-        result.append({"auditor_nombre": name, "average_compliance": round(avg, 2)})
-    return result
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        models.User.nombre,
+        func.avg(models.Audit.porcentaje_cumplimiento)
+    ).join(models.Audit, models.User.id == models.Audit.auditor_id).filter(
+        models.Audit.auditor_id.isnot(None),
+        models.Audit.porcentaje_cumplimiento.isnot(None)
+    )
+    
+    if db_status:
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    results = query.group_by(models.User.nombre).all()
+    return [{"auditor_nombre": s[0], "average_compliance": round(s[1], 2) if s[1] else 0.0} for s in results]
 
 @router.get("/statistics/audits-by-period", response_model=List[schemas.AuditsByPeriodStatistic])
 async def get_audits_by_period_statistic(
@@ -794,14 +878,44 @@ async def get_audits_by_period_statistic(
         stats = crud.get_audits_by_period(db, start_date, end_date)
         return [{"fecha": s[0], "total_auditorias": s[1]} for s in stats]
 
+    # OPTIMIZADO: Usar agregaciones en BD con DATE()
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    counter = {}
-    for a in audits:
-        fecha = a.creada_en.date()
-        counter[fecha] = counter.get(fecha, 0) + 1
-    items = sorted(counter.items())
-    return [{"fecha": s[0], "total_auditorias": s[1]} for s in items]
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        cast(models.Audit.creada_en, Date).label('fecha'),
+        func.count(models.Audit.id).label('total')
+    ).filter(
+        models.Audit.auditor_id.isnot(None)
+    )
+    
+    if db_status:
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    results = query.group_by('fecha').order_by('fecha').all()
+    return [{"fecha": s[0], "total_auditorias": s[1]} for s in results]
 
 @router.get("/statistics/top-novelty-skus", response_model=List[schemas.TopNoveltySkuStatistic])
 async def get_top_novelty_skus_statistic(
@@ -825,20 +939,47 @@ async def get_top_novelty_skus_statistic(
         stats = crud.get_top_novelty_skus(db, limit)
         return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in stats]
 
+    # OPTIMIZADO: Usar agregaciones en BD
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    counter = {}
-    names = {}
-    for a in audits:
-        if not a.productos:
-            continue
-        for p in a.productos:
-            if p.novedad == 'sin_novedad':
-                continue
-            counter[p.sku] = counter.get(p.sku, 0) + 1
-            names[p.sku] = p.nombre_articulo
-    items = sorted(counter.items(), key=lambda x: x[1], reverse=True)[:limit]
-    return [{"sku": sku, "nombre_articulo": names.get(sku, ''), "total_novedades": count} for sku, count in items]
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        models.Product.sku,
+        models.Product.nombre_articulo,
+        func.count(models.Product.id).label('total_novedades')
+    ).join(models.Audit).filter(
+        models.Product.novedad != 'sin_novedad',
+        models.Product.novedad.isnot(None),
+        models.Audit.auditor_id.isnot(None)
+    )
+    
+    if db_status:
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    results = query.group_by(models.Product.sku, models.Product.nombre_articulo).order_by(func.count(models.Product.id).desc()).limit(limit).all()
+    return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in results]
 
 @router.post("/{audit_id}/add-ot")
 async def add_ot_to_audit(
@@ -1004,14 +1145,42 @@ async def get_average_audit_duration_statistic(
         average_duration = crud.get_average_audit_duration(db)
         return {"average_duration_hours": average_duration}
 
+    # OPTIMIZADO: Usar agregaciones en BD
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    audits = crud.get_audits_with_filters(db, status=db_status, auditor_id=auditor_id, ubicacion_origen_id=ubicacion_origen_id, start_date=start_date, end_date=end_date)
-    durations = []
-    for a in audits:
-        if a.estado == 'finalizada' and a.finalizada_en and a.creada_en:
-            delta = (a.finalizada_en - a.creada_en).total_seconds() / 3600.0
-            durations.append(delta)
-    if not durations:
-        return {"average_duration_hours": 0.0}
-    avg = sum(durations) / len(durations)
-    return {"average_duration_hours": round(avg, 2)}
+    
+    bogota_tz = ZoneInfo("America/Bogota")
+    query = db.query(
+        func.avg(func.extract('epoch', models.Audit.finalizada_en - models.Audit.creada_en)) / 3600
+    ).filter(
+        models.Audit.estado == 'finalizada',
+        models.Audit.finalizada_en.isnot(None),
+        models.Audit.auditor_id.isnot(None)
+    )
+    
+    if db_status and db_status != 'finalizada':
+        query = query.filter(models.Audit.estado == db_status)
+    if auditor_id:
+        query = query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+    
+    if start_date and start_date.strip():
+        try:
+            sd = datetime.strptime(start_date, "%Y-%m-%d").date()
+            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
+            start_utc = start_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en >= start_utc)
+        except ValueError:
+            pass
+    
+    if end_date and end_date.strip():
+        try:
+            ed = datetime.strptime(end_date, "%Y-%m-%d").date()
+            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
+            end_utc = end_local.astimezone(timezone.utc)
+            query = query.filter(models.Audit.creada_en <= end_utc)
+        except ValueError:
+            pass
+    
+    result = query.scalar()
+    return {"average_duration_hours": round(result, 2) if result else 0.0}
