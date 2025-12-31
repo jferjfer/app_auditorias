@@ -202,49 +202,53 @@ def search_audit_by_exact_ot(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Busca una auditoría que contenga la OT especificada y devuelve SOLO los productos de esa OT.
+    Busca auditoría(s) que contengan la(s) OT(s) especificada(s) y devuelve SOLO los productos de esa(s) OT(s).
+    Soporta búsqueda múltiple separada por comas: VE3,VE4,VE5
+    Si las OTs están en diferentes auditorías, devuelve productos de todas ellas.
     """
-    # Validar y sanitizar OT
-    ot_number = validate_ot_number(ot_number)
-    # Construir filtro según el rol
+    ot_numbers = [validate_ot_number(ot.strip()) for ot in ot_number.split(',') if ot.strip()]
+    
+    if not ot_numbers:
+        raise HTTPException(status_code=400, detail="No se proporcionaron OTs válidas")
+    
+    # Buscar productos según el rol
     if current_user.rol in ["analista", "administrador"]:
-        # Analistas y admins pueden ver todas las auditorías
-        audit = db.query(models.Audit).join(models.Product).options(
-            joinedload(models.Audit.auditor),
-            joinedload(models.Audit.collaborators)
+        products_query = db.query(models.Product).join(models.Audit).options(
+            joinedload(models.Product.novelties)
         ).filter(
             models.Audit.auditor_id.isnot(None),
-            models.Product.orden_traslado_original == ot_number
-        ).order_by(models.Audit.creada_en.desc()).first()
+            models.Product.orden_traslado_original.in_(ot_numbers)
+        )
     else:
-        # Auditores solo ven sus auditorías o donde son colaboradores
-        audit = db.query(models.Audit).join(models.Product).options(
-            joinedload(models.Audit.auditor),
-            joinedload(models.Audit.collaborators)
+        products_query = db.query(models.Product).join(models.Audit).options(
+            joinedload(models.Product.novelties)
         ).filter(
             models.Audit.auditor_id.isnot(None),
             (
                 (models.Audit.auditor_id == current_user.id) |
                 (models.Audit.collaborators.any(models.User.id == current_user.id))
             ),
-            models.Product.orden_traslado_original == ot_number
-        ).order_by(models.Audit.creada_en.desc()).first()
+            models.Product.orden_traslado_original.in_(ot_numbers)
+        )
     
-    if not audit:
-        raise HTTPException(status_code=404, detail=f"No se encontró auditoría con OT {ot_number}")
+    filtered_products = products_query.all()
     
-    # Filtrar productos para mostrar SOLO los de esa OT específica
-    filtered_products = db.query(models.Product).options(
-        joinedload(models.Product.novelties)
-    ).filter(
-        models.Product.auditoria_id == audit.id,
-        models.Product.orden_traslado_original == ot_number
-    ).all()
+    if not filtered_products:
+        raise HTTPException(status_code=404, detail=f"No se encontraron productos con OT(s): {', '.join(ot_numbers)}")
     
-    # Crear respuesta con productos filtrados
+    # Obtener la auditoría más reciente de los productos encontrados
+    audit_id = filtered_products[0].auditoria_id
+    audit = db.query(models.Audit).options(
+        joinedload(models.Audit.auditor),
+        joinedload(models.Audit.collaborators),
+        joinedload(models.Audit.ubicacion_origen),
+        joinedload(models.Audit.ubicacion_destino)
+    ).filter(models.Audit.id == audit_id).first()
+    
     audit_dict = {
         'id': audit.id,
         'auditor_id': audit.auditor_id,
+        'ubicacion_origen': audit.ubicacion_origen,
         'ubicacion_destino': audit.ubicacion_destino,
         'estado': audit.estado,
         'porcentaje_cumplimiento': audit.porcentaje_cumplimiento,

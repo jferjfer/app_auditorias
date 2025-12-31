@@ -424,7 +424,7 @@ export default function AuditorDashboard() {
     }
   };
 
-  const handleVerAuditoria = async (auditId, isFiltered = false) => {
+  const handleVerAuditoria = async (auditId, otNumber = null) => {
     try {
       // Cancelar request anterior si existe
       if (abortControllerRef.current) {
@@ -437,15 +437,18 @@ export default function AuditorDashboard() {
       let data, prods;
       
       if (isOnline) {
-        // Si es búsqueda filtrada, usar el endpoint de búsqueda
-        if (isFiltered && otSearch) {
+        // Si hay OT específica, usar el endpoint de búsqueda filtrada
+        if (otNumber) {
           const token = localStorage.getItem('access_token');
-          const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${otSearch.trim()}`, {
+          const response = await fetch(`${API_BASE_URL}/api/audits/search-by-ot/${encodeURIComponent(otNumber)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
+          if (!response.ok) {
+            throw new Error('Error cargando auditoría filtrada');
+          }
           data = await response.json();
         } else {
-          // Online: cargar desde API normal
+          // Online: cargar desde API normal (todos los productos)
           data = await fetchAuditDetails(auditId);
         }
         prods = data.productos || [];
@@ -1270,7 +1273,7 @@ export default function AuditorDashboard() {
                   <input
                     type="text"
                     className="form-control form-control-sm"
-                    placeholder="Buscar por OT (ej: VE23456)"
+                    placeholder="Buscar por OT (ej: VE23456 o VE3,VE4,VE5)"
                     value={otSearch}
                     onChange={(e) => setOtSearch(e.target.value)}
                     style={{width: '250px'}}
@@ -1329,7 +1332,7 @@ export default function AuditorDashboard() {
                           )}
                           {audit.estado === 'en_progreso' && (
                             <>
-                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))} style={{minHeight: '38px'}}>
+                              <button className="btn btn-sm btn-info me-2" onClick={() => handleVerAuditoria(audit.id, otSearch || null)} style={{minHeight: '38px'}}>
                                 Ver
                               </button>
                               <button className="btn btn-sm btn-warning me-2" onClick={() => {
@@ -1344,7 +1347,7 @@ export default function AuditorDashboard() {
                             </>
                           )}
                           {audit.estado === 'finalizada' && (
-                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, audit.ubicacion_destino?.nombre?.includes('Filtrado:'))} style={{minHeight: '38px'}}>
+                            <button className="btn btn-sm btn-success" onClick={() => handleVerAuditoria(audit.id, otSearch || null)} style={{minHeight: '38px'}}>
                               <i className="bi bi-eye"></i> Ver
                             </button>
                           )}
@@ -1461,6 +1464,7 @@ export default function AuditorDashboard() {
                                 .reduce((acc, p) => {
                                   if (!acc[p.sku]) {
                                     acc[p.sku] = {
+                                      orden_traslado_original: p.orden_traslado_original,
                                       sku: p.sku,
                                       nombre_articulo: p.nombre_articulo,
                                       cantidad_documento: p.cantidad_documento,
@@ -1687,6 +1691,7 @@ export default function AuditorDashboard() {
                             <table className="table table-sm table-hover">
                               <thead>
                                 <tr>
+                                  <th>OT</th>
                                   <th>SKU</th>
                                   <th>Nombre</th>
                                   <th>Cant. Doc</th>
@@ -1696,6 +1701,7 @@ export default function AuditorDashboard() {
                               <tbody>
                                 {noveltiesBySku.map((item, idx) => (
                                   <tr key={idx}>
+                                    <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{item.orden_traslado_original || 'N/A'}</span></td>
                                     <td><strong>{item.sku}</strong></td>
                                     <td>{item.nombre_articulo}</td>
                                     <td>{item.cantidad_documento}</td>
@@ -1737,6 +1743,7 @@ export default function AuditorDashboard() {
                             <table className="table table-sm table-hover">
                               <thead>
                                 <tr>
+                                  <th>OT</th>
                                   <th>SKU</th>
                                   <th>Nombre</th>
                                   <th>Cant. Doc</th>
@@ -1747,6 +1754,7 @@ export default function AuditorDashboard() {
                               <tbody>
                                 {productsNotScanned.map(p => (
                                   <tr key={p.id}>
+                                    <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{p.orden_traslado_original || 'N/A'}</span></td>
                                     <td><strong>{p.sku}</strong></td>
                                     <td>{p.nombre_articulo}</td>
                                     <td>{p.cantidad_documento}</td>

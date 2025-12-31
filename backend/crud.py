@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 from typing import List, Optional
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
+import math
 
 # Configuración de hash de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -274,14 +275,23 @@ def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optio
         cumplimiento = 100
         print(f"   ✅ Sin productos, cumplimiento: 100%")
     else:
-        # Contar productos con cantidad_fisica registrada
+        # Contar productos con cantidad_fisica registrada (incluyendo 0)
         productos_auditados = sum(
             1 for p in products 
             if p.cantidad_fisica is not None
         )
         
-        cumplimiento = round((productos_auditados / total_productos) * 100)
+        # Calcular porcentaje exacto
+        porcentaje_exacto = (productos_auditados / total_productos) * 100
+        
+        # Si está muy cerca del 100% (99% o más), redondear hacia arriba
+        if porcentaje_exacto >= 99.0:
+            cumplimiento = math.ceil(porcentaje_exacto)
+        else:
+            cumplimiento = round(porcentaje_exacto)
+        
         print(f"   📈 Productos auditados: {productos_auditados}/{total_productos}")
+        print(f"   📐 Porcentaje exacto: {porcentaje_exacto:.2f}%")
         print(f"   ✅ Cumplimiento final: {cumplimiento}%")
 
     db_audit.porcentaje_cumplimiento = cumplimiento
