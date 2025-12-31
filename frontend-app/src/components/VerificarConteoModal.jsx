@@ -99,6 +99,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr>
+                        <th>OT</th>
                         <th>SKU</th>
                         <th>Nombre</th>
                         <th>Cant. Física</th>
@@ -107,6 +108,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                     <tbody>
                       {no_referenciados.map(p => (
                         <tr key={p.id}>
+                          <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{p.orden_traslado_original}</span></td>
                           <td><strong>{p.sku}</strong></td>
                           <td>{p.nombre_articulo}</td>
                           <td><span className="badge bg-info">{p.cantidad_fisica}</span></td>
@@ -126,6 +128,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr>
+                        <th>OT</th>
                         <th>SKU</th>
                         <th>Nombre</th>
                         <th>Doc</th>
@@ -136,6 +139,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                     <tbody>
                       {faltantes.map(p => (
                         <tr key={p.id}>
+                          <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{p.orden_traslado_original}</span></td>
                           <td><strong>{p.sku}</strong></td>
                           <td>{p.nombre_articulo}</td>
                           <td>{p.cantidad_documento}</td>
@@ -157,6 +161,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr>
+                        <th>OT</th>
                         <th>SKU</th>
                         <th>Nombre</th>
                         <th>Doc</th>
@@ -167,6 +172,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                     <tbody>
                       {sobrantes.map(p => (
                         <tr key={p.id}>
+                          <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{p.orden_traslado_original}</span></td>
                           <td><strong>{p.sku}</strong></td>
                           <td>{p.nombre_articulo}</td>
                           <td>{p.cantidad_documento}</td>
@@ -188,6 +194,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr>
+                        <th>OT</th>
                         <th>SKU</th>
                         <th>Nombre</th>
                         <th>Cant. Doc</th>
@@ -196,6 +203,7 @@ export default function VerificarConteoModal({ show, onClose, products, onSave, 
                     <tbody>
                       {sin_escanear.map(p => (
                         <tr key={p.id}>
+                          <td><span className="badge bg-secondary" style={{fontSize: '0.7rem'}}>{p.orden_traslado_original}</span></td>
                           <td><strong>{p.sku}</strong></td>
                           <td>{p.nombre_articulo}</td>
                           <td><span className="badge bg-secondary">{p.cantidad_documento}</span></td>
