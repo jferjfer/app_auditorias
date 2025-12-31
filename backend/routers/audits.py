@@ -406,9 +406,8 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user.rol != "administrador"):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
 
-    # Usar la función correcta que calcula basándose en unidades
-    crud.recalculate_and_update_audit_percentage(db, audit_id)
-    
+    # NO recalcular - el porcentaje ya está actualizado en tiempo real
+    # Solo marcar como finalizada
     db_audit.estado = "finalizada"
     db_audit.finalizada_en = datetime.utcnow()
     db.commit()
