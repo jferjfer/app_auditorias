@@ -1,44 +1,63 @@
 """
-Verificar hashes de contraseñas en la nueva BD
+Script para verificar contraseñas de usuarios
 """
 import os
 from sqlalchemy import create_engine, text
-from passlib.context import CryptContext
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 
 load_dotenv()
 
+# BD Vercel/Neon
+DB_URL = os.getenv("DATABASE_URL")
+
+# Configurar bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-NEW_DB = os.getenv("DATABASE_URL")
-engine = create_engine(NEW_DB)
 
-print("VERIFICANDO HASHES DE CONTRASEÑAS\n")
+print("Verificando contraseñas en BD de Vercel/Neon...\n")
 
-with engine.connect() as conn:
-    result = conn.execute(text("""
-        SELECT id, nombre, correo, contrasena_hash, rol 
-        FROM usuarios 
-        ORDER BY rol, id
-    """))
-    users = result.fetchall()
-    
-    print(f"Total usuarios: {len(users)}\n")
-    
-    for user in users:
-        user_id, nombre, correo, hash_pwd, rol = user
+engine = create_engine(DB_URL)
+
+# Contraseñas comunes a probar
+passwords_to_test = [
+    "password123",
+    "Password123",
+    "123456",
+    "admin123",
+    "laika123",
+    "Laika123"
+]
+
+try:
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT id, nombre, correo, contrasena_hash, rol 
+            FROM usuarios 
+            ORDER BY id
+            LIMIT 5
+        """))
+        users = result.fetchall()
         
-        # Verificar que el hash tiene formato bcrypt correcto
-        is_valid_bcrypt = hash_pwd.startswith('$2b$') and len(hash_pwd) == 60
+        print(f"Probando contraseñas para los primeros 5 usuarios:\n")
+        print("=" * 80)
         
-        print(f"ID: {user_id}")
-        print(f"Nombre: {nombre}")
-        print(f"Correo: {correo}")
-        print(f"Rol: {rol}")
-        print(f"Hash: {hash_pwd[:20]}...")
-        print(f"Formato bcrypt valido: {'SI' if is_valid_bcrypt else 'NO'}")
-        print("-" * 50)
-
-print("\nPara probar login, usa estos usuarios:")
-print("Auditor: (busca un correo con rol 'auditor')")
-print("Analista: (busca un correo con rol 'analista')")
-print("Admin: (busca un correo con rol 'administrador')")
+        for user in users:
+            user_id, nombre, correo, hash_pwd, rol = user
+            print(f"\nUsuario: {correo} ({rol})")
+            print(f"Hash: {hash_pwd[:50]}...")
+            
+            # Probar cada contraseña
+            for pwd in passwords_to_test:
+                try:
+                    if pwd_context.verify(pwd, hash_pwd):
+                        print(f"   >>> CONTRASEÑA ENCONTRADA: {pwd}")
+                        break
+                except:
+                    pass
+            else:
+                print(f"   >>> Ninguna contraseña comun funciona")
+            
+            print("-" * 80)
+        
+except Exception as e:
+    print(f"Error: {e}")
