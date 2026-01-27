@@ -74,6 +74,30 @@ def delete_user(db: Session, user_id: int):
     db_user = get_user_by_id(db, user_id)
     if not db_user:
         return None
+    
+    # Verificar si es el único administrador
+    if db_user.rol == "administrador":
+        admin_count = db.query(models.User).filter(models.User.rol == "administrador").count()
+        if admin_count <= 1:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="No se puede eliminar el único administrador")
+    
+    # Limpiar referencias antes de eliminar
+    # 1. Auditorías como auditor principal -> NULL
+    db.query(models.Audit).filter(models.Audit.auditor_id == user_id).update({"auditor_id": None})
+    
+    # 2. Colaboraciones -> eliminar de tabla many-to-many
+    from sqlalchemy import text
+    db.execute(text("DELETE FROM audit_collaborators WHERE user_id = :user_id"), {"user_id": user_id})
+    
+    # 3. Productos bloqueados -> desbloquear
+    db.query(models.Product).filter(models.Product.locked_by_user_id == user_id).update({
+        "locked_by_user_id": None,
+        "locked_at": None
+    })
+    
+    # 4. Historial y novedades se mantienen para trazabilidad (no se eliminan)
+    
     db.delete(db_user)
     db.commit()
     return db_user
@@ -256,9 +280,8 @@ def get_novelties_by_audit(db: Session, audit_id: int):
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
     """
-    Calcula el porcentaje de productos auditados.
-    Un producto está auditado si tiene cantidad_fisica registrada (no NULL).
-    No importa si fue escaneado o ingresado manualmente.
+    Calcula el porcentaje de SKUs únicos auditados.
+    Un SKU está auditado si al menos UNA de sus líneas tiene cantidad_fisica registrada (no NULL).
     """
     db_audit = get_audit_by_id(db, audit_id)
     if not db_audit:
@@ -267,22 +290,23 @@ def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optio
     products = get_products_by_audit(db, audit_id=audit_id)
     
     print(f"📊 Recalculando cumplimiento para auditoría {audit_id}")
-    print(f"   Total productos: {len(products)}")
+    print(f"   Total productos (líneas): {len(products)}")
     
-    total_productos = len(products)
-    
-    if total_productos == 0:
+    if len(products) == 0:
         cumplimiento = 100
         print(f"   ✅ Sin productos, cumplimiento: 100%")
     else:
-        # Contar productos con cantidad_fisica registrada (incluyendo 0)
-        productos_auditados = sum(
-            1 for p in products 
-            if p.cantidad_fisica is not None
-        )
+        # Obtener SKUs únicos
+        skus_unicos = set(p.sku for p in products)
+        
+        # Obtener SKUs que tienen al menos una línea auditada
+        skus_auditados = set(p.sku for p in products if p.cantidad_fisica is not None)
+        
+        total_skus = len(skus_unicos)
+        skus_con_auditoria = len(skus_auditados)
         
         # Calcular porcentaje exacto
-        porcentaje_exacto = (productos_auditados / total_productos) * 100
+        porcentaje_exacto = (skus_con_auditoria / total_skus) * 100
         
         # Si está muy cerca del 100% (99% o más), redondear hacia arriba
         if porcentaje_exacto >= 99.0:
@@ -290,7 +314,8 @@ def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optio
         else:
             cumplimiento = round(porcentaje_exacto)
         
-        print(f"   📈 Productos auditados: {productos_auditados}/{total_productos}")
+        print(f"   📦 SKUs únicos: {total_skus}")
+        print(f"   ✅ SKUs auditados: {skus_con_auditoria}")
         print(f"   📐 Porcentaje exacto: {porcentaje_exacto:.2f}%")
         print(f"   ✅ Cumplimiento final: {cumplimiento}%")
 
@@ -316,12 +341,14 @@ def add_collaborators_to_audit(db: Session, audit_id: int, collaborator_ids: Lis
     if not db_audit:
         return None
 
-    # Limpiar colaboradores existentes si es necesario (o simplemente añadir)
-    # db_audit.collaborators.clear()
-
-    for user_id in collaborator_ids:
-        user = get_user_by_id(db, user_id=user_id)
-        if user and user not in db_audit.collaborators:
+    # Optimizado: Una sola query para obtener todos los usuarios
+    users = db.query(models.User).filter(models.User.id.in_(collaborator_ids)).all()
+    
+    # Obtener IDs de colaboradores existentes para evitar duplicados
+    existing_ids = {collab.id for collab in db_audit.collaborators}
+    
+    for user in users:
+        if user.id not in existing_ids:
             db_audit.collaborators.append(user)
     
     db.commit()
@@ -640,10 +667,146 @@ def get_ubicaciones(db: Session, tipo: Optional[str] = None) -> List[models.Ubic
     return db.query(models.Ubicacion).order_by(models.Ubicacion.nombre).all()
 
 def delete_ubicacion(db: Session, ubicacion_id: int):
-    """Elimina una ubicación."""
+    """Elimina una ubicación solo si no está siendo usada por auditorías."""
     db_ubicacion = db.query(models.Ubicacion).filter(models.Ubicacion.id == ubicacion_id).first()
     if not db_ubicacion:
         return None
+    
+    # Verificar si está en uso
+    audits_using = db.query(models.Audit).filter(
+        (models.Audit.ubicacion_origen_id == ubicacion_id) |
+        (models.Audit.ubicacion_destino_id == ubicacion_id)
+    ).count()
+    
+    if audits_using > 0:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No se puede eliminar. {audits_using} auditoría(s) usan esta ubicación"
+        )
+    
     db.delete(db_ubicacion)
     db.commit()
     return db_ubicacion
+
+
+# --- Funciones para Mapeo de SKUs ---
+def get_sku_mapping(db: Session, sku_antiguo: str) -> Optional[models.SkuMapping]:
+    """Busca un mapeo de SKU antiguo a nuevo."""
+    return db.query(models.SkuMapping).filter(
+        models.SkuMapping.sku_antiguo == sku_antiguo.upper().strip(),
+        models.SkuMapping.activo == True
+    ).first()
+
+def get_all_sku_mappings(db: Session, activo_only: bool = True) -> List[models.SkuMapping]:
+    """Obtiene todos los mapeos de SKU."""
+    query = db.query(models.SkuMapping)
+    if activo_only:
+        query = query.filter(models.SkuMapping.activo == True)
+    return query.order_by(models.SkuMapping.fecha_creacion.desc()).all()
+
+def create_sku_mapping(db: Session, sku_antiguo: str, sku_nuevo: str, user_id: int) -> models.SkuMapping:
+    """Crea un nuevo mapeo de SKU."""
+    sku_antiguo = sku_antiguo.upper().strip()
+    sku_nuevo = sku_nuevo.upper().strip()
+    
+    # Verificar si ya existe
+    existing = db.query(models.SkuMapping).filter(
+        models.SkuMapping.sku_antiguo == sku_antiguo
+    ).first()
+    
+    if existing:
+        # Actualizar existente
+        existing.sku_nuevo = sku_nuevo
+        existing.activo = True
+        existing.creado_por = user_id
+        existing.fecha_creacion = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return existing
+    
+    # Crear nuevo
+    mapping = models.SkuMapping(
+        sku_antiguo=sku_antiguo,
+        sku_nuevo=sku_nuevo,
+        creado_por=user_id,
+        activo=True
+    )
+    db.add(mapping)
+    db.commit()
+    db.refresh(mapping)
+    return mapping
+
+def bulk_create_sku_mappings(db: Session, mappings_data: List[dict], user_id: int) -> dict:
+    """Crea múltiples mapeos de SKU desde un Excel."""
+    creados = 0
+    actualizados = 0
+    errores = 0
+    detalles_errores = []
+    
+    for idx, mapping in enumerate(mappings_data, start=2):  # Start at 2 (Excel row number)
+        try:
+            sku_antiguo = str(mapping.get('sku_antiguo', '')).strip().upper()
+            sku_nuevo = str(mapping.get('sku_nuevo', '')).strip().upper()
+            
+            if not sku_antiguo or not sku_nuevo:
+                errores += 1
+                detalles_errores.append(f"Fila {idx}: SKUs vacíos")
+                continue
+            
+            # Verificar si existe
+            existing = db.query(models.SkuMapping).filter(
+                models.SkuMapping.sku_antiguo == sku_antiguo
+            ).first()
+            
+            if existing:
+                existing.sku_nuevo = sku_nuevo
+                existing.activo = True
+                existing.creado_por = user_id
+                existing.fecha_creacion = datetime.utcnow()
+                actualizados += 1
+            else:
+                new_mapping = models.SkuMapping(
+                    sku_antiguo=sku_antiguo,
+                    sku_nuevo=sku_nuevo,
+                    creado_por=user_id,
+                    activo=True
+                )
+                db.add(new_mapping)
+                creados += 1
+                
+        except Exception as e:
+            errores += 1
+            detalles_errores.append(f"Fila {idx}: {str(e)}")
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise Exception(f"Error guardando mapeos: {str(e)}")
+    
+    return {
+        "creados": creados,
+        "actualizados": actualizados,
+        "errores": errores,
+        "detalles_errores": detalles_errores[:10]  # Limitar a 10 errores
+    }
+
+def delete_sku_mapping(db: Session, mapping_id: int) -> bool:
+    """Elimina un mapeo de SKU."""
+    mapping = db.query(models.SkuMapping).filter(models.SkuMapping.id == mapping_id).first()
+    if not mapping:
+        return False
+    db.delete(mapping)
+    db.commit()
+    return True
+
+def toggle_sku_mapping(db: Session, mapping_id: int, activo: bool) -> Optional[models.SkuMapping]:
+    """Activa o desactiva un mapeo de SKU."""
+    mapping = db.query(models.SkuMapping).filter(models.SkuMapping.id == mapping_id).first()
+    if not mapping:
+        return None
+    mapping.activo = activo
+    db.commit()
+    db.refresh(mapping)
+    return mapping

@@ -329,3 +329,32 @@ class ProductWithNovelties(Product):
     
     class Config:
         from_attributes = True
+
+# --- Esquemas para Mapeo de SKUs ---
+class SkuMappingBase(BaseModel):
+    sku_antiguo: str
+    sku_nuevo: str
+
+class SkuMappingCreate(SkuMappingBase):
+    pass
+
+class SkuMapping(SkuMappingBase):
+    id: int
+    creado_por: Optional[int] = None
+    fecha_creacion: datetime
+    activo: bool
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class SkuMappingList(BaseModel):
+    mappings: List[SkuMapping]
+    total: int
+
+class SkuMappingUploadResponse(BaseModel):
+    message: str
+    creados: int
+    actualizados: int
+    errores: int
+    detalles_errores: List[str] = []

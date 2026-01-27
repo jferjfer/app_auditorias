@@ -38,6 +38,19 @@ export default function ModoAuditoriaModal({ show, onClose, onSelect }) {
                   </div>
                 </div>
               </button>
+              
+              <button 
+                className="btn btn-outline-warning btn-lg text-start"
+                onClick={() => onSelect('contraparte')}
+              >
+                <div className="d-flex align-items-center">
+                  <i className="bi bi-people-fill fs-2 me-3"></i>
+                  <div>
+                    <strong>Auditoría con Contraparte</strong>
+                    <p className="mb-0 small text-muted">Dos auditores verifican la misma OT - requiere subir contraparte para finalizar</p>
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
           <div className="modal-footer">

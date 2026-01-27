@@ -82,8 +82,8 @@ class Audit(Base):
         back_populates="collaborative_audits"
     )
     
-    productos = relationship("Product", back_populates="auditoria")
-    archivos = relationship("File", back_populates="auditoria")
+    productos = relationship("Product", back_populates="auditoria", cascade="all, delete-orphan")
+    archivos = relationship("File", back_populates="auditoria", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_auditorias_auditor', 'auditor_id'),
@@ -129,6 +129,7 @@ class Product(Base):
     locked_by = relationship("User", foreign_keys=[locked_by_user_id])
     last_modified_by = relationship("User", foreign_keys=[last_modified_by_id])
     novelties = relationship("ProductNovelty", back_populates="product", cascade="all, delete-orphan")
+    history = relationship("ProductHistory", back_populates="product", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_productos_auditoria', 'auditoria_id'),
@@ -196,3 +197,25 @@ class ProductNovelty(Base):
         Index('idx_novelties_product', 'product_id'),
         Index('idx_novelties_tipo', 'novedad_tipo'),
     )
+
+class SkuMapping(Base):
+    """Mapeo de SKUs antiguos (fisicos) a SKUs nuevos (sistema)"""
+    __tablename__ = "sku_mapping"
+    
+    id = Column(Integer, primary_key=True)
+    sku_antiguo = Column(String, nullable=False, unique=True)
+    sku_nuevo = Column(String, nullable=False)
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    activo = Column(Boolean, default=True, nullable=False)
+    
+    creador = relationship("User")
+    
+    __table_args__ = (
+        Index('idx_sku_mapping_antiguo', 'sku_antiguo'),
+        Index('idx_sku_mapping_nuevo', 'sku_nuevo'),
+        Index('idx_sku_mapping_activo', 'activo'),
+    )
+    
+    def __repr__(self):
+        return f"<SkuMapping(antiguo='{self.sku_antiguo}', nuevo='{self.sku_nuevo}', activo={self.activo})>"

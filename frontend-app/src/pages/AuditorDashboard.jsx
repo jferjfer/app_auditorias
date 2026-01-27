@@ -17,6 +17,7 @@ import AddOtModal from '../components/AddOtModal';
 import ModoAuditoriaModal from '../components/ModoAuditoriaModal';
 import VerificarConteoModal from '../components/VerificarConteoModal';
 import AuditConfirmModal from '../components/AuditConfirmModal';
+import DiscrepanciasModal from '../components/DiscrepanciasModal';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 import { API_BASE_URL } from '../services/api';
@@ -79,6 +80,7 @@ export default function AuditorDashboard() {
   const [skuIndex, setSkuIndex] = useState({});
   const [scanHistory, setScanHistory] = useState([]);
   const [scannedCount, setScannedCount] = useState(0);
+  const MAX_SCAN_HISTORY = 5; // Limitar historial para evitar sobrecarga
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterNovedad, setFilterNovedad] = useState('all');
@@ -98,12 +100,17 @@ export default function AuditorDashboard() {
   const [currentPage, setCurrentPage] = useState(0);
   const [otSearch, setOtSearch] = useState('');
   const [modoConteoRapido, setModoConteoRapido] = useState(false);
+  const [modoContraparte, setModoContraparte] = useState(false);
+  const [showDiscrepanciasModal, setShowDiscrepanciasModal] = useState(false);
+  const [discrepancias, setDiscrepancias] = useState([]);
+  const [contraparteSubida, setContraparteSubida] = useState(false);
   const [showModoModal, setShowModoModal] = useState(false);
   const [pendingAuditId, setPendingAuditId] = useState(null);
   const [showVerificarConteoModal, setShowVerificarConteoModal] = useState(false);
   const [creatingProducts, setCreatingProducts] = useState(new Set());
   const [showAuditConfirmModal, setShowAuditConfirmModal] = useState(false);
   const [pendingAuditData, setPendingAuditData] = useState(null);
+  const [skuMappingsCache, setSkuMappingsCache] = useState({}); // Cache de mapeos
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -113,6 +120,7 @@ export default function AuditorDashboard() {
   useSessionKeepAlive(30000); // Ping cada 30 segundos
   
   const ITEMS_PER_PAGE = modoConteoRapido ? 10 : 20;
+  const OPACITY_DECREMENT = 0.2; // Constante para opacidad del historial
 
   // Buscar descripciones pendientes cuando se reconecta
   useEffect(() => {
@@ -407,6 +415,71 @@ export default function AuditorDashboard() {
     }
   };
 
+  const handleUploadContraparte = async (e) => {
+    e.preventDefault();
+    if (selectedFiles.length === 0) return toast.warning('Selecciona archivos de contraparte');
+    setLoading(true);
+    
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach(file => formData.append('files', file));
+      
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/api/audits/${currentAudit.id}/upload-contraparte`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Error subiendo contraparte');
+      }
+      
+      const result = await response.json();
+      toast.success(result.message);
+      
+      setDiscrepancias(result.discrepancias || []);
+      setContraparteSubida(true);
+      setSelectedFiles([]);
+      e.target.reset();
+      
+      if (result.discrepancias && result.discrepancias.length > 0) {
+        setShowDiscrepanciasModal(true);
+      }
+      
+      await handleVerAuditoria(currentAudit.id);
+    } catch (err) {
+      toast.error('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResolverDiscrepancia = async (productId, cantidadCorrecta, observaciones) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/api/audits/${currentAudit.id}/resolver-discrepancia?product_id=${productId}&cantidad_correcta=${cantidadCorrecta}&observaciones=${encodeURIComponent(observaciones || '')}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error resolviendo discrepancia');
+      }
+      
+      toast.success('Discrepancia resuelta');
+      
+      setDiscrepancias(prev => prev.map(d => 
+        d.product_id === productId ? { ...d, resuelta: true } : d
+      ));
+      
+      await handleVerAuditoria(currentAudit.id);
+    } catch (err) {
+      toast.error('Error: ' + err.message);
+    }
+  };
+
   const handleIniciar = async (auditId) => {
     setPendingAuditId(auditId);
     setShowModoModal(true);
@@ -414,9 +487,11 @@ export default function AuditorDashboard() {
 
   const handleModoSelected = async (modo) => {
     setModoConteoRapido(modo === 'conteo_rapido');
+    setModoContraparte(modo === 'contraparte');
     setShowModoModal(false);
     try {
-      await iniciarAuditoria(pendingAuditId, modo === 'conteo_rapido' ? 'conteo_rapido' : 'normal');
+      const modoValue = modo === 'conteo_rapido' ? 'conteo_rapido' : modo === 'contraparte' ? 'contraparte' : 'normal';
+      await iniciarAuditoria(pendingAuditId, modoValue);
       loadAudits();
       setPendingAuditId(null);
     } catch (err) {
@@ -437,6 +512,21 @@ export default function AuditorDashboard() {
       let data, prods;
       
       if (isOnline) {
+        // Cargar cache de mapeos de SKU
+        try {
+          const token = localStorage.getItem('access_token');
+          const mappingsResponse = await fetch(`${API_BASE_URL}/api/sku-mappings/active`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (mappingsResponse.ok) {
+            const mappingsData = await mappingsResponse.json();
+            setSkuMappingsCache(mappingsData);
+            console.log(`Cache de mapeos cargado: ${Object.keys(mappingsData).length} mapeos`);
+          }
+        } catch (err) {
+          console.error('Error cargando mapeos:', err);
+        }
+        
         // Si hay OT específica, usar el endpoint de búsqueda filtrada
         if (otNumber) {
           const token = localStorage.getItem('access_token');
@@ -488,6 +578,43 @@ export default function AuditorDashboard() {
     }
   };
 
+  // Función helper para resolver SKU con mapeo
+  const resolveSkuWithMapping = async (scannedSku) => {
+    // 1. Buscar directamente en índice
+    let product = skuIndex[scannedSku];
+    if (product) return { product, mapped: false };
+
+    // 2. Buscar en cache de mapeos (modo conteo rápido)
+    if (modoConteoRapido && skuMappingsCache[scannedSku]) {
+      const skuNuevo = skuMappingsCache[scannedSku];
+      const skuNuevoNorm = skuNuevo.toUpperCase().replace(/^0+/, '');
+      product = skuIndex[skuNuevoNorm];
+      if (product) {
+        return { product, mapped: true, sku_antiguo: scannedSku, sku_nuevo: skuNuevo };
+      }
+    }
+
+    // 3. Buscar en API (modo normal y contraparte)
+    if (!modoConteoRapido && isOnline) {
+      try {
+        const token = localStorage.getItem('access_token');
+        const response = await fetch(
+          `${API_BASE_URL}/api/products/resolve-sku/${scannedSku}?audit_id=${currentAudit.id}`,
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data;
+        }
+      } catch (err) {
+        console.error('Error resolviendo SKU:', err);
+      }
+    }
+
+    return { product: null, mapped: false };
+  };
+
   const handleScan = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -498,38 +625,68 @@ export default function AuditorDashboard() {
       if (modoConteoRapido) {
         // MODO CONTEO RÁPIDO: Solo incrementar cantidad, sin guardar automáticamente
         let product = skuIndex[scannedSku];
+        let skuMapeado = false;
+        let skuAntiguo = null;
+        
+        // Búsqueda optimizada: detener al encontrar el primero
         if (!product) {
           for (const p of products) {
-            if (String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku) {
+            const normalizedProductSku = String(p.sku).toUpperCase().replace(/^0+/, '');
+            if (normalizedProductSku === scannedSku) {
               product = p;
-              break;
+              break; // Detener búsqueda al encontrar
             }
+          }
+        }
+        
+        // Si no encuentra, buscar en cache de mapeos
+        if (!product && skuMappingsCache[scannedSku]) {
+          const skuNuevo = skuMappingsCache[scannedSku];
+          const skuNuevoNorm = skuNuevo.toUpperCase().replace(/^0+/, '');
+          product = skuIndex[skuNuevoNorm];
+          if (product) {
+            skuMapeado = true;
+            skuAntiguo = scannedSku;
+            toast.success(`✅ ${scannedSku} → ${skuNuevo} (+1)`, {duration: 2000});
           }
         }
         
         if (!product) {
           // Verificar si ya existe en el estado (incluso con ID temporal)
-          const existingProduct = products.find(p => 
-            String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku
-          );
+          const existingProduct = products.find(p => {
+            const normalizedSku = String(p.sku).toUpperCase().replace(/^0+/, '');
+            return normalizedSku === scannedSku;
+          });
           
           if (existingProduct) {
             // Ya existe, solo incrementar cantidad
             const newQty = (existingProduct.cantidad_fisica || 0) + 1;
             const updatedProduct = { ...existingProduct, cantidad_fisica: newQty };
+            
             setProducts(prev => prev.map(p => 
               p.id === existingProduct.id ? updatedProduct : p
             ));
             setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
             
-            // Guardar en BD (incluso si es temporal, se guardará cuando se convierta en real)
+            // Actualizar historial de escaneo
+            setScanHistory(prev => [
+              { sku: scannedSku, nombre: existingProduct.nombre_articulo },
+              ...prev.slice(0, MAX_SCAN_HISTORY - 1)
+            ]);
+            
+            // Guardar en BD (solo si no es temporal)
             const changes = { cantidad_fisica: newQty };
             if (!String(existingProduct.id).startsWith('temp_')) {
               if (isOnline) {
-                updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
+                updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => {
+                  console.error('Error actualizando producto:', err);
+                  toast.error('⚠️ Error guardando. Reintenta.');
+                });
               } else {
                 offlineDB.savePendingChange(currentAudit.id, existingProduct.id, changes).then(() => {
                   window.dispatchEvent(new Event('pendingChangesUpdated'));
+                }).catch(err => {
+                  console.error('Error guardando offline:', err);
                 });
               }
             }
@@ -538,12 +695,13 @@ export default function AuditorDashboard() {
             if (creatingProducts.has(scannedSku)) {
               setScannedCount(prev => prev + 1);
               setScanInput('');
+              toast.info('⏳ Creando producto...');
               return;
             }
             
             // Producto no referenciado - crear temporal y guardar inmediatamente
             const tempProduct = {
-              id: `temp_${Date.now()}`,
+              id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               auditoria_id: currentAudit.id,
               sku: scannedSku,
               nombre_articulo: 'NO REFERENCIADO',
@@ -555,9 +713,16 @@ export default function AuditorDashboard() {
               orden_traslado_original: 'N/A',
               isNew: true
             };
+            
             setProducts(prev => [...prev, tempProduct]);
             setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
             setCreatingProducts(prev => new Set(prev).add(scannedSku));
+            
+            // Actualizar historial
+            setScanHistory(prev => [
+              { sku: scannedSku, nombre: 'NO REFERENCIADO' },
+              ...prev.slice(0, MAX_SCAN_HISTORY - 1)
+            ]);
           
             // Guardar inmediatamente en BD en background
             (async () => {
@@ -612,7 +777,20 @@ export default function AuditorDashboard() {
       }
       
       // MODO NORMAL (código original)
-      const product = skuIndex[scannedSku];
+      let product = skuIndex[scannedSku];
+      let skuMapeado = false;
+      
+      // Si no encuentra, buscar con mapeo
+      if (!product) {
+        const resolved = await resolveSkuWithMapping(scannedSku);
+        product = resolved.product;
+        skuMapeado = resolved.mapped;
+        
+        if (skuMapeado) {
+          speak(`SKU actualizado. Cantidad ${product.cantidad_documento}`);
+          toast.info(`⚠️ SKU antiguo: ${scannedSku} → Nuevo: ${product.sku}`);
+        }
+      }
       
       if (!product) {
         speak('Producto no encontrado');
@@ -764,6 +942,71 @@ export default function AuditorDashboard() {
     }
   };
 
+  const handleVerificarClick = () => {
+    try {
+      if (modoConteoRapido) {
+        setShowVerificarConteoModal(true);
+      } else {
+        setShowVerifyModal(true);
+        
+        // Combinar novedades del array Y del campo único de forma segura
+        const localNovelties = products
+          .filter(p => {
+            // Validar que el producto tenga datos válidos
+            if (!p || !p.sku) return false;
+            
+            const hasArrayNovelties = Array.isArray(p.novelties) && p.novelties.length > 0;
+            const hasFieldNovelty = p.novedad && p.novedad !== 'sin_novedad';
+            
+            return hasArrayNovelties || hasFieldNovelty;
+          })
+          .reduce((acc, p) => {
+            const skuKey = p.sku;
+            
+            if (!acc[skuKey]) {
+              acc[skuKey] = {
+                orden_traslado_original: p.orden_traslado_original || 'N/A',
+                sku: p.sku,
+                nombre_articulo: p.nombre_articulo || 'Sin nombre',
+                cantidad_documento: p.cantidad_documento || 0,
+                novelties: []
+              };
+            }
+            
+            // Agregar novedades del array (avería, vencido, etc.) con validación
+            if (Array.isArray(p.novelties) && p.novelties.length > 0) {
+              p.novelties.forEach(nov => {
+                if (nov && nov.novedad_tipo && typeof nov.cantidad === 'number') {
+                  acc[skuKey].novelties.push({
+                    tipo: nov.novedad_tipo,
+                    cantidad: nov.cantidad,
+                    observaciones: nov.observaciones || ''
+                  });
+                }
+              });
+            }
+            
+            // Agregar novedad del campo único (faltante/sobrante) con validación
+            if (p.novedad && p.novedad !== 'sin_novedad') {
+              const cantidad = typeof p.cantidad_fisica === 'number' ? p.cantidad_fisica : 0;
+              acc[skuKey].novelties.push({
+                tipo: p.novedad,
+                cantidad: cantidad,
+                observaciones: p.observaciones || ''
+              });
+            }
+            
+            return acc;
+          }, {});
+        
+        setNoveltiesBySku(Object.values(localNovelties));
+      }
+    } catch (error) {
+      console.error('Error en handleVerificarClick:', error);
+      toast.error('Error al verificar auditoría');
+    }
+  };
+
   const handleSave = async () => {
     try {
       await fetchAuditDetails(currentAudit.id);
@@ -774,6 +1017,19 @@ export default function AuditorDashboard() {
   };
 
   const handleFinish = async () => {
+    if (modoContraparte) {
+      const pendientes = discrepancias.filter(d => !d.resuelta).length;
+      if (pendientes > 0) {
+        toast.error(`No puedes finalizar. Hay ${pendientes} discrepancia(s) sin resolver`);
+        setShowDiscrepanciasModal(true);
+        return;
+      }
+      if (!contraparteSubida) {
+        toast.error('Debes subir la contraparte antes de finalizar');
+        return;
+      }
+    }
+    
     const confirmed = await confirm('¿Finalizar auditoría?');
     if (!confirmed) return;
     try {
@@ -782,6 +1038,9 @@ export default function AuditorDashboard() {
       setCurrentAudit(null);
       setProducts([]);
       setModoConteoRapido(false);
+      setModoContraparte(false);
+      setContraparteSubida(false);
+      setDiscrepancias([]);
       loadAudits();
     } catch (err) {
       toast.error('Error: ' + err.message);
@@ -866,7 +1125,7 @@ export default function AuditorDashboard() {
     setTimeout(() => flash.remove(), 300);
   };
 
-  const handleCameraScan = (decodedText) => {
+  const handleCameraScan = async (decodedText) => {
     // En modo normal cierra la cámara, en modo rápido continúa
     if (!modoConteoRapido) {
       setShowCameraScanner(false);
@@ -878,6 +1137,17 @@ export default function AuditorDashboard() {
     if (modoConteoRapido) {
       // MODO CONTEO RÁPIDO: Solo incrementar cantidad
       let product = skuIndex[scannedSku];
+      
+      // Buscar en cache de mapeos si no encuentra
+      if (!product && skuMappingsCache[scannedSku]) {
+        const skuNuevo = skuMappingsCache[scannedSku];
+        const skuNuevoNorm = skuNuevo.toUpperCase().replace(/^0+/, '');
+        product = skuIndex[skuNuevoNorm];
+        if (product) {
+          toast.success(`✅ ${scannedSku} → ${skuNuevo} (+1)`, {duration: 2000});
+        }
+      }
+      
       if (!product) {
         for (const p of products) {
           if (String(p.sku).toUpperCase().replace(/^0+/, '') === scannedSku) {
@@ -897,19 +1167,31 @@ export default function AuditorDashboard() {
           // Ya existe, solo incrementar cantidad
           const newQty = (existingProduct.cantidad_fisica || 0) + 1;
           const updatedProduct = { ...existingProduct, cantidad_fisica: newQty };
+          
           setProducts(prev => prev.map(p => 
             p.id === existingProduct.id ? updatedProduct : p
           ));
           setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
           
-          // Guardar en BD (incluso si es temporal, se guardará cuando se convierta en real)
+          // Actualizar historial
+          setScanHistory(prev => [
+            { sku: scannedSku, nombre: existingProduct.nombre_articulo },
+            ...prev.slice(0, MAX_SCAN_HISTORY - 1)
+          ]);
+          
+          // Guardar en BD
           const changes = { cantidad_fisica: newQty };
           if (!String(existingProduct.id).startsWith('temp_')) {
             if (isOnline) {
-              updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => console.error('Error:', err));
+              updateProduct(currentAudit.id, existingProduct.id, changes).catch(err => {
+                console.error('Error:', err);
+                toast.error('⚠️ Error guardando');
+              });
             } else {
               offlineDB.savePendingChange(currentAudit.id, existingProduct.id, changes).then(() => {
                 window.dispatchEvent(new Event('pendingChangesUpdated'));
+              }).catch(err => {
+                console.error('Error guardando offline:', err);
               });
             }
           }
@@ -917,12 +1199,13 @@ export default function AuditorDashboard() {
           // Evitar crear duplicados si ya se está creando
           if (creatingProducts.has(scannedSku)) {
             setScannedCount(prev => prev + 1);
+            toast.info('⏳ Creando producto...');
             return;
           }
           
           // Producto no referenciado - crear temporal y guardar inmediatamente
           const tempProduct = {
-            id: `temp_${Date.now()}`,
+            id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             auditoria_id: currentAudit.id,
             sku: scannedSku,
             nombre_articulo: 'NO REFERENCIADO',
@@ -934,9 +1217,16 @@ export default function AuditorDashboard() {
             orden_traslado_original: 'N/A',
             isNew: true
           };
+          
           setProducts(prev => [...prev, tempProduct]);
           setSkuIndex(prev => ({...prev, [scannedSku]: tempProduct}));
           setCreatingProducts(prev => new Set(prev).add(scannedSku));
+          
+          // Actualizar historial
+          setScanHistory(prev => [
+            { sku: scannedSku, nombre: 'NO REFERENCIADO' },
+            ...prev.slice(0, MAX_SCAN_HISTORY - 1)
+          ]);
         
           // Guardar inmediatamente en BD en background
           (async () => {
@@ -953,8 +1243,11 @@ export default function AuditorDashboard() {
                 p.id === tempProduct.id ? createdProduct : p
               ));
               setSkuIndex(prev => ({...prev, [scannedSku]: createdProduct}));
+              
+              toast.success(`✅ ${scannedSku} creado`);
             } catch (err) {
               console.error('Error creando producto:', err);
+              toast.error(`❌ Error creando ${scannedSku}`);
             } finally {
               setCreatingProducts(prev => {
                 const newSet = new Set(prev);
@@ -968,19 +1261,31 @@ export default function AuditorDashboard() {
         // Producto existente - incrementar cantidad
         const newQty = (product.cantidad_fisica || 0) + 1;
         const updatedProduct = { ...product, cantidad_fisica: newQty };
+        
         setProducts(prev => prev.map(p => 
           p.id === product.id ? updatedProduct : p
         ));
         // Actualizar índice con el producto actualizado
         setSkuIndex(prev => ({...prev, [scannedSku]: updatedProduct}));
         
+        // Actualizar historial
+        setScanHistory(prev => [
+          { sku: scannedSku, nombre: product.nombre_articulo },
+          ...prev.slice(0, MAX_SCAN_HISTORY - 1)
+        ]);
+        
         // Guardar inmediatamente en BD
         const changes = { cantidad_fisica: newQty };
         if (isOnline) {
-          updateProduct(currentAudit.id, product.id, changes).catch(err => console.error('Error:', err));
+          updateProduct(currentAudit.id, product.id, changes).catch(err => {
+            console.error('Error actualizando:', err);
+            toast.error('⚠️ Error guardando');
+          });
         } else {
           offlineDB.savePendingChange(currentAudit.id, product.id, changes).then(() => {
             window.dispatchEvent(new Event('pendingChangesUpdated'));
+          }).catch(err => {
+            console.error('Error guardando offline:', err);
           });
         }
       }
@@ -990,7 +1295,19 @@ export default function AuditorDashboard() {
     }
     
     // MODO NORMAL
-    const product = skuIndex[scannedSku];
+    let product = skuIndex[scannedSku];
+    
+    // Buscar con mapeo si no encuentra
+    if (!product) {
+      const resolved = await resolveSkuWithMapping(scannedSku);
+      product = resolved.product;
+      
+      if (resolved.mapped) {
+        speak(`SKU actualizado. Cantidad ${product.cantidad_documento}`);
+        toast.info(`⚠️ ${scannedSku} → ${product.sku}`);
+      }
+    }
+    
     if (!product) {
       speak('Producto no encontrado');
       return;
@@ -1262,6 +1579,39 @@ export default function AuditorDashboard() {
         </div>
       </div>
 
+      {/* Carga de contraparte (solo en modo contraparte) */}
+      {currentAudit && modoContraparte && currentAudit.estado === 'en_progreso' && !contraparteSubida && (
+        <div style={{width: '100%', marginBottom: '15px'}}>
+          <div className="col-12">
+            <div className="card border-warning">
+              <div className="card-body">
+                <h5 className="card-title text-warning">
+                  <i className="bi bi-exclamation-triangle"></i> Subir Contraparte
+                </h5>
+                <p className="text-muted">Sube los archivos de la segunda auditoría para comparar con la primera.</p>
+                <form onSubmit={handleUploadContraparte}>
+                  <div className="input-group">
+                    <input 
+                      type="file" 
+                      className="form-control" 
+                      accept=".xlsx,.xls" 
+                      multiple 
+                      onChange={handleFileSelect}
+                    />
+                    <button className="btn btn-warning" type="submit" disabled={loading}>
+                      <i className="bi bi-upload"></i> {loading ? 'Subiendo...' : 'Subir Contraparte'}
+                    </button>
+                  </div>
+                  {selectedFiles.length > 0 && (
+                    <small className="text-muted">{selectedFiles.length} archivo(s) seleccionado(s)</small>
+                  )}
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabla de auditorías */}
       <div style={{width: '100%', marginBottom: '15px'}}>
         <div>
@@ -1315,7 +1665,11 @@ export default function AuditorDashboard() {
                         <td style={{textAlign: 'left'}}>{audit.ubicacion_destino?.nombre || 'N/A'}</td>
                         <td style={{textAlign: 'center'}}>{new Date(audit.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</td>
                         <td style={{textAlign: 'center'}}>
-                          <span className={`badge bg-${audit.estado === 'finalizada' ? 'success' : audit.estado === 'en_progreso' ? 'warning' : 'secondary'}`}>
+                          <span className={`badge bg-${
+                            audit.estado === 'finalizada' ? 'success' : 
+                            audit.estado === 'en_progreso' ? 'warning' : 
+                            'secondary'
+                          }`}>
                             {audit.estado}
                           </span>
                         </td>
@@ -1408,10 +1762,10 @@ export default function AuditorDashboard() {
                   </div>
                   {scanHistory.length > 0 && (
                     <div className="mt-2">
-                      <small className="text-muted">Últimos escaneos:</small>
+                      <small className="text-muted">Últimos {MAX_SCAN_HISTORY} escaneos:</small>
                       <div style={{fontSize: '12px', marginTop: '5px'}}>
-                        {scanHistory.map((item, idx) => (
-                          <div key={idx} style={{opacity: 1 - (idx * 0.2)}}>
+                        {scanHistory.slice(0, MAX_SCAN_HISTORY).map((item, idx) => (
+                          <div key={`${item.sku}-${idx}`} style={{opacity: 1 - (idx * OPACITY_DECREMENT)}}>
                             <i className="bi bi-check-circle-fill text-success"></i> {item.sku} - {item.nombre}
                           </div>
                         ))}
@@ -1446,57 +1800,22 @@ export default function AuditorDashboard() {
                       </button>
                       {currentAudit.estado !== 'finalizada' && (
                         <>
+                          {modoContraparte && contraparteSubida && discrepancias.length > 0 && (
+                            <button 
+                              className="btn btn-warning me-2" 
+                              onClick={() => setShowDiscrepanciasModal(true)}
+                            >
+                              <i className="bi bi-exclamation-triangle"></i> Verificar Discrepancias ({discrepancias.filter(d => !d.resuelta).length})
+                            </button>
+                          )}
                           <button className="btn btn-primary me-2" onClick={handleSave}>
                             <i className="bi bi-save"></i> Guardar
                           </button>
-                          <button className="btn btn-warning me-2" onClick={() => {
-                            if (modoConteoRapido) {
-                              setShowVerificarConteoModal(true);
-                            } else {
-                              setShowVerifyModal(true);
-                              
-                              // Combinar novedades del array Y del campo único
-                              const localNovelties = products
-                                .filter(p => 
-                                  (p.novelties && p.novelties.length > 0) || 
-                                  (p.novedad && p.novedad !== 'sin_novedad')
-                                )
-                                .reduce((acc, p) => {
-                                  if (!acc[p.sku]) {
-                                    acc[p.sku] = {
-                                      orden_traslado_original: p.orden_traslado_original,
-                                      sku: p.sku,
-                                      nombre_articulo: p.nombre_articulo,
-                                      cantidad_documento: p.cantidad_documento,
-                                      novelties: []
-                                    };
-                                  }
-                                  
-                                  // Agregar novedades del array (avería, vencido, etc.)
-                                  if (p.novelties && p.novelties.length > 0) {
-                                    p.novelties.forEach(nov => {
-                                      acc[p.sku].novelties.push({
-                                        tipo: nov.novedad_tipo,
-                                        cantidad: nov.cantidad,
-                                        observaciones: nov.observaciones
-                                      });
-                                    });
-                                  }
-                                  
-                                  // Agregar novedad del campo único (faltante/sobrante)
-                                  if (p.novedad && p.novedad !== 'sin_novedad') {
-                                    acc[p.sku].novelties.push({
-                                      tipo: p.novedad,
-                                      cantidad: p.cantidad_fisica,
-                                      observaciones: p.observaciones
-                                    });
-                                  }
-                                  
-                                  return acc;
-                                }, {});
-                              setNoveltiesBySku(Object.values(localNovelties));
-                            }
-                          }}>
+                          <button 
+                            className="btn btn-warning me-2" 
+                            onClick={() => handleVerificarClick()}
+                            aria-label="Verificar auditoría"
+                          >
                             <i className="bi bi-exclamation-triangle"></i> Verificar
                           </button>
                           {currentAudit.auditor_id === user.id && (
@@ -1971,6 +2290,13 @@ export default function AuditorDashboard() {
         auditData={pendingAuditData}
         onConfirm={handleConfirmAudit}
         onDelete={handleDeleteAudit}
+      />
+
+      <DiscrepanciasModal
+        show={showDiscrepanciasModal}
+        onClose={() => setShowDiscrepanciasModal(false)}
+        discrepancias={discrepancias}
+        onResolve={handleResolverDiscrepancia}
       />
 
       <ToastContainer />

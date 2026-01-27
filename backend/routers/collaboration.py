@@ -43,15 +43,23 @@ async def unlock_product(audit_id: int, product_id: int, db: Session = Depends(g
 
 @router.get("/{audit_id}/history")
 def get_audit_history(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    history = db.query(models.ProductHistory).join(models.Product).filter(models.Product.auditoria_id == audit_id).order_by(models.ProductHistory.modified_at.desc()).limit(100).all()
+    # Usar LEFT JOIN con condición explícita para incluir productos eliminados
+    history = db.query(models.ProductHistory).outerjoin(
+        models.Product,
+        models.ProductHistory.product_id == models.Product.id
+    ).filter(
+        (models.Product.auditoria_id == audit_id) | 
+        (models.Product.id.is_(None))
+    ).order_by(models.ProductHistory.modified_at.desc()).limit(100).all()
+    
     return [{
         "id": h.id, 
         "product_id": h.product_id, 
         "user_id": h.user_id, 
-        "user_name": h.user.nombre if h.user else "Unknown", 
+        "user_name": h.user.nombre if h.user else "Usuario eliminado", 
         "ot": h.product.orden_traslado_original if h.product else "N/A",
         "sku": h.product.sku if h.product else "N/A",
-        "descripcion": h.product.nombre_articulo if h.product else "N/A",
+        "descripcion": h.product.nombre_articulo if h.product else "Producto eliminado",
         "field_changed": h.field_changed, 
         "old_value": h.old_value, 
         "new_value": h.new_value, 

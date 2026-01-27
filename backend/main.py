@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 load_dotenv()
 
-from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products
+from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products, sku_mappings
 from backend.database import engine
 from backend import models
 from backend.middleware.security import rate_limit_middleware
@@ -82,6 +82,7 @@ app.include_router(websockets.router, prefix="/api")
 app.include_router(collaboration.router, prefix="/api")
 app.include_router(ubicaciones.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
+app.include_router(sku_mappings.router, prefix="/api")
 
 # Proteger directorio uploads pa q solo usuarios autorizados accedan
 @app.get("/uploads/{path:path}")
@@ -96,43 +97,43 @@ async def serve_upload(path: str, request: Request, current_user: models.User = 
 # Servir el frontend de React solo en producción
 if not DEBUG:
     frontend_dir = "frontend-app/dist"
-    print(f"🔍 Buscando frontend en: {os.path.abspath(frontend_dir)}")
-    print(f"📁 ¿Existe? {os.path.exists(frontend_dir)}")
+    print(f"Buscando frontend en: {os.path.abspath(frontend_dir)}")
+    print(f"Existe? {os.path.exists(frontend_dir)}")
 
     if os.path.exists(frontend_dir):
-        print("✅ Frontend encontrado, montando archivos estáticos...")
+        print("Frontend encontrado, montando archivos estaticos...")
         app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
         app.mount("/images", StaticFiles(directory=os.path.join(frontend_dir, "images")), name="images")
         
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
-            print(f"📄 Solicitando: {full_path}")
+            print(f"Solicitando: {full_path}")
             
             if full_path.startswith("api/") or full_path.startswith("uploads/"):
                 raise HTTPException(status_code=404)
             
-            # Si es la raíz o vacío, servir index.html
+            # Si es la raiz o vacio, servir index.html
             if full_path == "" or full_path == "/":
                 index_path = os.path.join(frontend_dir, "index.html")
-                print(f"🏠 Sirviendo index: {index_path}")
+                print(f"Sirviendo index: {index_path}")
                 return FileResponse(index_path)
             
             file_path = os.path.join(frontend_dir, full_path)
             if os.path.isfile(file_path):
-                print(f"📦 Sirviendo archivo: {file_path}")
+                print(f"Sirviendo archivo: {file_path}")
                 return FileResponse(file_path)
             
             # Para rutas de React Router, servir index.html
             index_path = os.path.join(frontend_dir, "index.html")
             if os.path.exists(index_path):
-                print(f"🔄 Ruta SPA, sirviendo index: {index_path}")
+                print(f"Ruta SPA, sirviendo index: {index_path}")
                 return FileResponse(index_path)
             
             raise HTTPException(status_code=404)
     else:
-        print("❌ Frontend NO encontrado")
+        print("Frontend NO encontrado")
 else:
-    print("🔧 Modo desarrollo: Backend API solo (frontend por separado)")
+    print("Modo desarrollo: Backend API solo (frontend por separado)")
 
 
 if __name__ == "__main__":

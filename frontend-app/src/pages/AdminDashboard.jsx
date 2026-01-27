@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchAllUsers, createUser, updateUser, deleteUser } from '../services/api';
 import { useSessionKeepAlive } from '../hooks/useSessionKeepAlive';
 import UbicacionesManager from '../components/UbicacionesManager';
+import SkuMappingManager from '../components/SkuMappingManager';
 import ToastContainer, { toast } from '../components/Toast';
 import ConfirmModal, { confirm } from '../components/ConfirmModal';
 
@@ -11,6 +12,8 @@ export default function AdminDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({ nombre: '', correo: '', rol: 'auditor', contrasena: '' });
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     loadUsers();
@@ -101,7 +104,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map(user => (
+                    {users.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE).map(user => (
                       <tr key={user.id}>
                         <td style={{textAlign: 'left'}}>{user.nombre}</td>
                         <td style={{textAlign: 'left'}}>{user.correo}</td>
@@ -119,6 +122,27 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+              {Math.ceil(users.length / ITEMS_PER_PAGE) > 1 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <button 
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                  >
+                    <i className="bi bi-chevron-left"></i> Anterior
+                  </button>
+                  <span className="text-muted">
+                    Página {currentPage + 1} de {Math.ceil(users.length / ITEMS_PER_PAGE)} ({users.length} usuarios)
+                  </span>
+                  <button 
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(users.length / ITEMS_PER_PAGE) - 1, p + 1))}
+                    disabled={currentPage >= Math.ceil(users.length / ITEMS_PER_PAGE) - 1}
+                  >
+                    Siguiente <i className="bi bi-chevron-right"></i>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -130,6 +154,9 @@ export default function AdminDashboard() {
           <UbicacionesManager />
         </div>
       </div>
+
+      {/* Gestión de Mapeo de SKUs */}
+      <SkuMappingManager />
 
       {/* Modal para agregar/editar usuario */}
       {showModal && (

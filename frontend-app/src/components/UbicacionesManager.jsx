@@ -8,6 +8,8 @@ export default function UbicacionesManager() {
   const [bulkText, setBulkText] = useState('');
   const [loading, setLoading] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     loadUbicaciones();
@@ -112,7 +114,7 @@ export default function UbicacionesManager() {
               </tr>
             </thead>
             <tbody>
-              {sedes.map(sede => (
+              {sedes.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE).map(sede => (
                 <tr key={sede.id}>
                   <td>{sede.id}</td>
                   <td>{sede.nombre}</td>
@@ -129,6 +131,27 @@ export default function UbicacionesManager() {
             </tbody>
           </table>
         </div>
+        {Math.ceil(sedes.length / ITEMS_PER_PAGE) > 1 && (
+          <div className="d-flex justify-content-between align-items-center mt-3">
+            <button 
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+            >
+              <i className="bi bi-chevron-left"></i> Anterior
+            </button>
+            <span className="text-muted">
+              Página {currentPage + 1} de {Math.ceil(sedes.length / ITEMS_PER_PAGE)} ({sedes.length} sedes)
+            </span>
+            <button 
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(sedes.length / ITEMS_PER_PAGE) - 1, p + 1))}
+              disabled={currentPage >= Math.ceil(sedes.length / ITEMS_PER_PAGE) - 1}
+            >
+              Siguiente <i className="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal para carga masiva */}

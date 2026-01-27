@@ -268,6 +268,7 @@ async def iniciar_auditoria(audit_id: int, modo: str = "normal", db: Session = D
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
     if db_audit.estado != "pendiente":
         raise HTTPException(status_code=400, detail=f"No se puede iniciar una auditoría en estado '{db_audit.estado}'")
+    
     db_audit.estado = "en_progreso"
     db_audit.modo_auditoria = modo
     db.commit()
@@ -410,8 +411,10 @@ async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_use
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user.rol != "administrador"):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
 
-    # NO recalcular - el porcentaje ya está actualizado en tiempo real
-    # Solo marcar como finalizada
+    # Recalcular porcentaje antes de finalizar para asegurar consistencia
+    crud.recalculate_and_update_audit_percentage(db, audit_id)
+    
+    # Marcar como finalizada
     db_audit.estado = "finalizada"
     db_audit.finalizada_en = datetime.utcnow()
     db.commit()
@@ -1096,6 +1099,202 @@ async def add_ot_to_audit(
         "productos_agregados": len(all_productos_data),
         "ordenes_agregadas": list(ordenes_procesadas)
     }
+
+@router.post("/{audit_id}/upload-contraparte")
+async def upload_contraparte(
+    audit_id: int,
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Sube archivos de contraparte (segunda auditoría del mismo auditor) y compara con la primera auditoría.
+    Solo para auditorías en modo contraparte.
+    """
+    import logging
+    logger = logging.getLogger("uvicorn")
+    
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit:
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada")
+    
+    if db_audit.modo_auditoria != "contraparte":
+        raise HTTPException(status_code=400, detail="Esta auditoría no está en modo contraparte")
+    
+    if db_audit.estado not in ["en_progreso"]:
+        raise HTTPException(status_code=400, detail="La auditoría debe estar en progreso para subir contraparte")
+    
+    # Validar archivos
+    validate_files_batch(files)
+    
+    # Procesar archivos de contraparte
+    contraparte_data = {}
+    
+    for file_index, file in enumerate(files):
+        content = await file.read()
+        validate_excel_file(file, content)
+        
+        temp_file_path = f"temp_contraparte_{file.filename}_{file_index}"
+        try:
+            with open(temp_file_path, "wb") as buffer:
+                buffer.write(content)
+            
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=None)
+            
+            header_row = None
+            target_patterns = [["número", "documento"], ["sku", "articulo"], ["nombre", "articulo"], ["cantidad"], ["un", "enviada"]]
+            for i in range(len(df)):
+                row_values = [str(cell).lower().strip() if pd.notna(cell) else "" for cell in df.iloc[i]]
+                matches = sum(1 for pattern in target_patterns if any(all(keyword in cell for keyword in pattern) for cell in row_values))
+                if matches >= 3:
+                    header_row = i
+                    break
+            
+            if header_row is None:
+                continue
+            
+            df = pd.read_excel(temp_file_path, engine='openpyxl', header=header_row)
+            
+            exact_mapping = {'Número de documento': 'número de documento', 'SKU ARTICULO': 'sku articulo', 'NOMBRE ARTICULO': 'nombre articulo', 'Cantidad': 'cantidad', 'Un Enviada': 'un enviada'}
+            column_mapping = {}
+            for original_col in df.columns:
+                original_col_str = str(original_col).strip().lower()
+                for key, val in exact_mapping.items():
+                    if original_col_str == key.lower():
+                        column_mapping[original_col] = val
+                        break
+            df = df.rename(columns=column_mapping)
+            
+            required_columns = ["número de documento", "sku articulo", "nombre articulo", "cantidad", "un enviada"]
+            if any(col not in df.columns for col in required_columns):
+                continue
+            
+            df["cantidad"] = pd.to_numeric(df["cantidad"], errors='coerce').fillna(0).astype(int)
+            df["un enviada"] = pd.to_numeric(df["un enviada"], errors='coerce').fillna(0).astype(int)
+            
+            numero_documento = next((str(df.iloc[i][df.columns[0]]).strip() for i in range(len(df)) if pd.notna(df.iloc[i][df.columns[0]]) and "total" not in str(df.iloc[i][df.columns[0]]).lower()), f"Documento_{file_index}")
+            
+            for i, row in df.iterrows():
+                sku_value = row.get("sku articulo")
+                if pd.isna(sku_value) or "total" in str(sku_value).lower():
+                    continue
+                
+                sku = str(sku_value).strip().split('.')[0]
+                orden_traslado = str(numero_documento).strip()
+                if "VE" in orden_traslado:
+                    match = re.search(r'VE\\d+', orden_traslado)
+                    if match:
+                        orden_traslado = match.group(0)
+                
+                # Guardar cantidad_documento de contraparte por SKU y OT
+                key = f"{orden_traslado}_{sku}"
+                contraparte_data[key] = {
+                    "sku": sku,
+                    "ot": orden_traslado,
+                    "cantidad_contraparte": row.get("un enviada", 0),
+                    "nombre": str(row.get("nombre articulo", "Sin nombre")).strip()
+                }
+        
+        finally:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+    
+    if not contraparte_data:
+        raise HTTPException(status_code=400, detail="No se encontraron productos válidos en los archivos de contraparte")
+    
+    # Comparar con productos de la auditoría original
+    productos = crud.get_products_by_audit(db, audit_id)
+    discrepancias = []
+    
+    for producto in productos:
+        key = f"{producto.orden_traslado_original}_{producto.sku}"
+        if key in contraparte_data:
+            contraparte = contraparte_data[key]
+            cantidad_primera = producto.cantidad_fisica if producto.cantidad_fisica is not None else 0
+            cantidad_contraparte = contraparte["cantidad_contraparte"]
+            
+            if cantidad_primera != cantidad_contraparte:
+                discrepancias.append({
+                    "product_id": producto.id,
+                    "sku": producto.sku,
+                    "nombre": producto.nombre_articulo,
+                    "ot": producto.orden_traslado_original,
+                    "cantidad_fisica": cantidad_primera,
+                    "cantidad_contraparte": cantidad_contraparte,
+                    "diferencia": cantidad_contraparte - cantidad_primera,
+                    "resuelta": False
+                })
+    
+    # Cambiar estado sigue siendo en_progreso (no cambia)
+    db.commit()
+    
+    logger.info(f"Contraparte subida para auditoría {audit_id}. Discrepancias: {len(discrepancias)}")
+    
+    return {
+        "message": f"Contraparte procesada. {len(discrepancias)} discrepancia(s) encontrada(s)",
+        "discrepancias": discrepancias,
+        "total_productos": len(productos)
+    }
+
+@router.post("/{audit_id}/resolver-discrepancia")
+async def resolver_discrepancia(
+    audit_id: int,
+    product_id: int,
+    cantidad_correcta: int,
+    observaciones: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Resuelve una discrepancia actualizando la cantidad física y recalculando faltante/sobrante.
+    """
+    db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
+    if not db_audit:
+        raise HTTPException(status_code=404, detail="Auditoría no encontrada")
+    
+    if db_audit.modo_auditoria != "contraparte":
+        raise HTTPException(status_code=400, detail="Esta auditoría no está en modo contraparte")
+    
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    
+    # Actualizar cantidad física
+    db_product.cantidad_fisica = cantidad_correcta
+    
+    # Recalcular faltante/sobrante (NO tocar otras novedades)
+    if db_product.novedad in ["faltante", "sobrante", "sin_novedad"]:
+        if cantidad_correcta < db_product.cantidad_documento:
+            db_product.novedad = "faltante"
+            db_product.observaciones = f"Faltante {db_product.cantidad_documento - cantidad_correcta} unidades. {observaciones or ''}"
+        elif cantidad_correcta > db_product.cantidad_documento:
+            db_product.novedad = "sobrante"
+            db_product.observaciones = f"Sobrante {cantidad_correcta - db_product.cantidad_documento} unidades. {observaciones or ''}"
+        else:
+            db_product.novedad = "sin_novedad"
+            db_product.observaciones = observaciones or "Cantidad correcta verificada"
+    else:
+        # Si tiene otra novedad (avería, vencido, etc.), solo agregar observación
+        if observaciones:
+            db_product.observaciones = f"{db_product.observaciones or ''}. Resolución: {observaciones}"
+    
+    # Registrar en historial
+    history = models.ProductHistory(
+        product_id=product_id,
+        user_id=current_user.id,
+        field_changed="resolucion_discrepancia",
+        old_value=str(db_product.cantidad_fisica),
+        new_value=str(cantidad_correcta)
+    )
+    db.add(history)
+    
+    db.commit()
+    db.refresh(db_product)
+    
+    # Recalcular porcentaje
+    crud.recalculate_and_update_audit_percentage(db, audit_id)
+    
+    return {"message": "Discrepancia resuelta", "product": db_product}
 
 @router.delete("/{audit_id}")
 async def delete_audit(

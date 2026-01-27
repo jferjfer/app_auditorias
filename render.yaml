@@ -4,7 +4,7 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: "pip install -r requirements.txt && cd frontend-app && npm install && npm run build && cd .. && alembic upgrade head"
+    buildCommand: "pip install -r requirements.txt && cd frontend-app && npm install && npm run build && cd .. && alembic stamp head"
     startCommand: "gunicorn -k uvicorn.workers.UvicornWorker backend.main:app"
     envVars:
       - key: PYTHON_VERSION
