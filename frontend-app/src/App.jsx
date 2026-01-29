@@ -8,6 +8,12 @@ const AnalystDashboard = lazy(() => import('./components/AnalystDashboard/Analys
 const AuditorDashboard = lazy(() => import('./pages/AuditorDashboard'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const Login = lazy(() => import('./pages/Login'))
+const UltimaMillaPage = lazy(() => import('./pages/UltimaMillaPage'))
+const BodegasPage = lazy(() => import('./pages/BodegasPage'))
+const DomiciliariosPage = lazy(() => import('./pages/DomiciliariosPage'))
+const PedidosPage = lazy(() => import('./pages/PedidosPage'))
+const AuditarUltimaMillaPage = lazy(() => import('./pages/AuditarUltimaMillaPage'))
+const MisAuditoriasUltimaMillaPage = lazy(() => import('./pages/MisAuditoriasUltimaMillaPage'))
 
 export default function App(){
   const location = useLocation();
@@ -34,6 +40,36 @@ export default function App(){
             <Route path="/admin" element={
               <ProtectedRoute allowedRoles={['administrador']}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <UltimaMillaPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla/mis-auditorias" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <MisAuditoriasUltimaMillaPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla/bodegas" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <BodegasPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla/domiciliarios" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <DomiciliariosPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla/pedidos" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <PedidosPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/ultima-milla/auditar/:auditoriaId" element={
+              <ProtectedRoute allowedRoles={['auditor']}>
+                <AuditarUltimaMillaPage />
               </ProtectedRoute>
             } />
           </Routes>

@@ -358,3 +358,96 @@ class SkuMappingUploadResponse(BaseModel):
     actualizados: int
     errores: int
     detalles_errores: List[str] = []
+
+# --- Esquemas para Última Milla ---
+class ProductoPedidoUltimaMillaBase(BaseModel):
+    sku: str
+    descripcion: str
+    gramaje: Optional[str] = None
+    cantidad_pedida: int
+
+class ProductoPedidoUltimaMilla(ProductoPedidoUltimaMillaBase):
+    id: int
+    pedido_id: int
+    cantidad_fisica: Optional[int] = None
+    novedad: str
+    observaciones: Optional[str] = None
+    auditado_por: Optional[int] = None
+    auditado_en: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class PedidoUltimaMillaBase(BaseModel):
+    bodega: str
+    documento_domiciliario: str
+    nombre_domiciliario: str
+    numero_pedido: str
+
+class PedidoUltimaMilla(PedidoUltimaMillaBase):
+    id: int
+    estado: str
+    fecha_carga: datetime
+    auditoria_id: Optional[int] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class PedidoUltimaMillaConProductos(PedidoUltimaMilla):
+    productos: List[ProductoPedidoUltimaMilla] = []
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class BodegaStats(BaseModel):
+    bodega: str
+    total_domiciliarios: int
+    total_pedidos: int
+    pedidos_pendientes: int
+    pedidos_auditados: int
+
+class DomiciliarioStats(BaseModel):
+    documento: str
+    nombre: str
+    bodega: str
+    total_pedidos: int
+    pedidos_auditados: int
+    pedidos_pendientes: int
+
+class PedidoResumen(BaseModel):
+    numero_pedido: str
+    total_productos: int
+    total_unidades: int
+    estado: str
+
+class ConfirmarAuditorRequest(BaseModel):
+    password: str
+
+class ConfirmarAuditorResponse(BaseModel):
+    confirmed: bool
+    auditor_id: int
+    auditor_nombre: str
+    token_confirmacion: str
+
+class IniciarAuditoriaUltimaMillaRequest(BaseModel):
+    documento_domiciliario: str
+    bodega: str
+    pedidos_seleccionados: Optional[List[str]] = None
+
+class IniciarAuditoriaUltimaMillaResponse(BaseModel):
+    auditoria_id: int
+    total_productos: int
+    pedidos_incluidos: List[str]
+
+class ActualizarProductoUltimaMillaRequest(BaseModel):
+    cantidad_fisica: int
+    novedad: str = 'sin_novedad'
+    observaciones: Optional[str] = None
+
+class FinalizarAuditoriaUltimaMillaResponse(BaseModel):
+    porcentaje_cumplimiento: float
+    productos_auditados: int
+    novedades: dict

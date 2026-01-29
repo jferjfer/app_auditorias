@@ -219,3 +219,50 @@ class SkuMapping(Base):
     
     def __repr__(self):
         return f"<SkuMapping(antiguo='{self.sku_antiguo}', nuevo='{self.sku_nuevo}', activo={self.activo})>"
+
+# --- Modelos para Última Milla ---
+class PedidoUltimaMilla(Base):
+    """Modelo de pedidos de última milla (domiciliarios)"""
+    __tablename__ = "pedidos_ultima_milla"
+    
+    id = Column(Integer, primary_key=True)
+    bodega = Column(String, nullable=False)
+    documento_domiciliario = Column(String, nullable=False)
+    nombre_domiciliario = Column(String, nullable=False)
+    numero_pedido = Column(String, nullable=False, unique=True)
+    estado = Column(String, nullable=False, default='pendiente')
+    fecha_carga = Column(DateTime, default=datetime.utcnow, nullable=False)
+    auditoria_id = Column(Integer, ForeignKey("auditorias.id", ondelete='SET NULL'), nullable=True)
+    
+    auditoria = relationship("Audit")
+    productos = relationship("ProductoPedidoUltimaMilla", back_populates="pedido", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_pedidos_bodega', 'bodega'),
+        Index('idx_pedidos_domiciliario', 'documento_domiciliario'),
+        Index('idx_pedidos_estado', 'estado'),
+    )
+
+class ProductoPedidoUltimaMilla(Base):
+    """Modelo de productos de pedidos de última milla"""
+    __tablename__ = "productos_pedido_ultima_milla"
+    
+    id = Column(Integer, primary_key=True)
+    pedido_id = Column(Integer, ForeignKey("pedidos_ultima_milla.id", ondelete='CASCADE'), nullable=False)
+    sku = Column(String, nullable=False)
+    descripcion = Column(String, nullable=False)
+    gramaje = Column(String, nullable=True)
+    cantidad_pedida = Column(Integer, nullable=False)
+    cantidad_fisica = Column(Integer, nullable=True)
+    novedad = Column(String, nullable=False, default='sin_novedad')
+    observaciones = Column(String, nullable=True)
+    auditado_por = Column(Integer, ForeignKey("usuarios.id", ondelete='SET NULL'), nullable=True)
+    auditado_en = Column(DateTime, nullable=True)
+    
+    pedido = relationship("PedidoUltimaMilla", back_populates="productos")
+    auditor = relationship("User")
+    
+    __table_args__ = (
+        Index('idx_productos_pedido', 'pedido_id'),
+        Index('idx_productos_pedido_sku', 'sku'),
+    )

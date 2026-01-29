@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 load_dotenv()
 
-from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products, sku_mappings
+from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products, sku_mappings, ultima_milla
 from backend.database import engine
 from backend import models
 from backend.middleware.security import rate_limit_middleware
@@ -83,6 +83,7 @@ app.include_router(collaboration.router, prefix="/api")
 app.include_router(ubicaciones.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(sku_mappings.router, prefix="/api")
+app.include_router(ultima_milla.router, prefix="/api")
 
 # Proteger directorio uploads pa q solo usuarios autorizados accedan
 @app.get("/uploads/{path:path}")

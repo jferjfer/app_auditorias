@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   fetchAudits,
   uploadAuditFiles,
@@ -116,6 +117,7 @@ export default function AuditorDashboard() {
   const abortControllerRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
   const user = getCurrentUser();
+  const navigate = useNavigate();
   const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(currentAudit?.id);
   useSessionKeepAlive(30000); // Ping cada 30 segundos
   
@@ -1486,6 +1488,15 @@ export default function AuditorDashboard() {
       `}</style>
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
         <h1 className="h3 mb-0">Dashboard del Auditor</h1>
+        
+        {/* Botón Auditar Última Milla */}
+        <button 
+          className="btn btn-primary"
+          onClick={() => navigate('/ultima-milla')}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          <i className="bi bi-truck"></i> 📦 Auditar Última Milla
+        </button>
         
         {/* Indicador Online/Offline */}
         <div className="d-flex flex-wrap align-items-center gap-2">
