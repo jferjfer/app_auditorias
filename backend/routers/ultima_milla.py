@@ -31,8 +31,8 @@ async def upload_ultima_milla_excel(
     Columnas esperadas: bodega, documento domiciliario, nombre domiciliario, 
                        sku, numero de pedido, descripcion, gramaje, cantidad
     """
-    if current_user.rol != "auditor":
-        raise HTTPException(status_code=403, detail="Solo auditores pueden cargar archivos")
+    if current_user.rol not in ["auditor", "analista", "administrador"]:
+        raise HTTPException(status_code=403, detail="No tienes permisos para cargar archivos")
     
     content = await file.read()
     validate_excel_file(file, content)
@@ -66,14 +66,21 @@ async def upload_ultima_milla_excel(
         bodegas = set()
         domiciliarios = set()
         
+        # Obtener pedidos existentes de una vez
+        numeros_pedidos = df['numero de pedido'].unique().tolist()
+        existing_pedidos = set(
+            p.numero_pedido for p in db.query(models.PedidoUltimaMilla.numero_pedido).filter(
+                models.PedidoUltimaMilla.numero_pedido.in_([str(n) for n in numeros_pedidos])
+            ).all()
+        )
+        
+        pedidos_batch = []
+        productos_batch = []
+        
         # Agrupar por pedido
         for numero_pedido, grupo in df.groupby('numero de pedido'):
             # Verificar si el pedido ya existe
-            existing_pedido = db.query(models.PedidoUltimaMilla).filter(
-                models.PedidoUltimaMilla.numero_pedido == str(numero_pedido)
-            ).first()
-            
-            if existing_pedido:
+            if str(numero_pedido) in existing_pedidos:
                 continue
             
             primera_fila = grupo.iloc[0]
@@ -92,8 +99,7 @@ async def upload_ultima_milla_excel(
                 numero_pedido=str(numero_pedido),
                 estado='pendiente'
             )
-            db.add(pedido)
-            db.flush()
+            pedidos_batch.append(pedido)
             pedidos_creados += 1
             
             # Crear productos del pedido
@@ -102,14 +108,24 @@ async def upload_ultima_milla_excel(
                     continue
                 
                 producto = models.ProductoPedidoUltimaMilla(
-                    pedido_id=pedido.id,
+                    pedido_id=None,  # Se asignará después
                     sku=str(row['sku']).strip(),
                     descripcion=str(row['descripcion']).strip(),
                     gramaje=str(row['gramaje']).strip() if pd.notna(row['gramaje']) else None,
                     cantidad_pedida=int(row['cantidad'])
                 )
-                db.add(producto)
+                productos_batch.append((pedido, producto))
                 productos_creados += 1
+        
+        # Insertar pedidos en lote
+        if pedidos_batch:
+            db.add_all(pedidos_batch)
+            db.flush()
+            
+            # Asignar IDs de pedidos a productos
+            for pedido, producto in productos_batch:
+                producto.pedido_id = pedido.id
+                db.add(producto)
         
         db.commit()
         
@@ -131,8 +147,8 @@ def get_bodegas(
     current_user: models.User = Depends(get_current_user)
 ):
     """Obtiene lista de bodegas con estadísticas"""
-    if current_user.rol != "auditor":
-        raise HTTPException(status_code=403, detail="Solo auditores pueden acceder")
+    if current_user.rol not in ["auditor", "analista", "administrador"]:
+        raise HTTPException(status_code=403, detail="No tienes permisos para acceder")
     
     bodegas = db.query(
         models.PedidoUltimaMilla.bodega,
@@ -175,7 +191,7 @@ def get_domiciliarios(
     current_user: models.User = Depends(get_current_user)
 ):
     """Obtiene lista de domiciliarios de una bodega"""
-    if current_user.rol != "auditor":
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden acceder")
     
     domiciliarios = db.query(
@@ -228,7 +244,7 @@ def get_mis_auditorias_ultima_milla(
     current_user: models.User = Depends(get_current_user)
 ):
     """Obtiene las auditorías de última milla del auditor actual"""
-    if current_user.rol != "auditor":
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden acceder")
     
     # Obtener auditorías de última milla del usuario
@@ -284,7 +300,7 @@ def confirmar_auditor(
     current_user: models.User = Depends(get_current_user)
 ):
     """Confirma identidad del auditor con contraseña"""
-    if current_user.rol != "auditor":
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden confirmar")
     
     # Verificar contraseña
@@ -315,7 +331,7 @@ def get_pedidos_domiciliario(
     current_user: models.User = Depends(get_current_user)
 ):
     """Obtiene pedidos de un domiciliario"""
-    if current_user.rol != "auditor":
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden acceder")
     
     query = db.query(models.PedidoUltimaMilla).filter(
@@ -353,7 +369,7 @@ def iniciar_auditoria_ultima_milla(
     current_user: models.User = Depends(get_current_user)
 ):
     """Inicia auditoría de última milla para un domiciliario"""
-    if current_user.rol != "auditor":
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden iniciar auditorías")
     
     # Obtener pedidos
@@ -408,7 +424,7 @@ def get_productos_auditoria(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Obtiene productos de una auditoría de última milla"""
+    """Obtiene productos de una auditoría de última milla con novedades"""
     auditoria = db.query(models.Audit).filter(models.Audit.id == auditoria_id).first()
     
     if not auditoria:
@@ -424,17 +440,28 @@ def get_productos_auditoria(
     
     pedido_ids = [p.id for p in pedidos]
     
-    # Obtener productos con información del pedido
-    productos = db.query(models.ProductoPedidoUltimaMilla).filter(
+    # Obtener productos con novedades
+    productos = db.query(models.ProductoPedidoUltimaMilla).options(
+        joinedload(models.ProductoPedidoUltimaMilla.novedades)
+    ).filter(
         models.ProductoPedidoUltimaMilla.pedido_id.in_(pedido_ids)
     ).all()
     
     # Crear diccionario de pedidos para búsqueda rápida
     pedidos_dict = {p.id: p.numero_pedido for p in pedidos}
     
-    # Agregar numero_pedido a cada producto
+    # Agregar numero_pedido y novedades a cada producto
     result = []
     for producto in productos:
+        novedades_list = [
+            {
+                'tipo': nov.tipo_novedad,
+                'cantidad': nov.cantidad,
+                'observaciones': nov.observaciones
+            }
+            for nov in producto.novedades
+        ]
+        
         result.append({
             'id': producto.id,
             'pedido_id': producto.pedido_id,
@@ -447,7 +474,8 @@ def get_productos_auditoria(
             'observaciones': producto.observaciones,
             'auditado_por': producto.auditado_por,
             'auditado_en': producto.auditado_en,
-            'numero_pedido': pedidos_dict.get(producto.pedido_id, 'N/A')
+            'numero_pedido': pedidos_dict.get(producto.pedido_id, 'N/A'),
+            'novedades': novedades_list
         })
     
     return result
@@ -459,8 +487,8 @@ def actualizar_producto_ultima_milla(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Actualiza producto de última milla durante auditoría"""
-    if current_user.rol != "auditor":
+    """Actualiza producto de última milla con novedades múltiples"""
+    if current_user.rol not in ["auditor", "administrador"]:
         raise HTTPException(status_code=403, detail="Solo auditores pueden actualizar")
     
     producto = db.query(models.ProductoPedidoUltimaMilla).filter(
@@ -483,12 +511,44 @@ def actualizar_producto_ultima_milla(
     if auditoria.auditor_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes acceso a esta auditoría")
     
+    # Validar que suma de novedades = cantidad_fisica
+    suma_novedades = sum(n.get('cantidad', 0) for n in request.novedades)
+    if suma_novedades != request.cantidad_fisica:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"La suma de novedades ({suma_novedades}) debe ser igual a cantidad física ({request.cantidad_fisica})"
+        )
+    
     # Actualizar producto
     producto.cantidad_fisica = request.cantidad_fisica
-    producto.novedad = request.novedad
     producto.observaciones = request.observaciones
     producto.auditado_por = current_user.id
     producto.auditado_en = datetime.utcnow()
+    
+    # Determinar novedad principal (la que tenga mayor cantidad que no sea sin_novedad)
+    novedad_principal = 'sin_novedad'
+    max_cantidad = 0
+    for nov in request.novedades:
+        if nov.get('tipo') != 'sin_novedad' and nov.get('cantidad', 0) > max_cantidad:
+            max_cantidad = nov.get('cantidad', 0)
+            novedad_principal = nov.get('tipo')
+    producto.novedad = novedad_principal
+    
+    # Eliminar novedades anteriores
+    db.query(models.NovedadProductoUltimaMilla).filter(
+        models.NovedadProductoUltimaMilla.producto_id == producto_id
+    ).delete()
+    
+    # Crear nuevas novedades
+    for novedad_data in request.novedades:
+        if novedad_data.get('cantidad', 0) > 0:
+            novedad = models.NovedadProductoUltimaMilla(
+                producto_id=producto_id,
+                tipo_novedad=novedad_data['tipo'],
+                cantidad=novedad_data['cantidad'],
+                observaciones=novedad_data.get('observaciones')
+            )
+            db.add(novedad)
     
     db.commit()
     db.refresh(producto)
@@ -501,7 +561,7 @@ def finalizar_auditoria_ultima_milla(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Finaliza auditoría de última milla"""
+    """Finaliza auditoría de última milla con cálculo de novedades"""
     auditoria = db.query(models.Audit).filter(models.Audit.id == auditoria_id).first()
     
     if not auditoria:
@@ -517,22 +577,34 @@ def finalizar_auditoria_ultima_milla(
     
     pedido_ids = [p.id for p in pedidos]
     
-    productos = db.query(models.ProductoPedidoUltimaMilla).filter(
+    productos = db.query(models.ProductoPedidoUltimaMilla).options(
+        joinedload(models.ProductoPedidoUltimaMilla.novedades)
+    ).filter(
         models.ProductoPedidoUltimaMilla.pedido_id.in_(pedido_ids)
     ).all()
     
     # Calcular cumplimiento
     total_productos = len(productos)
     productos_auditados = sum(1 for p in productos if p.cantidad_fisica is not None)
-    productos_ok = sum(1 for p in productos if p.novedad == 'sin_novedad' and p.cantidad_fisica == p.cantidad_pedida)
+    
+    # Contar productos OK: cantidad física = pedida Y solo tiene novedad 'sin_novedad'
+    productos_ok = 0
+    for p in productos:
+        if p.cantidad_fisica == p.cantidad_pedida:
+            # Verificar que todas las novedades sean 'sin_novedad'
+            if all(n.tipo_novedad == 'sin_novedad' for n in p.novedades):
+                productos_ok += 1
     
     porcentaje_cumplimiento = (productos_ok / total_productos * 100) if total_productos > 0 else 0
     
-    # Contar novedades
+    # Contar novedades por tipo desde la tabla de novedades
     novedades = {}
     for producto in productos:
-        novedad = producto.novedad or 'sin_novedad'
-        novedades[novedad] = novedades.get(novedad, 0) + 1
+        for novedad in producto.novedades:
+            tipo = novedad.tipo_novedad
+            if tipo not in novedades:
+                novedades[tipo] = 0
+            novedades[tipo] += novedad.cantidad
     
     # Actualizar auditoría
     auditoria.estado = 'finalizada'
@@ -604,3 +676,79 @@ def get_cumplimiento_por_bodega(
         }
         for s in stats
     ]
+
+@router.delete("/limpiar-pendientes")
+def limpiar_pedidos_pendientes(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Elimina todos los pedidos pendientes (solo analistas)"""
+    if current_user.rol != "analista":
+        raise HTTPException(status_code=403, detail="Solo analistas pueden limpiar pedidos")
+    
+    # Contar pedidos a eliminar
+    count = db.query(models.PedidoUltimaMilla).filter(
+        models.PedidoUltimaMilla.estado == 'pendiente'
+    ).count()
+    
+    # Eliminar productos de pedidos pendientes
+    pedidos_pendientes = db.query(models.PedidoUltimaMilla).filter(
+        models.PedidoUltimaMilla.estado == 'pendiente'
+    ).all()
+    
+    pedido_ids = [p.id for p in pedidos_pendientes]
+    
+    if pedido_ids:
+        db.query(models.ProductoPedidoUltimaMilla).filter(
+            models.ProductoPedidoUltimaMilla.pedido_id.in_(pedido_ids)
+        ).delete(synchronize_session=False)
+        
+        # Eliminar pedidos
+        db.query(models.PedidoUltimaMilla).filter(
+            models.PedidoUltimaMilla.estado == 'pendiente'
+        ).delete(synchronize_session=False)
+    
+    db.commit()
+    
+    return {
+        "message": f"Se eliminaron {count} pedidos pendientes",
+        "eliminados": count
+    }
+
+@router.delete("/limpiar-antiguos")
+def limpiar_pedidos_antiguos(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Elimina pedidos pendientes con más de 24 horas (solo analistas)"""
+    if current_user.rol != "analista":
+        raise HTTPException(status_code=403, detail="Solo analistas pueden limpiar pedidos")
+    
+    limite = datetime.utcnow() - timedelta(hours=24)
+    
+    # Contar pedidos a eliminar
+    pedidos_antiguos = db.query(models.PedidoUltimaMilla).filter(
+        models.PedidoUltimaMilla.estado == 'pendiente',
+        models.PedidoUltimaMilla.fecha_carga < limite
+    ).all()
+    
+    count = len(pedidos_antiguos)
+    pedido_ids = [p.id for p in pedidos_antiguos]
+    
+    if pedido_ids:
+        # Eliminar productos
+        db.query(models.ProductoPedidoUltimaMilla).filter(
+            models.ProductoPedidoUltimaMilla.pedido_id.in_(pedido_ids)
+        ).delete(synchronize_session=False)
+        
+        # Eliminar pedidos
+        db.query(models.PedidoUltimaMilla).filter(
+            models.PedidoUltimaMilla.id.in_(pedido_ids)
+        ).delete(synchronize_session=False)
+    
+    db.commit()
+    
+    return {
+        "message": f"Se eliminaron {count} pedidos antiguos (>24h)",
+        "eliminados": count
+    }

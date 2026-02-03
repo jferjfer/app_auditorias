@@ -1492,7 +1492,7 @@ export default function AuditorDashboard() {
         {/* Botón Auditar Última Milla */}
         <button 
           className="btn btn-primary"
-          onClick={() => navigate('/ultima-milla')}
+          onClick={() => navigate('/ultima-milla/bodegas')}
           style={{ whiteSpace: 'nowrap' }}
         >
           <i className="bi bi-truck"></i> 📦 Auditar Última Milla

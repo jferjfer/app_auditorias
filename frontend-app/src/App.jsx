@@ -43,32 +43,32 @@ export default function App(){
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['analista', 'auditor', 'administrador']}>
                 <UltimaMillaPage />
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla/mis-auditorias" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['auditor', 'administrador']}>
                 <MisAuditoriasUltimaMillaPage />
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla/bodegas" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['auditor', 'analista', 'administrador']}>
                 <BodegasPage />
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla/domiciliarios" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['auditor', 'administrador']}>
                 <DomiciliariosPage />
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla/pedidos" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['auditor', 'administrador']}>
                 <PedidosPage />
               </ProtectedRoute>
             } />
             <Route path="/ultima-milla/auditar/:auditoriaId" element={
-              <ProtectedRoute allowedRoles={['auditor']}>
+              <ProtectedRoute allowedRoles={['auditor', 'administrador']}>
                 <AuditarUltimaMillaPage />
               </ProtectedRoute>
             } />

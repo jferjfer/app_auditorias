@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Filters from './Filters'
 import KPIs from './KPIs'
 import Charts from './Charts'
@@ -10,6 +11,7 @@ import { API_BASE_URL } from '../../services/api'
 import ToastContainer, { toast } from '../Toast'
 
 export default function AnalystDashboard(){
+  const navigate = useNavigate()
   useSessionKeepAlive(30000); // Ping cada 30 segundos
   const { data, loading, error, filters, setFilters, reload } = useStats()
   const [audits, setAudits] = useState([])
@@ -45,7 +47,13 @@ export default function AnalystDashboard(){
       setCurrentPage(0) // Reset a primera página
     } catch (err) {
       console.error('Error cargando auditorías:', err)
-      toast.error('Error cargando auditorías: ' + err.message)
+      // Si es error 502, mostrar mensaje específico
+      if (err.message.includes('502')) {
+        toast.error('El servidor está sobrecargado. Intenta con un rango de fechas más pequeño.')
+      } else {
+        toast.error('Error cargando auditorías: ' + err.message)
+      }
+      setAudits([]) // Limpiar auditorías en caso de error
     } finally {
       setLoadingAudits(false)
     }
@@ -149,11 +157,19 @@ export default function AnalystDashboard(){
     <div className="container-fluid" style={{padding: '0', maxWidth: '100%'}}>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h1 className="h3 mb-0">Dashboard del Analista</h1>
-        {Object.keys(filters).length > 0 && (
-          <span className="badge bg-info" style={{fontSize: '14px'}}>
-            <i className="bi bi-funnel-fill"></i> {Object.keys(filters).length} filtro(s) activo(s)
-          </span>
-        )}
+        <div className="d-flex gap-2 align-items-center">
+          <button 
+            className="btn btn-primary"
+            onClick={() => navigate('/ultima-milla')}
+          >
+            <i className="bi bi-truck"></i> 📦 Gestionar Última Milla
+          </button>
+          {Object.keys(filters).length > 0 && (
+            <span className="badge bg-info" style={{fontSize: '14px'}}>
+              <i className="bi bi-funnel-fill"></i> {Object.keys(filters).length} filtro(s) activo(s)
+            </span>
+          )}
+        </div>
       </div>
 
       <Filters onChange={setFilters} initial={filters} />

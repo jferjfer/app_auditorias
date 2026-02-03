@@ -59,12 +59,13 @@ export default function Filters({ onChange, initial = {} }){
   function formatYMD(v){
     if(!v) return ''
     const d = v instanceof Date ? v : new Date(v)
-    // Ajustar por timezone local
-    const yyyy = d.getFullYear()
-    const mm = String(d.getMonth()+1).padStart(2,'0')
-    const dd = String(d.getDate()).padStart(2,'0')
-    console.log('Formatting date:', v, 'Result:', `${yyyy}-${mm}-${dd}`)
-    return `${yyyy}-${mm}-${dd}`
+    // Usar UTC para evitar problemas de timezone
+    const yyyy = d.getUTCFullYear()
+    const mm = String(d.getUTCMonth()+1).padStart(2,'0')
+    const dd = String(d.getUTCDate()).padStart(2,'0')
+    const result = `${yyyy}-${mm}-${dd}`
+    console.log('Formatting date:', v, 'Result:', result)
+    return result
   }
 
   return (

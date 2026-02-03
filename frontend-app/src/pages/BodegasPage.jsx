@@ -21,10 +21,17 @@ function BodegasPage() {
             const response = await fetch(`${API_BASE_URL}/api/ultima-milla/bodegas`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            
+            if (!response.ok) {
+                throw new Error(`Error ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
-            setBodegas(data);
+            console.log('Bodegas cargadas:', data);
+            setBodegas(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error cargando bodegas:', error);
+            setBodegas([]);
         } finally {
             setLoading(false);
         }

@@ -122,7 +122,7 @@ function PedidosPage() {
                                             <div>
                                                 <h5 className="mb-1">Pedido #{pedido.numero_pedido}</h5>
                                                 <small className="text-muted">
-                                                    {pedido.total_productos} productos | {pedido.total_unidades} unidades
+                                                    {pedido.total_productos} SKU | {pedido.total_unidades} unidades
                                                 </small>
                                             </div>
                                             <span className="badge bg-warning text-dark">Pendiente</span>
@@ -162,7 +162,7 @@ function PedidosPage() {
                                     <div>
                                         <h5 className="mb-1">Pedido #{pedido.numero_pedido}</h5>
                                         <small className="text-muted">
-                                            {pedido.total_productos} productos | {pedido.total_unidades} unidades
+                                            {pedido.total_productos} SKU | {pedido.total_unidades} unidades
                                         </small>
                                     </div>
                                     <span className="badge bg-success">✓ Auditado</span>

@@ -261,8 +261,27 @@ class ProductoPedidoUltimaMilla(Base):
     
     pedido = relationship("PedidoUltimaMilla", back_populates="productos")
     auditor = relationship("User")
+    novedades = relationship("NovedadProductoUltimaMilla", back_populates="producto", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_productos_pedido', 'pedido_id'),
         Index('idx_productos_pedido_sku', 'sku'),
+    )
+
+class NovedadProductoUltimaMilla(Base):
+    """Novedades con cantidades para productos de última milla"""
+    __tablename__ = "novedades_producto_ultima_milla"
+    
+    id = Column(Integer, primary_key=True)
+    producto_id = Column(Integer, ForeignKey("productos_pedido_ultima_milla.id", ondelete='CASCADE'), nullable=False)
+    tipo_novedad = Column(String, nullable=False)
+    cantidad = Column(Integer, nullable=False)
+    observaciones = Column(String, nullable=True)
+    creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    producto = relationship("ProductoPedidoUltimaMilla", back_populates="novedades")
+    
+    __table_args__ = (
+        Index('idx_novedades_producto_ultima_milla', 'producto_id'),
+        Index('idx_novedades_tipo_ultima_milla', 'tipo_novedad'),
     )

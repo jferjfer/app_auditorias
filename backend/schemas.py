@@ -444,7 +444,7 @@ class IniciarAuditoriaUltimaMillaResponse(BaseModel):
 
 class ActualizarProductoUltimaMillaRequest(BaseModel):
     cantidad_fisica: int
-    novedad: str = 'sin_novedad'
+    novedades: List[dict]  # [{'tipo': 'sin_novedad', 'cantidad': 8}, {'tipo': 'averia', 'cantidad': 2}]
     observaciones: Optional[str] = None
 
 class FinalizarAuditoriaUltimaMillaResponse(BaseModel):
