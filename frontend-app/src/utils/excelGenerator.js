@@ -109,11 +109,12 @@ export function prepareReportData(audits) {
         const novedad = product.novedad || 'sin_novedad';
         noveltyCounts[novedad] = (noveltyCounts[novedad] || 0) + 1;
         
-        // Contar novedades de la tabla novelties (averías, vencidos, etc.)
+        // Contar novedades de la tabla novelties (averías, vencidos, etc.) CON CANTIDADES
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
             const tipo = nov.novedad_tipo || nov.tipo;
-            noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + 1;
+            const cantidad = nov.cantidad || 1;
+            noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + cantidad;
           });
         }
       });
