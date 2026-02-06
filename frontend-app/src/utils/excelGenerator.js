@@ -40,24 +40,33 @@ export function generateExcelReport(reportData, reportType, filters) {
   const productsData = [
     ['DETALLE DE PRODUCTOS'],
     [],
-    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
-    ...products.map((p, index) => [
-      index + 1,
-      p.audit_id || 'N/A',
-      p.fecha_auditoria || 'N/A',
-      p.auditor_nombre || 'N/A',
-      p.auditado_por || p.auditor_nombre || 'N/A',
-      p.orden_traslado_original || 'N/A',
-      p.sku,
-      p.nombre_articulo,
-      p.ubicacion_origen || 'N/A',
-      p.ubicacion_destino || 'N/A',
-      p.novedad,
-      p.cantidad_documento,
-      p.cantidad_fisica || 0,
-      (p.cantidad_fisica || 0) - (p.cantidad_documento || 0),
-      p.observaciones || ''
-    ])
+    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedad', 'Cantidad Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
+    ...products.map((p, index) => {
+      // Obtener cantidad de la novedad desde novelties
+      let cantidadNovedad = '';
+      if (p.novelties && p.novelties.length > 0) {
+        cantidadNovedad = p.novelties.map(n => `${n.novedad_tipo || n.tipo}: ${n.cantidad}`).join(', ');
+      }
+      
+      return [
+        index + 1,
+        p.audit_id || 'N/A',
+        p.fecha_auditoria || 'N/A',
+        p.auditor_nombre || 'N/A',
+        p.auditado_por || p.auditor_nombre || 'N/A',
+        p.orden_traslado_original || 'N/A',
+        p.sku,
+        p.nombre_articulo,
+        p.ubicacion_origen || 'N/A',
+        p.ubicacion_destino || 'N/A',
+        p.novedad,
+        cantidadNovedad || 'N/A',
+        p.cantidad_documento,
+        p.cantidad_fisica || 0,
+        (p.cantidad_fisica || 0) - (p.cantidad_documento || 0),
+        p.observaciones || ''
+      ];
+    })
   ];
 
   const wsProductos = XLSX.utils.aoa_to_sheet(productsData);
@@ -75,6 +84,7 @@ export function generateExcelReport(reportData, reportType, filters) {
     { wch: 20 },  // Origen
     { wch: 20 },  // Destino
     { wch: 15 },  // Novedad
+    { wch: 25 },  // Cantidad Novedad
     { wch: 10 },  // Cant. Doc
     { wch: 10 },  // Cant. Fís
     { wch: 10 },  // Diferencia
