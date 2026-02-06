@@ -45,7 +45,7 @@ export function generateExcelReport(reportData, reportType, filters) {
       // Obtener cantidad de la novedad desde novelties
       let cantidadNovedad = '';
       if (p.novelties && p.novelties.length > 0) {
-        cantidadNovedad = p.novelties.map(n => `${n.novedad_tipo || n.tipo}: ${n.cantidad}`).join(', ');
+        cantidadNovedad = p.novelties.map(n => n.cantidad).join(', ');
       }
       
       return [
