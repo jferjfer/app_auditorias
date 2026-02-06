@@ -625,6 +625,7 @@ async def get_report_details(
                 "cantidad_documento": p.cantidad_documento,
                 "cantidad_fisica": p.cantidad_fisica,
                 "novedad": novedad_combinada,
+                "novelties": [{"novedad_tipo": n.novedad_tipo.value if hasattr(n.novedad_tipo, 'value') else str(n.novedad_tipo), "cantidad": n.cantidad, "observaciones": n.observaciones} for n in (p.novelties if hasattr(p, 'novelties') and p.novelties else [])],
                 "observaciones": p.observaciones,
                 "orden_traslado_original": p.orden_traslado_original,
                 "auditado_por": auditado_por
