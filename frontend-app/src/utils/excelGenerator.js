@@ -40,12 +40,16 @@ export function generateExcelReport(reportData, reportType, filters) {
   const productsData = [
     ['DETALLE DE PRODUCTOS'],
     [],
-    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedad', 'Cantidad Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
+    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedades', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
     ...products.map((p, index) => {
-      // Obtener cantidad de la novedad desde novelties
-      let cantidadNovedad = '';
+      // Obtener todas las novedades con cantidades desde novelties
+      let novedadesTexto = 'sin_novedad';
       if (p.novelties && p.novelties.length > 0) {
-        cantidadNovedad = p.novelties.map(n => n.cantidad).join(', ');
+        novedadesTexto = p.novelties.map(n => {
+          const tipo = n.novedad_tipo || n.tipo || 'N/A';
+          const cantidad = n.cantidad || 0;
+          return `${tipo}: ${cantidad}`;
+        }).join(', ');
       }
       
       return [
@@ -59,8 +63,7 @@ export function generateExcelReport(reportData, reportType, filters) {
         p.nombre_articulo,
         p.ubicacion_origen || 'N/A',
         p.ubicacion_destino || 'N/A',
-        p.novedad,
-        cantidadNovedad || 'N/A',
+        novedadesTexto,
         p.cantidad_documento,
         p.cantidad_fisica || 0,
         (p.cantidad_fisica || 0) - (p.cantidad_documento || 0),
@@ -83,8 +86,7 @@ export function generateExcelReport(reportData, reportType, filters) {
     { wch: 40 },  // Descripción
     { wch: 20 },  // Origen
     { wch: 20 },  // Destino
-    { wch: 15 },  // Novedad
-    { wch: 25 },  // Cantidad Novedad
+    { wch: 35 },  // Novedades (más ancho para tipo:cantidad)
     { wch: 10 },  // Cant. Doc
     { wch: 10 },  // Cant. Fís
     { wch: 10 },  // Diferencia
@@ -115,17 +117,16 @@ export function prepareReportData(audits) {
         });
         totalProductos += product.cantidad_fisica || 0;
         
-        // Contar novedad del campo principal (faltante/sobrante)
-        const novedad = product.novedad || 'sin_novedad';
-        noveltyCounts[novedad] = (noveltyCounts[novedad] || 0) + 1;
-        
-        // Contar novedades de la tabla novelties (averías, vencidos, etc.) CON CANTIDADES
+        // Contar SOLO desde product_novelties (incluye faltante/sobrante con cantidades)
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
             const tipo = nov.novedad_tipo || nov.tipo;
             const cantidad = nov.cantidad || 1;
             noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + cantidad;
           });
+        } else if (product.novedad && product.novedad !== 'sin_novedad') {
+          // Fallback: si no hay novelties pero sí hay novedad en el campo, contar como 1
+          noveltyCounts[product.novedad] = (noveltyCounts[product.novedad] || 0) + 1;
         }
       });
     }

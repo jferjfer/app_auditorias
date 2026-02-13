@@ -569,6 +569,13 @@ export default function AuditorDashboard() {
         setModoConteoRapido(false);
       }
       
+      // Establecer modo contraparte (independiente de conteo rápido)
+      if (data.modo_auditoria === 'contraparte') {
+        setModoContraparte(true);
+      } else {
+        setModoContraparte(false);
+      }
+      
       const index = {};
       prods.forEach(p => {
         const normalizedSku = String(p.sku).toUpperCase().replace(/^0+/, '').substring(0, 50);

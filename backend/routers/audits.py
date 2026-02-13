@@ -347,6 +347,12 @@ async def update_product_endpoint(audit_id: int, product_id: int, product: schem
             except Exception as novelty_error:
                 print(f"❌ Error guardando novedades: {novelty_error}")
                 # No fallar todo el update por error en novedades
+        else:
+            # Si no hay novelties explícitas, crear faltante/sobrante automáticamente
+            try:
+                crud.create_product_novelties(db, product_id, [], current_user.id)
+            except Exception as e:
+                print(f"⚠️ Error creando faltante/sobrante automático: {e}")
         
         updated_product.last_modified_by_id = current_user.id
         updated_product.last_modified_at = datetime.utcnow()
@@ -1214,6 +1220,13 @@ async def upload_contraparte(
             cantidad_primera = producto.cantidad_fisica if producto.cantidad_fisica is not None else 0
             cantidad_contraparte = contraparte["cantidad_contraparte"]
             
+            # Calcular novedad automáticamente (sobrante/faltante)
+            novedad_tipo = "sin_novedad"
+            if cantidad_contraparte < producto.cantidad_documento:
+                novedad_tipo = "faltante"
+            elif cantidad_contraparte > producto.cantidad_documento:
+                novedad_tipo = "sobrante"
+            
             if cantidad_primera != cantidad_contraparte:
                 discrepancias.append({
                     "product_id": producto.id,
@@ -1222,7 +1235,9 @@ async def upload_contraparte(
                     "ot": producto.orden_traslado_original,
                     "cantidad_fisica": cantidad_primera,
                     "cantidad_contraparte": cantidad_contraparte,
+                    "cantidad_documento": producto.cantidad_documento,
                     "diferencia": cantidad_contraparte - cantidad_primera,
+                    "novedad": novedad_tipo,
                     "resuelta": False
                 })
     
@@ -1247,7 +1262,7 @@ async def resolver_discrepancia(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Resuelve una discrepancia actualizando la cantidad física y recalculando faltante/sobrante.
+    Resuelve una discrepancia actualizando la cantidad física y guardando novedades.
     """
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit:
@@ -1260,24 +1275,21 @@ async def resolver_discrepancia(
     if not db_product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     
-    # Actualizar cantidad física
+    # Actualizar cantidad física con la cantidad correcta (contraparte)
     db_product.cantidad_fisica = cantidad_correcta
     
-    # Recalcular faltante/sobrante (NO tocar otras novedades)
-    if db_product.novedad in ["faltante", "sobrante", "sin_novedad"]:
-        if cantidad_correcta < db_product.cantidad_documento:
-            db_product.novedad = "faltante"
-            db_product.observaciones = f"Faltante {db_product.cantidad_documento - cantidad_correcta} unidades. {observaciones or ''}"
-        elif cantidad_correcta > db_product.cantidad_documento:
-            db_product.novedad = "sobrante"
-            db_product.observaciones = f"Sobrante {cantidad_correcta - db_product.cantidad_documento} unidades. {observaciones or ''}"
-        else:
-            db_product.novedad = "sin_novedad"
-            db_product.observaciones = observaciones or "Cantidad correcta verificada"
+    # Calcular novedad comparando cantidad_correcta vs cantidad_documento
+    if cantidad_correcta < db_product.cantidad_documento:
+        db_product.novedad = "faltante"
+        diferencia = db_product.cantidad_documento - cantidad_correcta
+        db_product.observaciones = f"Faltante {diferencia} unidades. {observaciones or ''}"
+    elif cantidad_correcta > db_product.cantidad_documento:
+        db_product.novedad = "sobrante"
+        diferencia = cantidad_correcta - db_product.cantidad_documento
+        db_product.observaciones = f"Sobrante {diferencia} unidades. {observaciones or ''}"
     else:
-        # Si tiene otra novedad (avería, vencido, etc.), solo agregar observación
-        if observaciones:
-            db_product.observaciones = f"{db_product.observaciones or ''}. Resolución: {observaciones}"
+        db_product.novedad = "sin_novedad"
+        db_product.observaciones = observaciones or "Cantidad correcta verificada"
     
     # Registrar en historial
     history = models.ProductHistory(

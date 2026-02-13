@@ -208,6 +208,11 @@ def create_product_novelties(db: Session, product_id: int, novelties: list, user
     print(f"   Novedades recibidas: {novelties}")
     
     try:
+        # Obtener producto para calcular faltante/sobrante
+        db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+        if not db_product:
+            return False
+        
         # Eliminar novedades anteriores
         deleted = db.query(models.ProductNovelty).filter(
             models.ProductNovelty.product_id == product_id
@@ -235,6 +240,33 @@ def create_product_novelties(db: Session, product_id: int, novelties: list, user
                 )
                 db.add(db_novelty)
                 created_count += 1
+        
+        # Agregar faltante/sobrante automáticamente si aplica
+        if db_product.cantidad_fisica is not None and db_product.cantidad_documento is not None:
+            diferencia = db_product.cantidad_fisica - db_product.cantidad_documento
+            
+            if diferencia < 0:  # Faltante
+                db_novelty = models.ProductNovelty(
+                    product_id=product_id,
+                    novedad_tipo=models.NovedadEnum.faltante,
+                    cantidad=abs(diferencia),
+                    observaciones=f"Faltante de {abs(diferencia)} unidades",
+                    user_id=user_id
+                )
+                db.add(db_novelty)
+                created_count += 1
+                print(f"   📉 Agregado faltante: {abs(diferencia)} unidades")
+            elif diferencia > 0:  # Sobrante
+                db_novelty = models.ProductNovelty(
+                    product_id=product_id,
+                    novedad_tipo=models.NovedadEnum.sobrante,
+                    cantidad=diferencia,
+                    observaciones=f"Sobrante de {diferencia} unidades",
+                    user_id=user_id
+                )
+                db.add(db_novelty)
+                created_count += 1
+                print(f"   📈 Agregado sobrante: {diferencia} unidades")
         
         db.commit()
         print(f"   ✅ Creadas {created_count} novedades nuevas")
@@ -305,19 +337,12 @@ def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optio
         total_skus = len(skus_unicos)
         skus_con_auditoria = len(skus_auditados)
         
-        # Calcular porcentaje exacto
-        porcentaje_exacto = (skus_con_auditoria / total_skus) * 100
-        
-        # Si está muy cerca del 100% (99% o más), redondear hacia arriba
-        if porcentaje_exacto >= 99.0:
-            cumplimiento = math.ceil(porcentaje_exacto)
-        else:
-            cumplimiento = round(porcentaje_exacto)
+        # Calcular porcentaje exacto sin redondeos
+        cumplimiento = int((skus_con_auditoria / total_skus) * 100)
         
         print(f"   📦 SKUs únicos: {total_skus}")
         print(f"   ✅ SKUs auditados: {skus_con_auditoria}")
-        print(f"   📐 Porcentaje exacto: {porcentaje_exacto:.2f}%")
-        print(f"   ✅ Cumplimiento final: {cumplimiento}%")
+        print(f"   ✅ Cumplimiento: {cumplimiento}%")
 
     db_audit.porcentaje_cumplimiento = cumplimiento
     db.commit()
