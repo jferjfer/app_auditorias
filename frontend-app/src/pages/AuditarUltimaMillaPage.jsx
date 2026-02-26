@@ -44,6 +44,11 @@ function AuditarUltimaMillaPage() {
     const [lastScannedProduct, setLastScannedProduct] = useState(null);
     const [showQuickModal, setShowQuickModal] = useState(false);
     const [editingProductId, setEditingProductId] = useState(null);
+    const [showSearchModal, setShowSearchModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showPedidoSelectorModal, setShowPedidoSelectorModal] = useState(false);
+    const [productosConMismoSku, setProductosConMismoSku] = useState([]);
+    const [cantidadesPorProducto, setCantidadesPorProducto] = useState({});
     const autoSaveTimerRef = useRef(null);
     const navigate = useNavigate();
 
@@ -106,15 +111,60 @@ function AuditarUltimaMillaPage() {
 
     // 🚀 ESCANEO CON AUTO-INCREMENTO INMEDIATO
     const procesarEscaneo = async (sku) => {
-        const producto = productos.find(p => 
+        const productosEncontrados = productos.filter(p => 
             p.sku.toLowerCase().includes(sku.toLowerCase())
         );
         
-        if (!producto) {
+        if (productosEncontrados.length === 0) {
             console.log('❌ Producto no encontrado:', sku);
             return;
         }
 
+        // Si hay múltiples productos con el mismo SKU, mostrar selector
+        if (productosEncontrados.length > 1) {
+            console.log('🔍 Múltiples productos encontrados:', productosEncontrados.length);
+            setProductosConMismoSku(productosEncontrados);
+            // Inicializar cantidades con valores actuales
+            const cantidadesIniciales = {};
+            productosEncontrados.forEach(p => {
+                cantidadesIniciales[p.id] = p.cantidad_fisica || '';
+            });
+            setCantidadesPorProducto(cantidadesIniciales);
+            setShowPedidoSelectorModal(true);
+            return;
+        }
+
+        // Si solo hay uno, procesar directamente
+        const producto = productosEncontrados[0];
+        incrementarProducto(producto);
+    };
+
+    const handleGuardarPedidosSeleccionados = async () => {
+        const productosAActualizar = productosConMismoSku.filter(p => 
+            cantidadesPorProducto[p.id] !== '' && cantidadesPorProducto[p.id] !== null
+        );
+
+        if (productosAActualizar.length === 0) {
+            alert('⚠️ Ingresa al menos una cantidad física');
+            return;
+        }
+
+        for (const producto of productosAActualizar) {
+            const cantidad = parseInt(cantidadesPorProducto[producto.id]);
+            await handleActualizarProducto(producto.id, {
+                cantidad_fisica: cantidad,
+                novedades: [{ tipo: 'sin_novedad', cantidad: cantidad, observaciones: '' }],
+                observaciones: ''
+            });
+        }
+
+        await loadProductos();
+        setShowPedidoSelectorModal(false);
+        setProductosConMismoSku([]);
+        setCantidadesPorProducto({});
+    };
+
+    const incrementarProducto = async (producto) => {
         console.log('✅ Producto encontrado:', producto.sku, 'Cantidad actual:', producto.cantidad_fisica);
 
         // Incrementar cantidad física automáticamente
@@ -149,7 +199,7 @@ function AuditarUltimaMillaPage() {
             );
         });
         
-        setLastScannedSku(sku);
+        setLastScannedSku(producto.sku);
         setLastScannedProduct(producto);
         document.getElementById(`producto-${producto.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
@@ -273,6 +323,14 @@ function AuditarUltimaMillaPage() {
 
     const productosAuditados = productos.filter(p => p.cantidad_fisica !== null).length;
     const progreso = productos.length > 0 ? (productosAuditados / productos.length * 100).toFixed(1) : 0;
+
+    // Filtrar productos por búsqueda
+    const productosFiltrados = searchQuery.trim() === '' 
+        ? productos 
+        : productos.filter(p => 
+            p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.descripcion.toLowerCase().includes(searchQuery.toLowerCase())
+        );
 
     return (
         <div className="container-fluid mt-3" style={{maxWidth: '1400px', margin: '0 auto'}}>
@@ -402,7 +460,7 @@ function AuditarUltimaMillaPage() {
 
             {/* LISTA DE PRODUCTOS EN TARJETAS */}
             <div className="row g-3">
-                {productos.map((producto) => (
+                {productosFiltrados.map((producto) => (
                     <ProductoCard
                         key={producto.id}
                         producto={producto}
@@ -411,6 +469,59 @@ function AuditarUltimaMillaPage() {
                     />
                 ))}
             </div>
+
+            {/* BOTONES FLOTANTES MÓVILES */}
+            {isMobile && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '20px',
+                    right: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '15px',
+                    zIndex: 1000
+                }}>
+                    {/* Botón de Búsqueda */}
+                    <button
+                        onClick={() => setShowSearchModal(true)}
+                        style={{
+                            width: '60px',
+                            height: '60px',
+                            borderRadius: '50%',
+                            backgroundColor: '#2196f3',
+                            border: 'none',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '28px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        🔍
+                    </button>
+
+                    {/* Botón de Cámara */}
+                    <button
+                        onClick={() => setShowCameraScanner(true)}
+                        style={{
+                            width: '70px',
+                            height: '70px',
+                            borderRadius: '50%',
+                            backgroundColor: '#4caf50',
+                            border: 'none',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '32px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        📷
+                    </button>
+                </div>
+            )}
 
             {showCameraScanner && (
                 <CameraScanner 
@@ -429,6 +540,142 @@ function AuditarUltimaMillaPage() {
                         setLastScannedSku(null);
                     }}
                 />
+            )}
+
+            {/* MODAL DE SELECCIÓN DE PEDIDO */}
+            {showPedidoSelectorModal && (
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999 }}>
+                    <div className="modal-dialog modal-dialog-centered modal-lg">
+                        <div className="modal-content">
+                            <div className="modal-header bg-warning text-dark">
+                                <h5 className="modal-title">⚠️ Múltiples Pedidos con el mismo SKU</h5>
+                                <button type="button" className="btn-close" onClick={() => {
+                                    setShowPedidoSelectorModal(false);
+                                    setProductosConMismoSku([]);
+                                    setCantidadesPorProducto({});
+                                }}></button>
+                            </div>
+                            <div className="modal-body">
+                                <p className="mb-3"><strong>Ingresa la cantidad física para cada pedido:</strong></p>
+                                <div className="list-group">
+                                    {productosConMismoSku.map((producto) => (
+                                        <div key={producto.id} className="list-group-item">
+                                            <div className="row align-items-center">
+                                                <div className="col-md-7">
+                                                    <h6 className="mb-1">📦 Pedido #{producto.numero_pedido}</h6>
+                                                    <div style={{ fontSize: '0.85rem' }}>
+                                                        <strong>SKU:</strong> {producto.sku}<br/>
+                                                        <strong>Descripción:</strong> {producto.descripcion}<br/>
+                                                        <strong>Cantidad Pedida:</strong> {producto.cantidad_pedida}
+                                                    </div>
+                                                </div>
+                                                <div className="col-md-3">
+                                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: '600' }}>Cantidad Física</label>
+                                                    <input
+                                                        type="number"
+                                                        className="form-control form-control-lg"
+                                                        value={cantidadesPorProducto[producto.id] || ''}
+                                                        onChange={(e) => setCantidadesPorProducto(prev => ({
+                                                            ...prev,
+                                                            [producto.id]: e.target.value
+                                                        }))}
+                                                        min="0"
+                                                        placeholder="0"
+                                                        style={{ fontSize: '1.2rem', fontWeight: '700' }}
+                                                    />
+                                                </div>
+                                                <div className="col-md-2 text-end">
+                                                    {producto.cantidad_fisica !== null ? (
+                                                        <span className="badge bg-success">✓ Auditado</span>
+                                                    ) : (
+                                                        <span className="badge bg-warning text-dark">⏳ Pendiente</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => {
+                                    setShowPedidoSelectorModal(false);
+                                    setProductosConMismoSku([]);
+                                    setCantidadesPorProducto({});
+                                }}>
+                                    Cancelar
+                                </button>
+                                <button className="btn btn-primary btn-lg" onClick={handleGuardarPedidosSeleccionados}>
+                                    💾 Guardar Cantidades
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE BÚSQUEDA */}
+            {showSearchModal && (
+                <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-primary text-white">
+                                <h5 className="modal-title">🔍 Buscar Producto</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => {
+                                    setShowSearchModal(false);
+                                    setSearchQuery('');
+                                }}></button>
+                            </div>
+                            <div className="modal-body">
+                                <input
+                                    type="text"
+                                    className="form-control form-control-lg mb-3"
+                                    placeholder="Buscar por SKU o descripción..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    autoFocus
+                                    style={{ fontSize: '1.1rem' }}
+                                />
+                                
+                                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                    {productosFiltrados.length === 0 ? (
+                                        <div className="alert alert-warning">No se encontraron productos</div>
+                                    ) : (
+                                        productosFiltrados.map((producto) => (
+                                            <div
+                                                key={producto.id}
+                                                className="card mb-2"
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => {
+                                                    document.getElementById(`producto-${producto.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    setShowSearchModal(false);
+                                                    setSearchQuery('');
+                                                }}
+                                            >
+                                                <div className="card-body p-2">
+                                                    <div className="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>{producto.sku}</strong>
+                                                            <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                                                                {producto.descripcion}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            {producto.cantidad_fisica !== null ? (
+                                                                <span className="badge bg-success">✓</span>
+                                                            ) : (
+                                                                <span className="badge bg-warning">⏳</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
