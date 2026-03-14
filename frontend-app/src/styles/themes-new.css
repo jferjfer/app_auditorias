@@ -1,0 +1,361 @@
+/* ============================================
+   SISTEMA DE TEMAS PROFESIONAL
+   Basado en teoría del color y diseño gráfico
+   ============================================ */
+
+/* --- TEMA 1: MORADO NOCTURNO (Dark) --- */
+body[data-theme="dark-default"] {
+    --bg-color: #1a1625;
+    --bg-secondary-color: #251e35;
+    --text-color: #e4dff7;
+    --text-secondary: #b8b0d1;
+    --primary-color: #a78bfa;
+    --primary-color-rgb: 167, 139, 250;
+    --accent-color: #ec4899;
+    --border-color: #3d3450;
+    --success-color: #10b981;
+    --danger-color: #f43f5e;
+    --info-color: #8b5cf6;
+    --warning-color: #f59e0b;
+    --table-hover-color: #2d2540;
+}
+
+/* --- TEMA 2: AZUL MEDIANOCHE (Dark) --- */
+body[data-theme="dark-blue"] {
+    --bg-color: #0a0e1a;
+    --bg-secondary-color: #151b2e;
+    --text-color: #cbd5e1;
+    --text-secondary: #94a3b8;
+    --primary-color: #60a5fa;
+    --primary-color-rgb: 96, 165, 250;
+    --accent-color: #f472b6;
+    --border-color: #1e293b;
+    --success-color: #34d399;
+    --danger-color: #ef4444;
+    --info-color: #38bdf8;
+    --warning-color: #fbbf24;
+    --table-hover-color: #1e293b;
+}
+
+/* --- TEMA 3: VERDE ESMERALDA (Dark) --- */
+body[data-theme="dark-green"] {
+    --bg-color: #0f1e17;
+    --bg-secondary-color: #1a2e23;
+    --text-color: #d1f0e1;
+    --text-secondary: #9dc9b5;
+    --primary-color: #34d399;
+    --primary-color-rgb: 52, 211, 153;
+    --accent-color: #fbbf24;
+    --border-color: #2d4a3a;
+    --success-color: #6ee7b7;
+    --danger-color: #fb7185;
+    --info-color: #22d3ee;
+    --warning-color: #f59e0b;
+    --table-hover-color: #243b2f;
+}
+
+/* --- TEMA 4: BLANCO PURO (Light) --- */
+body[data-theme="light-default"] {
+    --bg-color: #ffffff;
+    --bg-secondary-color: #f9fafb;
+    --text-color: #111827;
+    --text-secondary: #6b7280;
+    --primary-color: #2563eb;
+    --primary-color-rgb: 37, 99, 235;
+    --accent-color: #dc2626;
+    --border-color: #e5e7eb;
+    --success-color: #059669;
+    --danger-color: #dc2626;
+    --info-color: #0284c7;
+    --warning-color: #d97706;
+    --table-hover-color: #f3f4f6;
+}
+
+/* --- TEMA 5: BEIGE CÁLIDO (Light) --- */
+body[data-theme="light-warm"] {
+    --bg-color: #fefcf7;
+    --bg-secondary-color: #f8f4ed;
+    --text-color: #292524;
+    --text-secondary: #78716c;
+    --primary-color: #ea580c;
+    --primary-color-rgb: 234, 88, 12;
+    --accent-color: #dc2626;
+    --border-color: #e7e5e4;
+    --success-color: #16a34a;
+    --danger-color: #dc2626;
+    --info-color: #0891b2;
+    --warning-color: #d97706;
+    --table-hover-color: #f5f5f4;
+}
+
+/* --- TEMA 6: GRIS AZULADO (Light) --- */
+body[data-theme="light-cool"] {
+    --bg-color: #f8fafc;
+    --bg-secondary-color: #f1f5f9;
+    --text-color: #0f172a;
+    --text-secondary: #64748b;
+    --primary-color: #0ea5e9;
+    --primary-color-rgb: 14, 165, 233;
+    --accent-color: #8b5cf6;
+    --border-color: #cbd5e1;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --info-color: #06b6d4;
+    --warning-color: #f59e0b;
+    --table-hover-color: #e2e8f0;
+}
+
+/* --- TEMA 7: ALTO CONTRASTE (Accesibilidad) --- */
+body[data-theme="high-contrast"] {
+    --bg-color: #000000;
+    --bg-secondary-color: #1a1a1a;
+    --text-color: #ffffff;
+    --text-secondary: #cccccc;
+    --primary-color: #00ff00;
+    --primary-color-rgb: 0, 255, 0;
+    --accent-color: #ffff00;
+    --border-color: #ffffff;
+    --success-color: #00ff00;
+    --danger-color: #ff0000;
+    --info-color: #00ffff;
+    --warning-color: #ffff00;
+    --table-hover-color: #333333;
+}
+
+/* ============================================
+   APLICACIÓN GLOBAL DE TEMAS
+   ============================================ */
+
+/* Reset y base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Override Bootstrap variables */
+:root {
+    --bs-body-bg: var(--bg-color);
+    --bs-body-color: var(--text-color);
+}
+
+/* Contenedores transparentes y full width */
+.container,
+.container-fluid,
+.container-sm,
+.container-md,
+.container-lg,
+.container-xl,
+.container-xxl {
+    background-color: transparent !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.row {
+    background-color: transparent !important;
+    margin: 0 !important;
+    width: 100% !important;
+}
+
+[class*="col-"] {
+    background-color: transparent !important;
+    padding: 0 !important;
+}
+
+/* Cards y componentes */
+.card {
+    background-color: var(--bg-secondary-color) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+}
+
+.card-body,
+.card-header,
+.card-footer {
+    background-color: transparent !important;
+    color: var(--text-color) !important;
+}
+
+/* Modales */
+.modal-content {
+    background-color: var(--bg-secondary-color) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+}
+
+.modal-header,
+.modal-body,
+.modal-footer {
+    background-color: transparent !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-color) !important;
+}
+
+/* Tablas */
+.table {
+    color: var(--text-color) !important;
+}
+
+.table thead th {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.table tbody td {
+    background-color: transparent !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--table-hover-color) !important;
+}
+
+/* Formularios */
+.form-control,
+.form-select {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 0.25rem rgba(var(--primary-color-rgb), 0.25) !important;
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+    color: var(--text-color) !important;
+    opacity: 0.6 !important;
+}
+
+.form-label {
+    color: var(--text-color) !important;
+}
+
+.input-group-text {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Dropdowns */
+.dropdown-menu {
+    background-color: var(--bg-secondary-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.dropdown-item {
+    color: var(--text-color) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: var(--table-hover-color) !important;
+    color: var(--text-color) !important;
+}
+
+.dropdown-divider {
+    border-color: var(--border-color) !important;
+}
+
+/* Badges */
+.badge {
+    color: #fff !important;
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: var(--bg-secondary-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+.sidebar .nav-link {
+    color: var(--text-color) !important;
+}
+
+.sidebar .nav-link:hover {
+    background-color: var(--table-hover-color) !important;
+}
+
+/* Textos */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color) !important;
+}
+
+p, span, label, small {
+    color: var(--text-color) !important;
+}
+
+.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* Botones - mantener colores Bootstrap pero adaptados */
+.btn-primary {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: #fff !important;
+}
+
+.btn-success {
+    background-color: var(--success-color) !important;
+    border-color: var(--success-color) !important;
+    color: #fff !important;
+}
+
+.btn-danger {
+    background-color: var(--danger-color) !important;
+    border-color: var(--danger-color) !important;
+    color: #fff !important;
+}
+
+.btn-info {
+    background-color: var(--info-color) !important;
+    border-color: var(--info-color) !important;
+    color: #fff !important;
+}
+
+.btn-warning {
+    background-color: var(--warning-color) !important;
+    border-color: var(--warning-color) !important;
+    color: #fff !important;
+}
+
+/* Alertas */
+.alert {
+    border-color: var(--border-color) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color);
+}

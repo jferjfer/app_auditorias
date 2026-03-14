@@ -1,0 +1,453 @@
+from __future__ import annotations
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
+from enum import Enum
+
+
+def datetime_to_bogota(dt: datetime):
+    if dt is None:
+        return None
+    # If naive, assume it's stored as UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    bog = dt.astimezone(ZoneInfo("America/Bogota"))
+    return bog.strftime("%Y-%m-%d %H:%M:%S")
+
+# Esquema base para los usuarios
+class UserBase(BaseModel):
+    nombre: str
+    correo: EmailStr
+    rol: str
+
+
+class User(UserBase):  # ✅ Hereda nombre, correo, rol de UserBase
+    id: int
+    creado_en: Optional[datetime] = None  
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para crear un nuevo usuario
+class UserCreate(UserBase):
+    contrasena: str
+
+
+class UserUpdate(BaseModel):
+    nombre: Optional[str] = None
+    correo: Optional[EmailStr] = None
+    rol: Optional[str] = None
+    contrasena: Optional[str] = None
+
+
+
+
+# --- Esquemas para Auditorías ---
+# Esquema base para el producto auditado
+class ProductBase(BaseModel):
+    sku: str
+    nombre_articulo: str
+    cantidad_documento: int
+    cantidad_enviada: int
+    cantidad_fisica: Optional[int] = None
+    novedad: str
+    observaciones: Optional[str] = None
+    orden_traslado_original: str
+    
+    class Config:
+        from_attributes = True
+
+# Esquema para el producto auditado CON ID (para respuestas)
+class Product(ProductBase):
+    id: int
+    novelties: List[ProductNovelty] = [] # <--- AÑADIR ESTA LÍNEA
+    
+    class Config:
+        from_attributes = True
+
+# Esquemas para Ubicaciones
+class UbicacionBase(BaseModel):
+    nombre: str
+    tipo: str  # 'origen' o 'destino'
+
+class UbicacionCreate(UbicacionBase):
+    pass
+
+class Ubicacion(UbicacionBase):
+    id: int
+    creado_en: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para crear una auditoría (con productos anidados)
+class AuditCreate(BaseModel):
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
+    productos: List[ProductBase]
+
+# Esquema base para auditoría
+class AuditBase(BaseModel):
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
+    estado: str
+    porcentaje_cumplimiento: Optional[int] = None
+    modo_auditoria: Optional[str] = "normal"
+
+# Esquema para la respuesta de una auditoría
+class Audit(AuditBase):
+    id: int
+    auditor_id: int
+    creada_en: datetime
+    auditor_nombre: Optional[str] = None
+    modo_auditoria: Optional[str] = "normal"
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para mostrar los detalles de la auditoría con productos
+class AuditDetails(Audit):
+    productos: List[Product]
+    collaborators: List[User] = []
+    auditor: Optional[User] = None
+    ubicacion_origen: Optional[Ubicacion] = None
+    ubicacion_destino: Optional[Ubicacion] = None
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para la carga de archivos
+class FileUpload(BaseModel):
+    nombre_archivo: str
+    ruta_archivo: str
+    class Config:
+        from_attributes = True
+
+# Esquema para la respuesta de archivos
+class File(FileUpload):
+    id: int
+    auditoria_id: int
+    subido_en: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema de token JWT
+class Token(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    user_name: str
+    user_role: str
+    user_id: int
+
+# Esquema de datos de token
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+class NovedadTipoEnum(str, Enum):
+    sin_novedad = "sin_novedad"
+    sobrante = "sobrante"
+    faltante = "faltante"
+    averia = "averia"
+    fecha_corta = "fecha_corta"
+    contaminado = "contaminado"
+    vencido = "vencido"
+    no_salio = "no_salio"
+
+class ProductNoveltyBase(BaseModel):
+    novedad_tipo: NovedadTipoEnum
+    cantidad: int
+    observaciones: Optional[str] = None
+
+class ProductNoveltyCreate(ProductNoveltyBase):
+    pass
+
+class ProductNovelty(ProductNoveltyBase):
+    id: int
+    product_id: int
+    user_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para actualizar un producto
+class ProductUpdate(BaseModel):
+    cantidad_fisica: Optional[int] = None
+    novedad: Optional[str] = None
+    observaciones: Optional[str] = None
+    novelties: Optional[List[ProductNoveltyCreate]] = None
+
+# Esquema para crear un producto (sin ID)
+class ProductCreate(ProductBase):
+    pass
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de auditorías con información básica
+class AuditResponse(BaseModel):
+    id: int
+    ubicacion_origen_id: Optional[int] = None
+    ubicacion_destino_id: Optional[int] = None
+    ubicacion_origen: Optional[Ubicacion] = None
+    ubicacion_destino: Optional[Ubicacion] = None
+    auditor_id: int
+    auditor_nombre: Optional[str] = None
+    creada_en: datetime
+    estado: str
+    porcentaje_cumplimiento: Optional[int] = None
+    productos_count: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+# Esquema para respuesta de login exitoso
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: User
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de registro exitoso
+class RegisterResponse(BaseModel):
+    message: str
+    user: User
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de carga de archivos
+class FileUploadResponse(BaseModel):
+    message: str
+    audit_id: int
+    productos_procesados: int
+    numero_documento: str
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de actualización de producto
+class ProductUpdateResponse(BaseModel):
+    message: str
+    product: Product
+
+    class Config:
+        from_attributes = True
+
+# Esquema para respuesta de finalización de auditoría
+class AuditFinishResponse(BaseModel):
+    message: str
+    audit: Audit
+    porcentaje_cumplimiento: float
+
+    class Config:
+        from_attributes = True
+
+# Esquema para añadir colaboradores a una auditoría
+class CollaboratorUpdate(BaseModel):
+    collaborator_ids: List[int]
+
+class SurplusProductCreate(BaseModel):
+    sku: str
+    cantidad_fisica: int
+    observaciones: Optional[str] = None
+
+class ProductBulkUpdate(BaseModel):
+    id: int
+    cantidad_fisica: Optional[int] = None
+    novedad: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class ProductBulkUpdateRequest(BaseModel):
+    products: List[ProductBulkUpdate]
+
+# --- Esquemas para Estadísticas ---
+class AuditStatusStatistic(BaseModel):
+    estado: str
+    count: int
+
+class AverageComplianceStatistic(BaseModel):
+    average_compliance: float
+
+class NoveltyDistributionStatistic(BaseModel):
+    novedad: str
+    count: int
+
+class ComplianceByAuditorStatistic(BaseModel):
+    auditor_nombre: str
+    average_compliance: float
+
+class AuditsByPeriodStatistic(BaseModel):
+    fecha: date
+    total_auditorias: int
+
+class TopNoveltySkuStatistic(BaseModel):
+    sku: str
+    nombre_articulo: str
+    total_novedades: int
+
+class AverageAuditDurationStatistic(BaseModel):
+    average_duration_hours: float
+
+class ProductHistory(BaseModel):
+    id: int
+    product_id: int
+    user_id: int
+    field_changed: str
+    old_value: Optional[str]
+    new_value: Optional[str]
+    modified_at: datetime
+    
+    @property
+    def user_name(self) -> str:
+        return getattr(self, '_user_name', 'Unknown')
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+        
+    @classmethod
+    def from_orm(cls, obj):
+        instance = super().from_orm(obj)
+        if hasattr(obj, 'user') and obj.user:
+            instance._user_name = obj.user.nombre
+        return instance
+class ProductWithNovelties(Product):
+    novelties: List[ProductNovelty] = []
+    
+    class Config:
+        from_attributes = True
+
+# --- Esquemas para Mapeo de SKUs ---
+class SkuMappingBase(BaseModel):
+    sku_antiguo: str
+    sku_nuevo: str
+
+class SkuMappingCreate(SkuMappingBase):
+    pass
+
+class SkuMapping(SkuMappingBase):
+    id: int
+    creado_por: Optional[int] = None
+    fecha_creacion: datetime
+    activo: bool
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class SkuMappingList(BaseModel):
+    mappings: List[SkuMapping]
+    total: int
+
+class SkuMappingUploadResponse(BaseModel):
+    message: str
+    creados: int
+    actualizados: int
+    errores: int
+    detalles_errores: List[str] = []
+
+# --- Esquemas para Última Milla ---
+class ProductoPedidoUltimaMillaBase(BaseModel):
+    sku: str
+    descripcion: str
+    gramaje: Optional[str] = None
+    cantidad_pedida: int
+
+class ProductoPedidoUltimaMilla(ProductoPedidoUltimaMillaBase):
+    id: int
+    pedido_id: int
+    cantidad_fisica: Optional[int] = None
+    novedad: str
+    observaciones: Optional[str] = None
+    auditado_por: Optional[int] = None
+    auditado_en: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class PedidoUltimaMillaBase(BaseModel):
+    bodega: str
+    documento_domiciliario: str
+    nombre_domiciliario: str
+    numero_pedido: str
+
+class PedidoUltimaMilla(PedidoUltimaMillaBase):
+    id: int
+    estado: str
+    fecha_carga: datetime
+    auditoria_id: Optional[int] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class PedidoUltimaMillaConProductos(PedidoUltimaMilla):
+    productos: List[ProductoPedidoUltimaMilla] = []
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: datetime_to_bogota}
+
+class BodegaStats(BaseModel):
+    bodega: str
+    total_domiciliarios: int
+    total_pedidos: int
+    pedidos_pendientes: int
+    pedidos_auditados: int
+
+class DomiciliarioStats(BaseModel):
+    documento: str
+    nombre: str
+    bodega: str
+    total_pedidos: int
+    pedidos_auditados: int
+    pedidos_pendientes: int
+
+class PedidoResumen(BaseModel):
+    numero_pedido: str
+    total_productos: int
+    total_unidades: int
+    estado: str
+
+class ConfirmarAuditorRequest(BaseModel):
+    password: str
+
+class ConfirmarAuditorResponse(BaseModel):
+    confirmed: bool
+    auditor_id: int
+    auditor_nombre: str
+    token_confirmacion: str
+
+class IniciarAuditoriaUltimaMillaRequest(BaseModel):
+    documento_domiciliario: str
+    bodega: str
+    pedidos_seleccionados: Optional[List[str]] = None
+
+class IniciarAuditoriaUltimaMillaResponse(BaseModel):
+    auditoria_id: int
+    total_productos: int
+    pedidos_incluidos: List[str]
+
+class ActualizarProductoUltimaMillaRequest(BaseModel):
+    cantidad_fisica: int
+    novedades: List[dict]  # [{'tipo': 'sin_novedad', 'cantidad': 8}, {'tipo': 'averia', 'cantidad': 2}]
+    observaciones: Optional[str] = None
+
+class FinalizarAuditoriaUltimaMillaResponse(BaseModel):
+    porcentaje_cumplimiento: float
+    productos_auditados: int
+    novedades: dict

@@ -1,0 +1,843 @@
+:root {
+    --bg-color: #0c0a1a;
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --text-light: #e0e6ed;
+    --text-muted: #a0a4b0;
+    --primary-color: #00c6ff;
+    --secondary-color: #ff0077;
+    --primary-glow: 0 0 8px rgba(var(--primary-color-rgb, 0, 198, 255), 0.5);
+    --secondary-glow: 0 0 8px rgba(var(--accent-color-rgb, 255, 0, 119), 0.5);
+    --font-family: 'Poppins', sans-serif;
+    --font-family-mono: 'Roboto Mono', monospace;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body, #root, #root > * {
+    background-color: var(--bg-color) !important;
+    color: var(--text-color) !important;
+}
+
+body {
+    font-family: var(--font-family);
+    position: relative;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+/* Fondo de cuadrícula animado */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: grid-glow 15s linear infinite;
+    z-index: -1;
+    opacity: 0.5;
+}
+
+@keyframes grid-glow {
+    0% { background-position: 0 0; }
+    100% { background-position: -50px -50px; }
+}
+
+.sidebar {
+    background-color: var(--bg-secondary-color);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border-color);
+    height: 100vh;
+    position: fixed;
+    width: 250px;
+    padding-top: 20px;
+    z-index: 1050;
+    transition: transform 0.3s ease-in-out, width 0.3s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+
+
+.sidebar .h3 {
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.sidebar a {
+    text-decoration: none;
+    display: block;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin: 2px 10px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.sidebar a:hover {
+    color: var(--primary-color);
+    background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
+}
+
+.sidebar .active {
+    background-color: rgba(0, 198, 255, 0.2);
+    border-left: 3px solid var(--primary-color);
+}
+
+.main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: calc(100vh - 60px);
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+.container-fluid {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+}
+
+.row {
+    margin: 0 !important;
+    width: 100% !important;
+}
+
+.card {
+    margin-bottom: 10px !important;
+    width: 100% !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.card-body {
+    width: 100% !important;
+    padding: 15px !important;
+}
+
+/* Sticky table header */
+.table-responsive {
+    position: relative;
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--bg-secondary-color) !important;
+}
+
+/* Botones más grandes y táctiles */
+.btn {
+    min-height: 38px;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-sm {
+    min-height: 32px;
+    padding: 6px 12px;
+}
+
+/* Loading skeleton */
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-secondary-color) 25%, var(--table-hover-color) 50%, var(--bg-secondary-color) 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+    border-radius: 4px;
+}
+
+/* Scan flash animation */
+@keyframes scanFlash {
+    0%, 100% { background-color: transparent; }
+    50% { background-color: rgba(16, 185, 129, 0.3); }
+}
+
+.scan-flash {
+    animation: scanFlash 1s ease;
+}
+
+/* Hardware acceleration para mejor rendimiento en móviles */
+.card, .modal-content, .btn, .table-responsive, .sidebar {
+    transform: translateZ(0);
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.card:hover, .btn:hover {
+    will-change: transform, box-shadow;
+}
+
+/* Optimización de animaciones */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Scan counter badge */
+.scan-counter {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: var(--success-color);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.table-responsive {
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+.table-responsive::-webkit-scrollbar {
+    display: none;
+}
+
+.table {
+    width: 100% !important;
+    margin-bottom: 0 !important;
+}
+
+[class*="col-"] {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.container-fluid, .container, .row, .col, [class*="col-"] {
+    background-color: transparent !important;
+    color: var(--text-color) !important;
+}
+
+.dashboard-section {
+    animation: fadeIn 0.5s ease-in-out;
+    perspective: 1000px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Estilo de las tarjetas (cards) */
+.card, .modal-content {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s ease, border-color 0.4s ease, background-color 0.3s ease;
+    transform-style: preserve-3d;
+}
+
+.card:hover {
+    transform: translateY(-5px) rotateX(5deg) rotateY(5deg);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3), var(--primary-glow);
+    border-color: var(--primary-color);
+}
+
+.form-control, .form-select {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb, 0, 198, 255), 0.25), 0 0 10px rgba(var(--primary-color-rgb, 0, 198, 255), 0.5);
+}
+
+.btn {
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.btn:active {
+    transform: scale(0.98);
+    box-shadow: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #00d8ff; /* Lighter shade for hover */
+    transform: translateY(-2px);
+    box-shadow: var(--primary-glow);
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    border: none;
+}
+
+.btn-success:hover {
+    background-color: #34c759; /* Lighter shade for hover */
+    transform: translateY(-2px);
+    box-shadow: 0 0 8px var(--success-color);
+}
+
+.btn-info {
+    background-color: var(--info-color);
+    border: none;
+}
+
+.btn-info:hover {
+    background-color: #5ac8fa; /* Lighter shade for hover */
+    transform: translateY(-2px);
+    box-shadow: 0 0 8px var(--info-color);
+}
+
+.btn-danger {
+    background-color: transparent;
+    border: 1px solid var(--danger-color);
+    color: var(--danger-color);
+}
+
+.btn-danger:hover {
+    background-color: var(--danger-color);
+    color: white;
+    box-shadow: 0 0 8px var(--danger-color);
+}
+
+.font-mono {
+    font-family: var(--font-family-mono);
+}
+
+.table-responsive {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 100%;
+    overflow-x: auto;
+}
+
+.table-dark {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: transparent;
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.table-dark th, .table-dark td {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+    vertical-align: middle;
+}
+
+.table-dark th {
+    font-weight: 500;
+}
+
+.chart-container {
+    background-color: transparent;
+    height: 400px;
+}
+
+.progress-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: conic-gradient(#00c6ff 75%, transparent 75%);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 2.2rem;
+    box-shadow: var(--primary-glow);
+    border: 4px solid var(--bg-secondary-color);
+    outline: 1px solid var(--border-color);
+}
+
+.input-group-text {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--border-color);
+    border-right: none;
+}
+
+.btn-close {
+    filter: invert(1);
+}
+
+/* Estilos específicos para los inputs del modal */
+.modal .form-control, .modal .form-select {
+    border: 1px solid var(--border-color);
+}
+
+/* --- Corrección para el Dropdown de Rol en el Modal --- */
+
+/* Estilo para las opciones seleccionadas o en hover */
+.form-select option:checked,
+.form-select option:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.physical-count:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.25) !important;
+}
+
+#scan-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.25);
+}
+
+/* Estados de auditoría */
+.estado-pendiente {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.estado-progreso {
+    background-color: #17a2b8 !important;
+    color: #fff !important;
+}
+
+.estado-completada {
+    background-color: #28a745 !important;
+    color: #fff !important;
+}
+
+.saved-success {
+    background-color: #d4edda !important;
+    border-color: var(--success-color) !important;
+    transition: all 0.3s ease;
+}
+
+#compliance-percentage {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    transition: all 0.5s ease;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* --- Estilos para Panel Colaborativo --- */
+#collaborative-panel {
+    background-color: var(--bg-secondary-color) !important;
+    color: var(--text-color) !important;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.row-locked {
+    display: none;
+}
+
+/* --- Estilos para el Escáner de Cámara --- */
+#scanner-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#reader {
+    width: 90%;
+    max-width: 500px;
+    background-color: white;
+    border-radius: 8px;
+}
+
+#close-scanner-btn {
+    width: 90%;
+    max-width: 500px;
+}
+
+/* --- Estilo para feedback visual de guardado --- */
+.is-saved {
+    transition: background-color 0.1s ease-in-out;
+    background-color: rgba(0, 198, 255, 0.2) !important; /* A light blue flash */
+}
+
+/* --- Responsive Design --- */
+.sidebar-toggle-btn {
+    display: none; /* Oculto en escritorio */
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1051; /* Encima del sidebar abierto */
+    background-color: rgba(var(--primary-color-rgb, 0, 198, 255), 0.1);
+    border: 1px solid var(--border-color);
+    color: var(--text-light);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 1.5rem;
+}
+
+/* Large Desktop (> 1440px) */
+@media (min-width: 1440px) {
+    .main-content {
+        padding: 30px;
+    }
+}
+
+
+
+/* Tablet (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .main-content {
+        padding: 15px;
+    }
+    
+    .btn {
+        min-height: 40px;
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+    
+    .btn-sm {
+        min-height: 36px;
+        padding: 7px 12px;
+    }
+    
+    .table {
+        font-size: 13px;
+    }
+}
+
+/* Mobile (< 768px) */
+@media (max-width: 767px) {
+    .main-content {
+        padding: 10px !important;
+    }
+    
+    .topbar {
+        flex-wrap: wrap;
+        padding: 10px !important;
+    }
+    
+    .topbar > div {
+        flex-direction: column;
+        width: 100%;
+        gap: 8px;
+    }
+    
+    /* Botones táctiles más grandes */
+    .btn {
+        min-height: 44px !important;
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+    
+    .btn-sm {
+        min-height: 44px !important;
+        font-size: 14px;
+    }
+    
+    /* Botones en tablas - stack vertical con espacio */
+    .table td .btn {
+        display: block;
+        width: 100%;
+        margin: 3px 0;
+    }
+    
+    /* Botones de acción - mejor espaciado */
+    .card-body > div > .btn {
+        margin: 5px 0 !important;
+    }
+    
+    /* Paginación táctil */
+    .btn-outline-primary {
+        min-height: 48px !important;
+        padding: 12px 20px !important;
+    }
+    
+    /* Header badges - wrap y espaciado */
+    .d-flex.gap-2 {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+    
+    .d-flex.align-items-center.gap-2 {
+        justify-content: center;
+    }
+    
+    /* Botón cámara más grande y táctil */
+    .input-group .btn-primary {
+        min-width: 60px !important;
+        padding: 12px !important;
+        font-size: 18px !important;
+    }
+    
+    /* Badges más grandes */
+    .badge {
+        font-size: 13px !important;
+        padding: 8px 12px !important;
+    }
+    
+    /* Inputs táctiles */
+    .form-control, .form-select {
+        min-height: 44px;
+        font-size: 16px;
+    }
+    
+    /* Tabla responsive - cards en móvil */
+    .table-responsive {
+        border: none;
+    }
+    
+    .table thead {
+        display: none;
+    }
+    
+    .table tbody tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 10px;
+        background: var(--bg-secondary-color);
+    }
+    
+    .table tbody td {
+        display: block;
+        text-align: right;
+        padding: 8px;
+        border: none;
+    }
+    
+    .table tbody td::before {
+        content: attr(data-label);
+        float: left;
+        font-weight: bold;
+    }
+    
+    /* Cards más compactas */
+    .card-body {
+        padding: 12px !important;
+    }
+    
+    /* Botones de acción en cards - stack vertical y más pequeños */
+    .card-body .d-grid.gap-2.d-md-flex {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    .card-body .d-grid.gap-2.d-md-flex .btn {
+        width: 100% !important;
+        min-height: 38px !important;
+        font-size: 13px !important;
+        padding: 8px 12px !important;
+    }
+    
+    h1, .h1 { font-size: 1.5rem; }
+    h2, .h2 { font-size: 1.3rem; }
+    h3, .h3 { font-size: 1.1rem; }
+}
+
+/* --- Estilos para la Pantalla de Carga (Splash Screen) --- */
+#splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh; /* Usar vh para la altura de la pantalla */
+    background-color: var(--bg-color);
+    z-index: 9999;
+    transition: opacity 0.5s ease-out;
+    overflow: hidden; /* Para asegurar que el video no se desborde */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#splash-video {
+    /* El centrado se maneja con flexbox en el contenedor padre */
+    /* Se establece un tamaño máximo para evitar que el video sea más grande que la pantalla */
+    max-width: 100%;
+    max-height: 100%;
+    /* width y height auto para mantener la proporción original */
+    width: auto;
+    height: auto;
+}
+
+/* --- Estilo para resaltar fila en edición manual --- */
+.highlight-manual {
+    background-color: rgba(255, 193, 7, 0.2) !important; /* Un amarillo suave para destacar */
+    transition: background-color 0.3s ease;
+}
+
+/* Opcional: Quitar el resaltado cuando el usuario empieza a editar */
+.highlight-manual .physical-count:focus {
+    background-color: transparent !important;
+}
+
+.dropdown-menu {
+    z-index: 1060;
+}
+
+/* Fix: Eleva el dropdown de informes sobre los gráficos */
+#analyst-dashboard .btn-group {
+    position: relative;
+    z-index: 2;
+}
+
+/* --- Sistema de Notificaciones Toast --- */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.toast-notification {
+    min-width: 300px;
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-family: var(--font-family);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    transform: translateX(120%);
+    transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.5s ease;
+    opacity: 0;
+}
+
+.toast-notification.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-notification i {
+    font-size: 1.5rem;
+}
+
+.toast-notification.success {
+    background-color: rgba(40, 167, 69, 0.7); /* Verde con transparencia */
+    border-left: 5px solid #28a745;
+}
+
+.toast-notification.error {
+    background-color: rgba(220, 53, 69, 0.7); /* Rojo con transparencia */
+    border-left: 5px solid #dc3545;
+}
+
+.toast-notification.info {
+    background-color: rgba(23, 162, 184, 0.7); /* Azul info con transparencia */
+    border-left: 5px solid #17a2b8;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+/* --- Animación de Carga (Spinner) --- */
+.loader {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 5px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* --- Scrollbar Personalizado --- */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 10px;
+    border: 2px solid var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #00d8ff;
+}
