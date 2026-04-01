@@ -11,5 +11,6 @@ openpyxl
 alembic
 pydantic[email]
 websockets
+gunicorn
 pytest
 httpx
