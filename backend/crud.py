@@ -398,7 +398,7 @@ def create_surplus_product(db: Session, audit_id: int, product_data: schemas.Sur
         cantidad_documento=0,
         cantidad_enviada=0,
         cantidad_fisica=product_data.cantidad_fisica,
-        novedad="sobrante",
+        novedad="sin_novedad",
         observaciones=product_data.observaciones or "Sobrante registrado por colaborador",
         orden_traslado_original=orden_traslado
     )
@@ -510,42 +510,21 @@ def get_average_compliance(db: Session):
 
 
 def get_novelty_distribution(db: Session):
-    """Obtiene el recuento de cada tipo de novedad de los últimos 30 días, incluyendo product_novelties."""
+    """Obtiene el recuento de cada tipo de novedad de los últimos 30 días desde product_novelties."""
     bogota_tz = ZoneInfo("America/Bogota")
     default_start = datetime.now(bogota_tz) - timedelta(days=30)
     start_utc = default_start.astimezone(timezone.utc)
     
-    # Contar novedades del campo product.novedad (faltante/sobrante)
-    # OPTIMIZADO: Solo contar, no cargar objetos completos
-    product_novelties = db.query(
-        models.Product.novedad,
-        func.count(models.Product.id)
-    ).join(models.Audit).filter(
-        models.Audit.creada_en >= start_utc,
-        models.Audit.auditor_id.isnot(None)
-    ).group_by(models.Product.novedad).all()
-    
-    # Contar novedades de la tabla product_novelties (averías, vencidos, etc.)
-    # OPTIMIZADO: Solo contar, no cargar objetos completos
-    table_novelties = db.query(
+    results = db.query(
         models.ProductNovelty.novedad_tipo,
         func.count(models.ProductNovelty.id)
     ).join(models.Product).join(models.Audit).filter(
         models.Audit.creada_en >= start_utc,
-        models.Audit.auditor_id.isnot(None)
+        models.Audit.auditor_id.isnot(None),
+        models.ProductNovelty.novedad_tipo != 'sin_novedad'
     ).group_by(models.ProductNovelty.novedad_tipo).all()
     
-    # Combinar ambos resultados
-    combined = {}
-    for novedad, count in product_novelties:
-        if novedad:  # Ignorar None
-            combined[novedad] = combined.get(novedad, 0) + count
-    
-    for novedad_tipo, count in table_novelties:
-        novedad_str = novedad_tipo.value if hasattr(novedad_tipo, 'value') else str(novedad_tipo)
-        combined[novedad_str] = combined.get(novedad_str, 0) + count
-    
-    return [(k, v) for k, v in combined.items()]
+    return [(r[0].value if hasattr(r[0], 'value') else str(r[0]), r[1]) for r in results]
 
 
 def get_compliance_by_auditor(db: Session):
@@ -613,24 +592,22 @@ def get_audits_by_period(db: Session, start_date: Optional[str] = None, end_date
 
 
 def get_top_novelty_skus(db: Session, limit: int = 10):
-    """Obtiene los N SKUs con más novedades de los últimos 30 días (excluyendo 'sin_novedad')."""
+    """Obtiene los N SKUs con más novedades de los últimos 30 días desde product_novelties."""
     bogota_tz = ZoneInfo("America/Bogota")
     default_start = datetime.now(bogota_tz) - timedelta(days=30)
     start_utc = default_start.astimezone(timezone.utc)
     
-    # OPTIMIZADO: Solo agregaciones, sin cargar objetos completos
     return (db.query(
         models.Product.sku,
         models.Product.nombre_articulo,
-        func.count(models.Product.id).label('total_novedades')
-    ).join(models.Audit).filter(
-        models.Product.novedad != "sin_novedad",
-        models.Product.novedad.isnot(None),
+        func.count(models.ProductNovelty.id).label('total_novedades')
+    ).join(models.ProductNovelty).join(models.Audit).filter(
+        models.ProductNovelty.novedad_tipo != 'sin_novedad',
         models.Audit.creada_en >= start_utc,
         models.Audit.auditor_id.isnot(None)
     )
     .group_by(models.Product.sku, models.Product.nombre_articulo)
-    .order_by(func.count(models.Product.id).desc())
+    .order_by(func.count(models.ProductNovelty.id).desc())
     .limit(limit).all())
 
 

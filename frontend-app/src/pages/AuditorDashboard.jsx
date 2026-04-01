@@ -201,7 +201,8 @@ export default function AuditorDashboard() {
         const changes = {
           cantidad_fisica: lastProduct.cantidad_documento,
           novedad: 'sin_novedad',
-          observaciones: 'sin novedad'
+          observaciones: 'sin novedad',
+          novelties: []
         };
         
         setProducts(prev => prev.map(p => 
@@ -822,7 +823,8 @@ export default function AuditorDashboard() {
           const changes = {
             cantidad_fisica: lastProduct.cantidad_documento,
             novedad: 'sin_novedad',
-            observaciones: 'sin novedad'
+            observaciones: 'sin novedad',
+            novelties: []
           };
           setProducts(prev => prev.map(p => 
             p.id === lastProduct.id ? { ...p, ...changes } : p
@@ -877,7 +879,6 @@ export default function AuditorDashboard() {
     const product = products.find(p => p.id === productId);
     if (!product) return;
     
-    // Validar que la cantidad sea razonable (máximo 2 mil millones)
     if (cantidad > 2147483647) {
       toast.error('Cantidad demasiado grande. Máximo: 2,147,483,647');
       return;
@@ -886,16 +887,19 @@ export default function AuditorDashboard() {
     let novedad = 'sin_novedad';
     let observaciones = '';
     const diferencia = Math.abs(cantidad - product.cantidad_documento);
+    const novelties = [];
     
     if (cantidad < product.cantidad_documento) {
       novedad = 'faltante';
       observaciones = `${diferencia} faltante`;
+      novelties.push({ novedad_tipo: 'faltante', cantidad: diferencia, observaciones });
     } else if (cantidad > product.cantidad_documento) {
       novedad = 'sobrante';
       observaciones = `${diferencia} sobrante`;
+      novelties.push({ novedad_tipo: 'sobrante', cantidad: diferencia, observaciones });
     }
 
-    const changes = { cantidad_fisica: cantidad, novedad, observaciones };
+    const changes = { cantidad_fisica: cantidad, novedad, observaciones, novelties };
     setProducts(prev => prev.map(p => 
       p.id === productId ? { ...p, ...changes } : p
     ));
@@ -1340,7 +1344,8 @@ export default function AuditorDashboard() {
         const changes = {
           cantidad_fisica: lastProduct.cantidad_documento,
           novedad: 'sin_novedad',
-          observaciones: 'sin novedad'
+          observaciones: 'sin novedad',
+          novelties: []
         };
         setProducts(prev => prev.map(p => 
           p.id === lastProduct.id ? { ...p, ...changes } : p
@@ -2189,30 +2194,32 @@ export default function AuditorDashboard() {
         currentAudit={currentAudit}
         onClose={() => setShowVerificarConteoModal(false)}
         onSave={async () => {
-          // Calcular y guardar novedades para cada producto
           for (const p of products) {
             const fisico = p.cantidad_fisica || 0;
             const documento = p.cantidad_documento || 0;
             
             let novedad = 'sin_novedad';
             let observaciones = '';
+            const novelties = [];
             
-            // Si es producto nuevo (no referenciado)
             if (p.isNew) {
               novedad = 'no_referenciado';
               observaciones = 'Producto no referenciado';
             } else if (fisico < documento) {
               novedad = 'faltante';
               observaciones = `Faltante ${documento - fisico} unidades`;
+              novelties.push({ novedad_tipo: 'faltante', cantidad: documento - fisico, observaciones });
             } else if (fisico > documento) {
               novedad = 'sobrante';
               observaciones = `Sobrante ${fisico - documento} unidades`;
+              novelties.push({ novedad_tipo: 'sobrante', cantidad: fisico - documento, observaciones });
             }
             
             const changes = {
               cantidad_fisica: fisico,
               novedad: novedad,
-              observaciones: observaciones
+              observaciones: observaciones,
+              novelties: novelties
             };
             
             // Actualizar estado local
@@ -2250,30 +2257,32 @@ export default function AuditorDashboard() {
           await handleVerAuditoria(currentAudit.id);
         }}
         onFinish={async () => {
-          // Primero guardar todo
           for (const p of products) {
             const fisico = p.cantidad_fisica || 0;
             const documento = p.cantidad_documento || 0;
             
             let novedad = 'sin_novedad';
             let observaciones = '';
+            const novelties = [];
             
-            // Si es producto nuevo (no referenciado)
             if (p.isNew) {
               novedad = 'no_referenciado';
               observaciones = 'Producto no referenciado';
             } else if (fisico < documento) {
               novedad = 'faltante';
               observaciones = `Faltante ${documento - fisico} unidades`;
+              novelties.push({ novedad_tipo: 'faltante', cantidad: documento - fisico, observaciones });
             } else if (fisico > documento) {
               novedad = 'sobrante';
               observaciones = `Sobrante ${fisico - documento} unidades`;
+              novelties.push({ novedad_tipo: 'sobrante', cantidad: fisico - documento, observaciones });
             }
             
             const changes = {
               cantidad_fisica: fisico,
               novedad: novedad,
-              observaciones: observaciones
+              observaciones: observaciones,
+              novelties: novelties
             };
             
             if (p.isNew && String(p.id).startsWith('temp_')) {

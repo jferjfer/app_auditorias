@@ -281,19 +281,9 @@ def get_audit_details(audit_id: int, db: Session = Depends(get_db), current_user
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user not in db_audit.collaborators and current_user.rol not in ["analista", "administrador"]):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
     
-    # Combinar novedades de ambas tablas para cada producto
+    # Novedades se leen directamente de novelties en el frontend
     for producto in db_audit.productos:
-        novedades = []
-        if producto.novedad and producto.novedad != 'sin_novedad':
-            novedades.append(producto.novedad)
-        
-        if hasattr(producto, 'novelties') and producto.novelties:
-            for nov in producto.novelties:
-                tipo = nov.novedad_tipo.value if hasattr(nov.novedad_tipo, 'value') else str(nov.novedad_tipo)
-                if tipo not in novedades:
-                    novedades.append(tipo)
-        
-        producto.novedad = ', '.join(novedades) if novedades else 'sin_novedad'
+        pass
     
     return schemas.AuditDetails.from_orm(db_audit)
 
@@ -602,20 +592,15 @@ async def get_report_details(
     for a in audits:
         productos_serializados = []
         for p in a.productos:
-            # Combinar novedades de ambas tablas
-            novedades = []
-            if p.novedad and p.novedad != 'sin_novedad':
-                novedades.append(p.novedad)
-            
-            # Agregar novedades de product_novelties
+            # Leer novedades solo de product_novelties
+            novedades_list = []
             if hasattr(p, 'novelties') and p.novelties:
                 for nov in p.novelties:
                     tipo = nov.novedad_tipo.value if hasattr(nov.novedad_tipo, 'value') else str(nov.novedad_tipo)
-                    if tipo not in novedades:
-                        novedades.append(tipo)
+                    if tipo != 'sin_novedad':
+                        novedades_list.append(tipo)
             
-            # Combinar en un solo string
-            novedad_combinada = ', '.join(novedades) if novedades else 'sin_novedad'
+            novedad_combinada = ', '.join(novedades_list) if novedades_list else 'sin_novedad'
             
             # Determinar quién auditó este producto
             auditado_por = None
@@ -769,15 +754,16 @@ async def get_novelty_distribution_statistic(
         stats = crud.get_novelty_distribution(db)
         return [{"novedad": s[0], "count": s[1]} for s in stats]
 
-    # OPTIMIZADO: Usar agregaciones en BD en lugar de cargar todo en memoria
+    # OPTIMIZADO: Usar agregaciones en BD desde product_novelties
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
     
     bogota_tz = ZoneInfo("America/Bogota")
     query = db.query(
-        models.Product.novedad,
-        func.count(models.Product.id)
-    ).join(models.Audit).filter(
-        models.Audit.auditor_id.isnot(None)
+        models.ProductNovelty.novedad_tipo,
+        func.count(models.ProductNovelty.id)
+    ).join(models.Product).join(models.Audit).filter(
+        models.Audit.auditor_id.isnot(None),
+        models.ProductNovelty.novedad_tipo != 'sin_novedad'
     )
     
     if db_status:
@@ -805,8 +791,8 @@ async def get_novelty_distribution_statistic(
         except ValueError:
             pass
     
-    results = query.group_by(models.Product.novedad).all()
-    return [{"novedad": s[0] or 'sin_novedad', "count": s[1]} for s in results]
+    results = query.group_by(models.ProductNovelty.novedad_tipo).all()
+    return [{"novedad": s[0].value if hasattr(s[0], 'value') else str(s[0]), "count": s[1]} for s in results]
 
 @router.get("/statistics/compliance-by-auditor", response_model=List[schemas.ComplianceByAuditorStatistic])
 async def get_compliance_by_auditor_statistic(
@@ -959,10 +945,9 @@ async def get_top_novelty_skus_statistic(
     query = db.query(
         models.Product.sku,
         models.Product.nombre_articulo,
-        func.count(models.Product.id).label('total_novedades')
-    ).join(models.Audit).filter(
-        models.Product.novedad != 'sin_novedad',
-        models.Product.novedad.isnot(None),
+        func.count(models.ProductNovelty.id).label('total_novedades')
+    ).join(models.ProductNovelty).join(models.Audit).filter(
+        models.ProductNovelty.novedad_tipo != 'sin_novedad',
         models.Audit.auditor_id.isnot(None)
     )
     
@@ -991,7 +976,7 @@ async def get_top_novelty_skus_statistic(
         except ValueError:
             pass
     
-    results = query.group_by(models.Product.sku, models.Product.nombre_articulo).order_by(func.count(models.Product.id).desc()).limit(limit).all()
+    results = query.group_by(models.Product.sku, models.Product.nombre_articulo).order_by(func.count(models.ProductNovelty.id).desc()).limit(limit).all()
     return [{"sku": s[0], "nombre_articulo": s[1], "total_novedades": s[2]} for s in results]
 
 @router.post("/{audit_id}/add-ot")
@@ -1277,19 +1262,32 @@ async def resolver_discrepancia(
     
     # Actualizar cantidad física con la cantidad correcta (contraparte)
     db_product.cantidad_fisica = cantidad_correcta
+    db_product.observaciones = observaciones or "Cantidad verificada"
     
-    # Calcular novedad comparando cantidad_correcta vs cantidad_documento
+    # Crear novedad en product_novelties
+    # Eliminar novedades anteriores del producto
+    db.query(models.ProductNovelty).filter(models.ProductNovelty.product_id == product_id).delete()
+    
     if cantidad_correcta < db_product.cantidad_documento:
-        db_product.novedad = "faltante"
         diferencia = db_product.cantidad_documento - cantidad_correcta
         db_product.observaciones = f"Faltante {diferencia} unidades. {observaciones or ''}"
+        db.add(models.ProductNovelty(
+            product_id=product_id,
+            novedad_tipo=models.NovedadEnum.faltante,
+            cantidad=diferencia,
+            observaciones=db_product.observaciones,
+            user_id=current_user.id
+        ))
     elif cantidad_correcta > db_product.cantidad_documento:
-        db_product.novedad = "sobrante"
         diferencia = cantidad_correcta - db_product.cantidad_documento
         db_product.observaciones = f"Sobrante {diferencia} unidades. {observaciones or ''}"
-    else:
-        db_product.novedad = "sin_novedad"
-        db_product.observaciones = observaciones or "Cantidad correcta verificada"
+        db.add(models.ProductNovelty(
+            product_id=product_id,
+            novedad_tipo=models.NovedadEnum.sobrante,
+            cantidad=diferencia,
+            observaciones=db_product.observaciones,
+            user_id=current_user.id
+        ))
     
     # Registrar en historial
     history = models.ProductHistory(
