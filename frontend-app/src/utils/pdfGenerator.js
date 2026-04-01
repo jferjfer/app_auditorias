@@ -183,30 +183,23 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
   doc.text('Detalle de Productos', 14, finalY + 10);
   const tableHeader = ['#', 'Orden T.', 'SKU', 'Descripción', 'Novedad', 'Cant. Novedad', 'Cant. Doc', 'Cant. Fís', 'Dif.'];
   const tableBody = products.map((p, index) => {
-    // Combinar todas las novedades (campo novedad + novelties)
     let novedadesTexto = '';
     let cantidadNovedadTexto = '';
     const novedadesArray = [];
     const cantidadesArray = [];
     
-    // Agregar novedad principal si existe
-    if (p.novedad && p.novedad !== 'sin_novedad') {
-      novedadesArray.push(p.novedad);
-      // Para novedad principal, calcular la cantidad basada en diferencia
-      const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
-      cantidadesArray.push(diff);
-    }
-    
-    // Agregar novedades de novelties
     if (p.novelties && p.novelties.length > 0) {
       p.novelties.forEach(nov => {
         const tipo = nov.novedad_tipo || nov.tipo;
         if (tipo && tipo !== 'sin_novedad') {
-          const cantidad = nov.cantidad || 0;
           novedadesArray.push(tipo);
-          cantidadesArray.push(cantidad);
+          cantidadesArray.push(nov.cantidad || 0);
         }
       });
+    } else if (p.novedad && p.novedad !== 'sin_novedad') {
+      novedadesArray.push(p.novedad);
+      const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
+      cantidadesArray.push(diff);
     }
     
     novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
@@ -242,7 +235,8 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
 export function prepareReportData(audits) {
   const products = [];
   const noveltyCounts = {};
-  let totalProductos = 0;
+  let totalUnidadesOts = 0;
+  let totalAuditados = 0;
 
   audits.forEach(audit => {
     if (audit.productos) {
@@ -252,22 +246,19 @@ export function prepareReportData(audits) {
           orden_traslado: audit.ubicacion_destino
         });
         
-        // Sumar SOLO las cantidades de novedades (excluyendo sin_novedad)
+        totalUnidadesOts += product.cantidad_documento || 0;
+        totalAuditados += product.cantidad_fisica || 0;
+        
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
             const tipo = nov.novedad_tipo || nov.tipo;
             const cantidad = nov.cantidad || 0;
-            
-            // Solo contar si NO es sin_novedad
             if (tipo !== 'sin_novedad') {
-              totalProductos += cantidad;
               noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + cantidad;
             }
           });
         } else if (product.novedad && product.novedad !== 'sin_novedad') {
-          // Fallback: si no hay novelties pero sí hay novedad en el campo
-          const cantidad = product.cantidad_fisica || 0;
-          totalProductos += cantidad;
+          const cantidad = Math.abs((product.cantidad_fisica || 0) - (product.cantidad_documento || 0));
           noveltyCounts[product.novedad] = (noveltyCounts[product.novedad] || 0) + cantidad;
         }
       });
@@ -277,7 +268,8 @@ export function prepareReportData(audits) {
   return {
     products,
     totalPedidos: products.length,
-    totalProductos,
+    totalUnidadesOts,
+    totalAuditados,
     noveltyCounts
   };
 }

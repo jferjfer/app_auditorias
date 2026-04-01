@@ -19,7 +19,7 @@ export function generateExcelReport(reportData, reportType, filters) {
     ['Fecha Fin Filtro', filters.end_date || 'N/A'],
     ['Total de Pedidos (líneas)', totalPedidos],
     ['Total de Productos (unidades de las OTs)', totalUnidadesOts],
-    ['Total de Productos (auditados sobre el total de las OTs)', totalAuditados],
+    ['Total de Productos (unidades auditadas sobre el total de las OTs)', totalAuditados],
     [],
     ['DISTRIBUCIÓN DE NOVEDADES'],
     [],
@@ -50,15 +50,8 @@ export function generateExcelReport(reportData, reportType, filters) {
       const novedadesArray = [];
       const cantidadesArray = [];
       
-      // Agregar novedad principal si existe y no es sin_novedad
-      if (p.novedad && p.novedad !== 'sin_novedad') {
-        novedadesArray.push(p.novedad);
-        const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
-        cantidadesArray.push(diff);
-      }
-      
-      // Agregar novedades de novelties con cantidades
       if (p.novelties && p.novelties.length > 0) {
+        // Fuente principal: tabla product_novelties (tiene tipo + cantidad)
         p.novelties.forEach(n => {
           const tipo = n.novedad_tipo || n.tipo || 'N/A';
           const cantidad = n.cantidad || 0;
@@ -68,7 +61,6 @@ export function generateExcelReport(reportData, reportType, filters) {
           }
         });
         
-        // Obtener la fecha de la primera novedad (o la más reciente)
         const primeraFecha = p.novelties[0].created_at;
         if (primeraFecha) {
           fechaNovedadTexto = new Date(primeraFecha).toLocaleString('es-CO', { 
@@ -81,6 +73,11 @@ export function generateExcelReport(reportData, reportType, filters) {
             second: '2-digit'
           });
         }
+      } else if (p.novedad && p.novedad !== 'sin_novedad') {
+        // Fallback: campo novedad (datos antiguos sin product_novelties)
+        novedadesArray.push(p.novedad);
+        const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
+        cantidadesArray.push(diff);
       }
       
       novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
