@@ -196,6 +196,13 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
           cantidadesArray.push(nov.cantidad || 0);
         }
       });
+      
+      // Verificar si novedad tiene algo que no esté en novelties
+      if (p.novedad && p.novedad !== 'sin_novedad' && !novedadesArray.includes(p.novedad)) {
+        novedadesArray.push(p.novedad);
+        const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
+        cantidadesArray.push(diff);
+      }
     } else if (p.novedad && p.novedad !== 'sin_novedad') {
       novedadesArray.push(p.novedad);
       const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));

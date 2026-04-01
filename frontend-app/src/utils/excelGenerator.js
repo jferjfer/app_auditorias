@@ -51,7 +51,6 @@ export function generateExcelReport(reportData, reportType, filters) {
       const cantidadesArray = [];
       
       if (p.novelties && p.novelties.length > 0) {
-        // Fuente principal: tabla product_novelties (tiene tipo + cantidad)
         p.novelties.forEach(n => {
           const tipo = n.novedad_tipo || n.tipo || 'N/A';
           const cantidad = n.cantidad || 0;
@@ -60,6 +59,13 @@ export function generateExcelReport(reportData, reportType, filters) {
             cantidadesArray.push(cantidad);
           }
         });
+        
+        // Verificar si novedad tiene algo que no esté en novelties
+        if (p.novedad && p.novedad !== 'sin_novedad' && !novedadesArray.includes(p.novedad)) {
+          novedadesArray.push(p.novedad);
+          const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
+          cantidadesArray.push(diff);
+        }
         
         const primeraFecha = p.novelties[0].created_at;
         if (primeraFecha) {
@@ -74,7 +80,6 @@ export function generateExcelReport(reportData, reportType, filters) {
           });
         }
       } else if (p.novedad && p.novedad !== 'sin_novedad') {
-        // Fallback: campo novedad (datos antiguos sin product_novelties)
         novedadesArray.push(p.novedad);
         const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
         cantidadesArray.push(diff);
