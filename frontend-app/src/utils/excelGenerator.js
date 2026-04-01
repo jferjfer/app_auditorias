@@ -40,16 +40,20 @@ export function generateExcelReport(reportData, reportType, filters) {
   const productsData = [
     ['DETALLE DE PRODUCTOS'],
     [],
-    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedades', 'Fecha/Hora Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
+    ['#', 'ID Auditoría', 'Fecha', 'Auditor Principal', 'Auditado Por', 'Orden T.', 'SKU', 'Descripción', 'Origen', 'Destino', 'Novedades', 'Cant. Novedad', 'Fecha/Hora Novedad', 'Cant. Doc', 'Cant. Fís', 'Diferencia', 'Observaciones'],
     ...products.map((p, index) => {
       // Combinar TODAS las novedades (campo novedad + novelties)
       let novedadesTexto = '';
+      let cantidadNovedadTexto = '';
       let fechaNovedadTexto = 'N/A';
       const novedadesArray = [];
+      const cantidadesArray = [];
       
       // Agregar novedad principal si existe y no es sin_novedad
       if (p.novedad && p.novedad !== 'sin_novedad') {
         novedadesArray.push(p.novedad);
+        const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
+        cantidadesArray.push(diff);
       }
       
       // Agregar novedades de novelties con cantidades
@@ -58,7 +62,8 @@ export function generateExcelReport(reportData, reportType, filters) {
           const tipo = n.novedad_tipo || n.tipo || 'N/A';
           const cantidad = n.cantidad || 0;
           if (tipo !== 'sin_novedad') {
-            novedadesArray.push(`${tipo}: ${cantidad}`);
+            novedadesArray.push(tipo);
+            cantidadesArray.push(cantidad);
           }
         });
         
@@ -78,6 +83,7 @@ export function generateExcelReport(reportData, reportType, filters) {
       }
       
       novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
+      cantidadNovedadTexto = cantidadesArray.length > 0 ? cantidadesArray.join(', ') : '0';
       
       return [
         index + 1,
@@ -91,6 +97,7 @@ export function generateExcelReport(reportData, reportType, filters) {
         p.ubicacion_origen || 'N/A',
         p.ubicacion_destino || 'N/A',
         novedadesTexto,
+        cantidadNovedadTexto,
         fechaNovedadTexto,
         p.cantidad_documento,
         p.cantidad_fisica || 0,
@@ -114,7 +121,8 @@ export function generateExcelReport(reportData, reportType, filters) {
     { wch: 40 },  // Descripción
     { wch: 20 },  // Origen
     { wch: 20 },  // Destino
-    { wch: 35 },  // Novedades (más ancho para tipo:cantidad)
+    { wch: 25 },  // Novedades
+    { wch: 15 },  // Cant. Novedad
     { wch: 20 },  // Fecha/Hora Novedad
     { wch: 10 },  // Cant. Doc
     { wch: 10 },  // Cant. Fís
@@ -145,22 +153,18 @@ export function prepareReportData(audits) {
           ubicacion_destino: audit.ubicacion_destino?.nombre || 'N/A'
         });
         
-        // Sumar SOLO las cantidades de novedades (excluyendo sin_novedad)
+        totalProductos += product.cantidad_fisica || 0;
+        
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
             const tipo = nov.novedad_tipo || nov.tipo;
             const cantidad = nov.cantidad || 0;
-            
-            // Solo contar si NO es sin_novedad
             if (tipo !== 'sin_novedad') {
-              totalProductos += cantidad;
               noveltyCounts[tipo] = (noveltyCounts[tipo] || 0) + cantidad;
             }
           });
         } else if (product.novedad && product.novedad !== 'sin_novedad') {
-          // Fallback: si no hay novelties pero sí hay novedad en el campo
-          const cantidad = product.cantidad_fisica || 0;
-          totalProductos += cantidad;
+          const cantidad = Math.abs((product.cantidad_fisica || 0) - (product.cantidad_documento || 0));
           noveltyCounts[product.novedad] = (noveltyCounts[product.novedad] || 0) + cantidad;
         }
       });
