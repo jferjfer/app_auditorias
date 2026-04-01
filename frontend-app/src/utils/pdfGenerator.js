@@ -23,7 +23,7 @@ async function getImageBase64(imagePath) {
 }
 
 export async function generatePdfReport(reportData, reportType, filters, userName = 'Usuario') {
-  const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
+  const { products, totalPedidos, totalUnidadesOts, totalAuditados, noveltyCounts } = reportData;
   const doc = new jsPDF();
 
   const logoBase64 = await getImageBase64('/images/marca_deagua.png');
@@ -98,7 +98,8 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
       ['Fecha Fin Filtro', filters.end_date || 'N/A'],
       ['Ubicación Origen', filters.ubicacion_origen_nombre || 'Todas'],
       ['Total de Pedidos (líneas)', totalPedidos],
-      ['Total de Productos (unidades)', totalProductos],
+      ['Total de Productos (unidades de las OTs)', totalUnidadesOts],
+      ['Total de Productos (auditados sobre el total de las OTs)', totalAuditados],
     ],
     theme: 'grid',
     styles: { fontSize: 9, textColor: textColor },

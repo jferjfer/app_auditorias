@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 
 export function generateExcelReport(reportData, reportType, filters) {
-  const { products, totalPedidos, totalProductos, noveltyCounts } = reportData;
+  const { products, totalPedidos, totalUnidadesOts, totalAuditados, noveltyCounts } = reportData;
   
   const reportTitle = reportType === 'general' ? 'Informe General de Auditoría' : 'Informe de Novedades';
   const fileName = `${reportTitle.replace(/ /g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -18,7 +18,8 @@ export function generateExcelReport(reportData, reportType, filters) {
     ['Fecha Inicio Filtro', filters.start_date || 'N/A'],
     ['Fecha Fin Filtro', filters.end_date || 'N/A'],
     ['Total de Pedidos (líneas)', totalPedidos],
-    ['Total de Productos (unidades)', totalProductos],
+    ['Total de Productos (unidades de las OTs)', totalUnidadesOts],
+    ['Total de Productos (auditados sobre el total de las OTs)', totalAuditados],
     [],
     ['DISTRIBUCIÓN DE NOVEDADES'],
     [],
@@ -139,7 +140,8 @@ export function generateExcelReport(reportData, reportType, filters) {
 export function prepareReportData(audits) {
   const products = [];
   const noveltyCounts = {};
-  let totalProductos = 0;
+  let totalUnidadesOts = 0;
+  let totalAuditados = 0;
 
   audits.forEach(audit => {
     if (audit.productos) {
@@ -153,7 +155,8 @@ export function prepareReportData(audits) {
           ubicacion_destino: audit.ubicacion_destino?.nombre || 'N/A'
         });
         
-        totalProductos += product.cantidad_fisica || 0;
+        totalUnidadesOts += product.cantidad_documento || 0;
+        totalAuditados += product.cantidad_fisica || 0;
         
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
@@ -174,7 +177,8 @@ export function prepareReportData(audits) {
   return {
     products,
     totalPedidos: products.length,
-    totalProductos,
+    totalUnidadesOts,
+    totalAuditados,
     noveltyCounts
   };
 }
