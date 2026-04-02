@@ -114,7 +114,7 @@ class Product(Base):
     cantidad_documento = Column(Integer, nullable=False)
     cantidad_enviada = Column(Integer, nullable=False)
     cantidad_fisica = Column(Integer)
-    novedad = Column(Enum(NovedadEnum), default=NovedadEnum.sin_novedad, nullable=False)
+    novedad = Column(Enum(NovedadEnum), default=NovedadEnum.sin_novedad, nullable=True)  # LEGACY: se mantiene por compatibilidad, leer de product_novelties
     observaciones = Column(String, nullable=True)
     orden_traslado_original = Column(String)
     registrado_en = Column(DateTime, default=datetime.utcnow)

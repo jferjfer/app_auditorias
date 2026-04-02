@@ -45,27 +45,28 @@ export function generateExcelReport(reportData, reportType, filters) {
     ...products.map((p, index) => {
       // Combinar TODAS las novedades (campo novedad + novelties)
       let novedadesTexto = '';
-      let cantidadNovedadTexto = '';
       let fechaNovedadTexto = 'N/A';
       const novedadesArray = [];
       const cantidadesArray = [];
       
       if (p.novelties && p.novelties.length > 0) {
+        // Agrupar novelties por tipo y sumar cantidades
+        const agrupadas = {};
         p.novelties.forEach(n => {
           const tipo = n.novedad_tipo || n.tipo || 'N/A';
           const cantidad = n.cantidad || 0;
           if (tipo !== 'sin_novedad') {
-            novedadesArray.push(tipo);
-            cantidadesArray.push(cantidad);
+            if (!agrupadas[tipo]) {
+              agrupadas[tipo] = 0;
+            }
+            agrupadas[tipo] += cantidad;
           }
         });
         
-        // Verificar si novedad tiene algo que no esté en novelties
-        if (p.novedad && p.novedad !== 'sin_novedad' && !novedadesArray.includes(p.novedad)) {
-          novedadesArray.push(p.novedad);
-          const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
-          cantidadesArray.push(diff);
-        }
+        Object.entries(agrupadas).forEach(([tipo, cantidad]) => {
+          novedadesArray.push(tipo);
+          cantidadesArray.push(cantidad);
+        });
         
         const primeraFecha = p.novelties[0].created_at;
         if (primeraFecha) {
@@ -86,7 +87,7 @@ export function generateExcelReport(reportData, reportType, filters) {
       }
       
       novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
-      cantidadNovedadTexto = cantidadesArray.length > 0 ? cantidadesArray.join(', ') : '0';
+      const cantidadNovedadFinal = cantidadesArray.length === 1 ? cantidadesArray[0] : (cantidadesArray.length > 1 ? cantidadesArray.join(', ') : 0);
       
       return [
         index + 1,
@@ -100,7 +101,7 @@ export function generateExcelReport(reportData, reportType, filters) {
         p.ubicacion_origen || 'N/A',
         p.ubicacion_destino || 'N/A',
         novedadesTexto,
-        cantidadNovedadTexto,
+        cantidadNovedadFinal,
         fechaNovedadTexto,
         p.cantidad_documento,
         p.cantidad_fisica || 0,

@@ -54,8 +54,17 @@ export default function AuditProductsModal({ audit, onClose }) {
                           {prod.cantidad_fisica !== null ? prod.cantidad_fisica - prod.cantidad_documento : '-'}
                         </td>
                         <td style={{textAlign: 'center'}}>
-                          <span className={`badge bg-${prod.novedad === 'sin_novedad' ? 'success' : 'warning'}`}>
-                            {prod.novedad?.replace('_', ' ')}
+                          <span className={`badge bg-${(() => {
+                            const nov = prod.novelties?.find(n => (n.novedad_tipo || n.tipo) !== 'sin_novedad');
+                            return nov ? 'warning' : 'success';
+                          })()}`}>
+                            {(() => {
+                              if (prod.novelties && prod.novelties.length > 0) {
+                                const tipos = prod.novelties.map(n => (n.novedad_tipo || n.tipo)).filter(t => t !== 'sin_novedad');
+                                return tipos.length > 0 ? tipos.join(', ').replace(/_/g, ' ') : 'sin novedad';
+                              }
+                              return prod.novedad?.replace('_', ' ') || 'sin novedad';
+                            })()}
                           </span>
                         </td>
                         <td style={{textAlign: 'left'}}>{prod.observaciones || '-'}</td>

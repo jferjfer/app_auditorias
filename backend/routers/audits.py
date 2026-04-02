@@ -616,7 +616,7 @@ async def get_report_details(
                 "cantidad_documento": p.cantidad_documento,
                 "cantidad_fisica": p.cantidad_fisica,
                 "novedad": novedad_combinada,
-                "novelties": [{"novedad_tipo": n.novedad_tipo.value if hasattr(n.novedad_tipo, 'value') else str(n.novedad_tipo), "cantidad": n.cantidad, "observaciones": n.observaciones, "created_at": n.created_at.isoformat() if n.created_at else None} for n in (p.novelties if hasattr(p, 'novelties') and p.novelties else [])],
+                "novelties": [{"novedad_tipo": n.novedad_tipo.value if hasattr(n.novedad_tipo, 'value') else str(n.novedad_tipo), "cantidad": n.cantidad, "observaciones": n.observaciones, "created_at": (n.created_at.isoformat() + 'Z') if n.created_at else None} for n in (p.novelties if hasattr(p, 'novelties') and p.novelties else [])],
                 "observaciones": p.observaciones,
                 "orden_traslado_original": p.orden_traslado_original,
                 "auditado_por": auditado_por
@@ -628,7 +628,7 @@ async def get_report_details(
             "ubicacion_destino": a.ubicacion_destino,
             "estado": a.estado,
             "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
-            "creada_en": a.creada_en,
+            "creada_en": (a.creada_en.isoformat() + 'Z') if a.creada_en else None,
             "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None,
             "productos": productos_serializados
         }

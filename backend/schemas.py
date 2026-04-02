@@ -52,7 +52,7 @@ class ProductBase(BaseModel):
     cantidad_documento: int
     cantidad_enviada: int
     cantidad_fisica: Optional[int] = None
-    novedad: str
+    novedad: Optional[str] = 'sin_novedad'
     observaciones: Optional[str] = None
     orden_traslado_original: str
     

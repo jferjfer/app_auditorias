@@ -412,7 +412,7 @@ function AuditarUltimaMillaPage() {
                                     <strong>📊 Cumplimiento:</strong> {currentAudit.porcentaje_cumplimiento}%
                                 </div>
                                 <div className="col-md-4">
-                                    <strong>📅 Finalizada:</strong> {new Date(currentAudit.finalizada_en).toLocaleString('es-CO')}
+                                    <strong>📅 Finalizada:</strong> {new Date(currentAudit.finalizada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                 </div>
                             </div>
                         </div>

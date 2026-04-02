@@ -189,20 +189,19 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
     const cantidadesArray = [];
     
     if (p.novelties && p.novelties.length > 0) {
+      const agrupadas = {};
       p.novelties.forEach(nov => {
         const tipo = nov.novedad_tipo || nov.tipo;
         if (tipo && tipo !== 'sin_novedad') {
-          novedadesArray.push(tipo);
-          cantidadesArray.push(nov.cantidad || 0);
+          if (!agrupadas[tipo]) agrupadas[tipo] = 0;
+          agrupadas[tipo] += nov.cantidad || 0;
         }
       });
       
-      // Verificar si novedad tiene algo que no esté en novelties
-      if (p.novedad && p.novedad !== 'sin_novedad' && !novedadesArray.includes(p.novedad)) {
-        novedadesArray.push(p.novedad);
-        const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));
-        cantidadesArray.push(diff);
-      }
+      Object.entries(agrupadas).forEach(([tipo, cantidad]) => {
+        novedadesArray.push(tipo);
+        cantidadesArray.push(cantidad);
+      });
     } else if (p.novedad && p.novedad !== 'sin_novedad') {
       novedadesArray.push(p.novedad);
       const diff = Math.abs((p.cantidad_fisica || 0) - (p.cantidad_documento || 0));

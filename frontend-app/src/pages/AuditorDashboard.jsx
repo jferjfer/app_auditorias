@@ -45,6 +45,20 @@ if ('speechSynthesis' in window) {
   window.speechSynthesis.onvoiceschanged = loadVoices;
 }
 
+const getProductNovedad = (product) => {
+  if (product.novelties && product.novelties.length > 0) {
+    const tipos = product.novelties
+      .map(n => n.novedad_tipo || n.tipo)
+      .filter(t => t && t !== 'sin_novedad');
+    return tipos.length > 0 ? tipos[0] : 'sin_novedad';
+  }
+  return product.novedad || 'sin_novedad';
+};
+
+const hasNovelties = (product) => {
+  return getProductNovedad(product) !== 'sin_novedad';
+};
+
 const speak = (text) => {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
@@ -845,12 +859,13 @@ export default function AuditorDashboard() {
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
           updatedProduct.cantidad_fisica !== undefined &&
-          updatedProduct.novedad !== 'sin_novedad') {
+          hasNovelties(updatedProduct)) {
         setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
         setScanInput('');
         const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
-        const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
-                       updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
+        const nov = getProductNovedad(updatedProduct);
+        const mensaje = nov === 'faltante' ? `Faltante ${diferencia}` : 
+                       nov === 'sobrante' ? `Sobrante ${diferencia}` : nov;
         if (!modoConteoRapido) speak(mensaje);
         setSelectedProduct(updatedProduct);
         setShowNovedadModal(true);
@@ -860,7 +875,7 @@ export default function AuditorDashboard() {
       if (updatedProduct && 
           updatedProduct.cantidad_fisica !== null && 
           updatedProduct.cantidad_fisica !== undefined &&
-          updatedProduct.novedad === 'sin_novedad') {
+          !hasNovelties(updatedProduct)) {
         setScanInput('');
         if (!modoConteoRapido) speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
         setSelectedProduct(updatedProduct);
@@ -969,7 +984,7 @@ export default function AuditorDashboard() {
             if (!p || !p.sku) return false;
             
             const hasArrayNovelties = Array.isArray(p.novelties) && p.novelties.length > 0;
-            const hasFieldNovelty = p.novedad && p.novedad !== 'sin_novedad';
+            const hasFieldNovelty = hasNovelties(p);
             
             return hasArrayNovelties || hasFieldNovelty;
           })
@@ -1000,10 +1015,11 @@ export default function AuditorDashboard() {
             }
             
             // Agregar novedad del campo único (faltante/sobrante) con validación
-            if (p.novedad && p.novedad !== 'sin_novedad') {
+            if (hasNovelties(p)) {
+              const nov = getProductNovedad(p);
               const cantidad = typeof p.cantidad_fisica === 'number' ? p.cantidad_fisica : 0;
               acc[skuKey].novelties.push({
-                tipo: p.novedad,
+                tipo: nov,
                 cantidad: cantidad,
                 observaciones: p.observaciones || ''
               });
@@ -1079,9 +1095,15 @@ export default function AuditorDashboard() {
       if (changes.cantidad_fisica < selectedProduct.cantidad_documento) {
         changes.novedad = 'faltante';
         changes.observaciones = changes.observaciones || `${diferencia} faltante`;
+        if (!changes.novelties || changes.novelties.length === 0) {
+          changes.novelties = [{ novedad_tipo: 'faltante', cantidad: diferencia, observaciones: changes.observaciones }];
+        }
       } else if (changes.cantidad_fisica > selectedProduct.cantidad_documento) {
         changes.novedad = 'sobrante';
         changes.observaciones = changes.observaciones || `${diferencia} sobrante`;
+        if (!changes.novelties || changes.novelties.length === 0) {
+          changes.novelties = [{ novedad_tipo: 'sobrante', cantidad: diferencia, observaciones: changes.observaciones }];
+        }
       }
     }
     
@@ -1366,11 +1388,12 @@ export default function AuditorDashboard() {
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
         updatedProduct.cantidad_fisica !== undefined &&
-        updatedProduct.novedad !== 'sin_novedad') {
+        hasNovelties(updatedProduct)) {
       setLastScanned({ sku: updatedProduct.sku, id: updatedProduct.id });
       const diferencia = Math.abs(updatedProduct.cantidad_fisica - updatedProduct.cantidad_documento);
-      const mensaje = updatedProduct.novedad === 'faltante' ? `Faltante ${diferencia}` : 
-                     updatedProduct.novedad === 'sobrante' ? `Sobrante ${diferencia}` : updatedProduct.novedad;
+      const nov = getProductNovedad(updatedProduct);
+      const mensaje = nov === 'faltante' ? `Faltante ${diferencia}` : 
+                     nov === 'sobrante' ? `Sobrante ${diferencia}` : nov;
       speak(mensaje);
       setSelectedProduct(updatedProduct);
       setShowNovedadModal(true);
@@ -1380,7 +1403,7 @@ export default function AuditorDashboard() {
     if (updatedProduct && 
         updatedProduct.cantidad_fisica !== null && 
         updatedProduct.cantidad_fisica !== undefined &&
-        updatedProduct.novedad === 'sin_novedad') {
+        !hasNovelties(updatedProduct)) {
       speak(`Producto ya contado con cantidad ${updatedProduct.cantidad_fisica}, ingresa ajuste`);
       setSelectedProduct(updatedProduct);
       setShowNovedadModal(true);
@@ -1429,7 +1452,7 @@ export default function AuditorDashboard() {
         if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) {
           return false;
         }
-        if (filterNovedad !== 'all' && p.novedad !== filterNovedad) {
+        if (filterNovedad !== 'all' && getProductNovedad(p) !== filterNovedad) {
           return false;
         }
         return true;
@@ -1448,7 +1471,7 @@ export default function AuditorDashboard() {
       const searchLower = debouncedSearch.toLowerCase();
       count = products.filter(p => {
         if (debouncedSearch && !p.sku.toLowerCase().includes(searchLower) && !p.nombre_articulo.toLowerCase().includes(searchLower)) return false;
-        if (filterNovedad !== 'all' && p.novedad !== filterNovedad) return false;
+        if (filterNovedad !== 'all' && getProductNovedad(p) !== filterNovedad) return false;
         return true;
       }).length;
     }
@@ -1919,11 +1942,11 @@ export default function AuditorDashboard() {
                                     disabled={currentAudit.estado === 'finalizada'}
                                     style={{ width: '80px', margin: 'auto' }}
                                   />
-                                  {product.novedad && product.novedad !== 'sin_novedad' && (
+                                  {hasNovelties(product) && (
                                     <span className={`badge bg-${
-                                      product.novedad === 'faltante' ? 'danger' :
-                                      product.novedad === 'sobrante' ? 'warning' :
-                                      product.novedad === 'averia' ? 'dark' : 'secondary'
+                                      getProductNovedad(product) === 'faltante' ? 'danger' :
+                                      getProductNovedad(product) === 'sobrante' ? 'warning' :
+                                      getProductNovedad(product) === 'averia' ? 'dark' : 'secondary'
                                     } ms-1`} style={{fontSize: '10px'}}>
                                       ⚠️
                                     </span>

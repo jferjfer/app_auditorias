@@ -107,7 +107,7 @@ function MisAuditoriasUltimaMillaPage() {
                                         )}
                                         
                                         <small className="text-muted d-block mb-2">
-                                            Creada: {new Date(auditoria.creada_en).toLocaleString('es-CO')}
+                                            Creada: {new Date(auditoria.creada_en).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
                                         </small>
                                         
                                         <button 

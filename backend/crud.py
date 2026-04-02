@@ -219,16 +219,21 @@ def create_product_novelties(db: Session, product_id: int, novelties: list, user
         ).delete()
         print(f"   🗑️ Eliminadas {deleted} novedades anteriores")
         
-        # Crear nuevas novedades
+        # Crear nuevas novedades (solo manuales, ignorar faltante/sobrante del frontend)
         created_count = 0
         for novelty_data in novelties:
             cantidad = novelty_data.get('cantidad', 0)
+            novedad_tipo_str = novelty_data.get('novedad_tipo', '')
+            
+            # Ignorar faltante/sobrante del frontend, el backend los calcula
+            if novedad_tipo_str in ('faltante', 'sobrante'):
+                continue
+            
             if cantidad > 0:
-                # Validar que novedad_tipo sea válido
                 try:
-                    novedad_tipo = models.NovedadEnum(novelty_data['novedad_tipo'])
+                    novedad_tipo = models.NovedadEnum(novedad_tipo_str)
                 except (ValueError, KeyError) as e:
-                    print(f"   ⚠️ Novedad inválida: {novelty_data.get('novedad_tipo', 'N/A')} - {e}")
+                    print(f"   ⚠️ Novedad inválida: {novedad_tipo_str} - {e}")
                     continue
                 
                 db_novelty = models.ProductNovelty(
@@ -241,11 +246,11 @@ def create_product_novelties(db: Session, product_id: int, novelties: list, user
                 db.add(db_novelty)
                 created_count += 1
         
-        # Agregar faltante/sobrante automáticamente si aplica
+        # Calcular faltante/sobrante siempre desde la diferencia real
         if db_product.cantidad_fisica is not None and db_product.cantidad_documento is not None:
             diferencia = db_product.cantidad_fisica - db_product.cantidad_documento
             
-            if diferencia < 0:  # Faltante
+            if diferencia < 0:
                 db_novelty = models.ProductNovelty(
                     product_id=product_id,
                     novedad_tipo=models.NovedadEnum.faltante,
@@ -256,7 +261,7 @@ def create_product_novelties(db: Session, product_id: int, novelties: list, user
                 db.add(db_novelty)
                 created_count += 1
                 print(f"   📉 Agregado faltante: {abs(diferencia)} unidades")
-            elif diferencia > 0:  # Sobrante
+            elif diferencia > 0:
                 db_novelty = models.ProductNovelty(
                     product_id=product_id,
                     novedad_tipo=models.NovedadEnum.sobrante,

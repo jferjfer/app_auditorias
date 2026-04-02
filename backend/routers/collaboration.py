@@ -63,5 +63,5 @@ def get_audit_history(audit_id: int, db: Session = Depends(get_db), current_user
         "field_changed": h.field_changed, 
         "old_value": h.old_value, 
         "new_value": h.new_value, 
-        "modified_at": h.modified_at
+        "modified_at": (h.modified_at.isoformat() + 'Z') if h.modified_at else None
     } for h in history]

@@ -1,0 +1,32 @@
+id,nombre,correo,contrasena_hash,rol,creado_en
+12,Juan Manuel Niño Corredor,juan.nino@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-11-21 18:56:50.738437
+8,Delia Ximena Fernandez Zamudio,ximena.fernandez@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-11-21 18:50:39.531945
+18,Demo Induccion,demo.induccion@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-12-14 21:27:54.199245
+20,Admin Principal,admin@laika.com.co,$2b$12$tVx5SENINVJCNNXYmwGCAOCXhO.4BqTaChj6x4aLRLsQisesEyI6y,administrador,2025-12-21 23:35:11.113281
+11,Jose Vertel,jose.vertellobato@laika.com.co,$2b$12$OgMELCH4IgFnY98ZPT/uMu8su20cYk8SFF7usFdJdU.H3U6xQEjMO,administrador,2025-11-21 18:55:39.533438
+13,Juan Manuel Niño Corredor,juan.corredor@laika.com.co,$2b$12$yyiAeeQRa678Kc7tFOzQQedASx467oR2LaJre2p7pKsDfZYO2lG9O,analista,2025-11-21 18:57:29.236432
+14,Daniela Diaz,daniela.diaz@laika.com.co,$2b$12$LSbcNVdjycWqR23mS73R8eRcflb/b8Ndd2Bt4xKnd105PJJ54Cgfe,auditor,2025-12-11 19:07:49.119737
+3,Kevin Alcides Mendoza Acuña,kevin.mendoza@laika.com.co,$2b$12$n/wVfjy/eWyhzNPK72d7tuN4cAE3M.z8F1iraGKetxhexjY.EYHqS,auditor,
+1,Jose Fernando Vertel Lobato,jose.vertel@laika.com.co,$2b$12$fbOj2.tnAXoe03ffJ6NRTeaSAi2CUgHVE5kliEz4h9bs4YNzO0q/e,analista,
+32,JENNIFER MESA,jennifer.mesa@laika.com.co,$2b$12$84.8qO6dFb7Ou.EriQLgr.H20BGtpmCKMIwdoHIfkAbh3scEbRHyW,auditor,2026-02-25 19:13:30.641339
+15,Trinidad Calderon,trinidad.calderon@laika.com.co,$2b$12$sQL3Fl94ilIqPKW7RTsma.VFfXpXc6SHkqxTbJT2.fknHY65yvoVO,auditor,2025-12-12 18:13:35.042692
+4,Ober Enrrique Castillo Florez,ober.castillo@laika.com.co,$2b$12$033PfXA0gp5vKarXXyD2oeDPemRQ3DpPq2S8R68JnvWeCgttw.lWi,auditor,2025-11-21 18:45:44.02701
+5,Heidi Cuesta,heidi.cuesta@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-11-21 18:46:42.445366
+6,Diana Lisbeth Rojas Torres,diana.rojas@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-11-21 18:47:38.135436
+7,Liris Del Carmen Martinez  Meneses,liris.martinez@laika.com.co,$2b$12$FsqUdQgAzdwI75ANNBH.fODJM/FsfMa5alF7LCHnW54aAwxmicfSW,auditor,2025-11-21 18:48:49.439895
+22,Laura Maturana,laura.maturana@laika.com.co,$2b$12$s4.sCUSEJd1i7h/qiwDe3u/g5RALHPf1Zt0gfjSGrXLxlzL85Fs0m,auditor,2026-01-06 14:21:30.100685
+33,Yusneris Cervantes,yusneris.cervantes@laika.com.co,$2b$12$oamD5QxUty1h/bLPpiJTUeNdFji/M0puKVwbx4zI3YSfwf7wmuyRa,auditor,2026-03-25 15:18:53.183904
+24,Dayana Silva,dayana.silva@laika.com.co,$2b$12$f3SWcOPgnpSxdFOH.WDSyO7hS8i1hfaN5h062kCG3LGmHwdlcqt4G,auditor,2026-01-16 20:02:07.882824
+23,Jose Vertel,jose.lobato@laika.com.co,$2b$12$pHlyuiNO0jjASS/3Nb9edeszT2lsvUx1F6cKIPyKoyhf8dRVTo/Oy,auditor,2026-01-06 17:22:35.298633
+2,Javier Admin,javier@laika.com.co,$2b$12$JNvlPDkpgi6y9BgeQ4EBNOS4Xx4yrCVMeJWM5ywz5bpquJe.KT.Iy,administrador,
+21,Yenny Fajardo,yenny.fajardo@laika.com.co,$2b$12$.hUOpYN1UCpmwD1BUSI2EeXG8YGEcNGPEiA0Th/Exdy1ZCFpk.Dmu,auditor,2026-01-05 16:21:20.781518
+26,Alba Yopasa,alba.yopasa@laika.com.co,$2b$12$bwAgMaazdugWyCH9hhuJb.wUilq/p7aSH/e9XQyl67zZt7f6ZYQFS,auditor,2026-01-30 19:24:11.45638
+28,John Marin,john.marin@laika.com.co,$2b$12$MunWW0H5pnRO/Uo.OeDlDedNXReO4TI9KE1/AAs4dqSM63XEsEyxe,auditor,2026-02-02 13:30:53.235624
+10,Delia Ximena Fernandez Zamudio,ximena.zamudio@laika.com.co,$2b$12$pCL6fkrbFTiIFwv1TwSenOdt0XatVpFuaswJ3pGY7RnV/v0FdK7TG,analista,2025-11-21 18:54:33.030313
+29,John Marin,john.jimenez@laika.com.co,$2b$12$RciDS4/lfDKg8mIJwMjxk.RcFQUA9xqbdzPVaJlqr7ywMdXcf/wXq,analista,2026-02-03 20:02:05.606353
+17,Jenny Ramirez,jenny.ramirez@laika.com.co,$2b$12$2ZSIaE57SB4so.V8L0b8luxFzZx0G5b57DkbRQvhsUQtOWwcXPZXK,auditor,2025-12-14 21:19:08.697574
+16,Lilibeth Jimenez,lilibeth.jimenez@laika.com.co,$2b$12$b9Xzgx20AQciA6dCsypnLOkPcmQYo085jNYitqvIr7Shrmi5uqlmq,auditor,2025-12-14 21:17:55.475074
+30,Diana Rojas,diana.torres@laika.com.co,$2b$12$NGlWDlAFThYaZ8BtLGVM6eHC4y6Pyxr.EfpOv9DvoI3o930lswo9e,analista,2026-02-17 20:14:28.649948
+27,Diana Larrota,diana.larrota@laika.com.co,$2b$12$KtNepMAqIW48R8R7Vnqyiehqkeh44L1fwM/ymjktJlVyPF84znL2m,auditor,2026-01-30 19:25:53.049771
+31,FABIAN MALAVER,fabian.malaver@laika.com.co,$2b$12$/DQfFOlbdJBfCjutxZ1BJ.7XHs9.jKb90svn/oO2289B96Rl32U4O,auditor,2026-02-24 20:34:14.523139
+34,Ana Zuluaga,ana.zuluaga@laika.com.co,$2b$12$E50jsbZeRXOii99K/kWoqeAGtRsvMBjPRuOO0DKDIiY1t4p/ggWLi,auditor,2026-03-25 15:20:37.887031

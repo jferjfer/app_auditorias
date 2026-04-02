@@ -109,9 +109,6 @@ export default function AnalystDashboard(){
         const auditsWithNovelties = audits.map(audit => ({
           ...audit,
           productos: audit.productos?.filter(p => {
-            // Incluir si tiene novedad diferente de sin_novedad
-            if (p.novedad !== 'sin_novedad') return true;
-            // Incluir si tiene novelties con tipos diferentes de sin_novedad
             if (p.novelties && p.novelties.length > 0) {
               return p.novelties.some(n => {
                 const tipo = n.novedad_tipo || n.tipo;
@@ -156,9 +153,6 @@ export default function AnalystDashboard(){
         const auditsWithNovelties = audits.map(audit => ({
           ...audit,
           productos: audit.productos?.filter(p => {
-            // Incluir si tiene novedad diferente de sin_novedad
-            if (p.novedad !== 'sin_novedad') return true;
-            // Incluir si tiene novelties con tipos diferentes de sin_novedad
             if (p.novelties && p.novelties.length > 0) {
               return p.novelties.some(n => {
                 const tipo = n.novedad_tipo || n.tipo;

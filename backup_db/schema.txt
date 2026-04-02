@@ -1,0 +1,27 @@
+                                                                         Table "public.usuarios"
+     Column      |            Type             | Collation | Nullable |                   Default                   | Storage  | Compression | Stats target | Description 
+-----------------+-----------------------------+-----------+----------+---------------------------------------------+----------+-------------+--------------+-------------
+ id              | integer                     |           | not null | nextval('public.usuarios_id_seq'::regclass) | plain    |             |              | 
+ nombre          | character varying           |           | not null |                                             | extended |             |              | 
+ correo          | character varying           |           | not null |                                             | extended |             |              | 
+ contrasena_hash | character varying           |           | not null |                                             | extended |             |              | 
+ rol             | character varying           |           | not null |                                             | extended |             |              | 
+ creado_en       | timestamp without time zone |           |          |                                             | plain    |             |              | 
+Indexes:
+    "usuarios_pkey" PRIMARY KEY, btree (id)
+    "ix_usuarios_correo" UNIQUE, btree (correo)
+Referenced by:
+    TABLE "public.audit_collaborators" CONSTRAINT "audit_collaborators_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.usuarios(id)
+    TABLE "public.auditorias" CONSTRAINT "auditorias_auditor_id_fkey" FOREIGN KEY (auditor_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.productos_auditados" CONSTRAINT "fk_last_modified_by" FOREIGN KEY (last_modified_by_id) REFERENCES public.usuarios(id)
+    TABLE "public.productos_auditados" CONSTRAINT "fk_locked_by_user" FOREIGN KEY (locked_by_user_id) REFERENCES public.usuarios(id)
+    TABLE "public.informes_generados" CONSTRAINT "informes_generados_analista_id_fkey" FOREIGN KEY (analista_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.product_history" CONSTRAINT "product_history_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.product_novelties" CONSTRAINT "product_novelties_user_id_fkey" FOREIGN KEY (user_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.productos_auditados" CONSTRAINT "productos_auditados_last_modified_by_id_fkey" FOREIGN KEY (last_modified_by_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.productos_auditados" CONSTRAINT "productos_auditados_locked_by_user_id_fkey" FOREIGN KEY (locked_by_user_id) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.productos_pedido_ultima_milla" CONSTRAINT "productos_pedido_ultima_milla_auditado_por_fkey" FOREIGN KEY (auditado_por) REFERENCES public.usuarios(id) ON DELETE SET NULL
+    TABLE "public.sku_mapping" CONSTRAINT "sku_mapping_creado_por_fkey" FOREIGN KEY (creado_por) REFERENCES public.usuarios(id)
+    TABLE "public.ubicaciones" CONSTRAINT "ubicaciones_creado_por_fkey" FOREIGN KEY (creado_por) REFERENCES public.usuarios(id)
+Access method: heap
+

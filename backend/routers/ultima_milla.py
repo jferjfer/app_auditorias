@@ -289,8 +289,8 @@ def get_mis_auditorias_ultima_milla(
             'productos_auditados': productos_auditados,
             'estado': auditoria.estado,
             'porcentaje_cumplimiento': auditoria.porcentaje_cumplimiento,
-            'creada_en': auditoria.creada_en,
-            'finalizada_en': auditoria.finalizada_en
+            'creada_en': (auditoria.creada_en.isoformat() + 'Z') if auditoria.creada_en else None,
+            'finalizada_en': (auditoria.finalizada_en.isoformat() + 'Z') if auditoria.finalizada_en else None
         })
     
     return result
@@ -505,7 +505,7 @@ def get_productos_auditoria(
             'novedad': producto.novedad,
             'observaciones': producto.observaciones,
             'auditado_por': producto.auditado_por,
-            'auditado_en': producto.auditado_en,
+            'auditado_en': (producto.auditado_en.isoformat() + 'Z') if producto.auditado_en else None,
             'numero_pedido': pedidos_dict.get(producto.pedido_id, 'N/A'),
             'novedades': novedades_list
         })
