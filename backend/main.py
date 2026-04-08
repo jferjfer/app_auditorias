@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 load_dotenv()
 
@@ -32,7 +32,7 @@ app.middleware("http")(rate_limit_middleware)
 if not DEBUG:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["app-auditorias.onrender.com", "*.onrender.com"]
+        allowed_hosts=["app-auditorias.onrender.com", "*.onrender.com", "localhost", "127.0.0.1"]
     )
 
 # CORS (solo origenes permitidos)
@@ -106,8 +106,8 @@ if not DEBUG:
         app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
         app.mount("/images", StaticFiles(directory=os.path.join(frontend_dir, "images")), name="images")
         
-        @app.get("/{full_path:path}")
-        async def serve_spa(full_path: str):
+        @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
+        async def serve_spa(request: Request, full_path: str):
             print(f"Solicitando: {full_path}")
             
             if full_path.startswith("api/") or full_path.startswith("uploads/"):
