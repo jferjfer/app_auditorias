@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, Response
 
 load_dotenv()
 
-from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products, sku_mappings, ultima_milla
+from backend.routers import auth, audits, users, websockets, collaboration, ubicaciones, products, sku_mappings, ultima_milla, dashboard
 from backend.database import engine
 from backend import models
 from backend.middleware.security import rate_limit_middleware
@@ -76,6 +76,7 @@ async def add_security_headers(request: Request, call_next):
 
 # Incluir los routers de la API
 app.include_router(auth.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 app.include_router(audits.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(websockets.router, prefix="/api")

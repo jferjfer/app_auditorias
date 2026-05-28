@@ -3,11 +3,11 @@ import React from 'react'
 export default function KPIs({ data }){
   if (!data) return null;
   
-  const totalStatus = data.status?.reduce((sum, s) => sum + s.count, 0) || 0;
-  const finalizadas = data.status?.find(s => s.estado === 'finalizada')?.count || 0;
-  const avgCompliance = data.averageCompliance?.average_compliance || 0;
-  const avgDuration = data.averageAuditDuration?.average_duration_hours || 0;
-  const totalNovelties = data.noveltyDistribution?.reduce((sum, n) => sum + n.count, 0) || 0;
+  const totalStatus = Array.isArray(data.status) ? data.status.reduce((sum, s) => sum + (s.count || 0), 0) : 0;
+  const finalizadas = Array.isArray(data.status) ? (data.status.find(s => s.estado === 'finalizada')?.count || 0) : 0;
+  const avgCompliance = Number(data.averageCompliance?.average_compliance) || 0;
+  const avgDuration = Number(data.averageAuditDuration?.average_duration_hours) || 0;
+  const totalNovelties = Array.isArray(data.noveltyDistribution) ? data.noveltyDistribution.reduce((sum, n) => sum + (n.count || 0), 0) : 0;
 
   return (
     <div className="row mb-4">

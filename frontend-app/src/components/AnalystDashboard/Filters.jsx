@@ -36,13 +36,21 @@ export default function Filters({ onChange, initial = {} }){
 
   function submit(e){
     e && e.preventDefault()
+    // Validar que fecha inicio no sea posterior a fecha fin
+    if(start && end){
+      const startDate = start instanceof Date ? start : new Date(start)
+      const endDate = end instanceof Date ? end : new Date(end)
+      if(startDate > endDate){
+        alert('La fecha de inicio no puede ser posterior a la fecha fin')
+        return
+      }
+    }
     const filters = {}
     if(status) filters.audit_status = status
     if(auditor) filters.auditor_id = auditor
     if(ubicacionOrigen) filters.ubicacion_origen_id = ubicacionOrigen
     if(start) filters.start_date = formatYMD(start)
     if(end) filters.end_date = formatYMD(end)
-    console.log('🔍 Aplicando filtros:', filters)
     onChange && onChange(filters)
   }
 
@@ -52,7 +60,6 @@ export default function Filters({ onChange, initial = {} }){
     setStatus('')
     setAuditor('')
     setUbicacionOrigen('')
-    console.log('🧹 Limpiando filtros')
     onChange && onChange({})
   }
 

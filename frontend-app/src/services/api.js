@@ -276,15 +276,13 @@ export async function fetchStats(filters = {}) {
 
 export async function fetchReportData(filters = {}) {
     const queryString = buildQueryString(filters);
-    const response = await fetch(`${API_BASE}/api/audits/report/details${queryString}`, buildOptions('GET'));
-    const text = await response.text();
-    console.log('📦 Tamaño de respuesta:', text.length, 'caracteres');
-    const data = JSON.parse(text);
-    console.log('📊 Auditorías parseadas:', data.length);
-    if (data.length > 0) {
-        console.log('🔍 Primera auditoría productos:', data[0].productos?.length || 0);
-    }
-    return data;
+    return fetchApi(`/api/audits/report/details${queryString}`, buildOptions('GET'));
+}
+
+export async function fetchDashboardData(filters = {}, page = 0, pageSize = 10) {
+    const params = { ...filters, page, page_size: pageSize };
+    const queryString = buildQueryString(params);
+    return fetchApi(`/api/audits/dashboard-data${queryString}`, buildOptions('GET'));
 }
 
 export async function downloadReport(filters = {}) {

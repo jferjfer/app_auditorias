@@ -8,8 +8,8 @@ export default function Charts({ data }){
   if (!data) return null;
 
   // Gráfico de estado
-  const statusLabels = data.status?.map(s => s.estado) || [];
-  const statusValues = data.status?.map(s => s.count) || [];
+  const statusLabels = Array.isArray(data.status) ? data.status.map(s => s.estado) : [];
+  const statusValues = Array.isArray(data.status) ? data.status.map(s => s.count) : [];
   const statusData = {
     labels: statusLabels,
     datasets: [{
@@ -20,8 +20,8 @@ export default function Charts({ data }){
   };
 
   // Gráfico de cumplimiento por auditor
-  const auditorLabels = data.complianceByAuditor?.map(a => a.auditor_nombre) || [];
-  const auditorValues = data.complianceByAuditor?.map(a => a.average_compliance) || [];
+  const auditorLabels = Array.isArray(data.complianceByAuditor) ? data.complianceByAuditor.map(a => a.auditor_nombre) : [];
+  const auditorValues = Array.isArray(data.complianceByAuditor) ? data.complianceByAuditor.map(a => a.average_compliance) : [];
   const auditorData = {
     labels: auditorLabels,
     datasets: [{
@@ -34,8 +34,8 @@ export default function Charts({ data }){
   };
 
   // Gráfico de auditorías por período
-  const periodLabels = data.auditsByPeriod?.map(p => p.fecha) || [];
-  const periodValues = data.auditsByPeriod?.map(p => p.total_auditorias) || [];
+  const periodLabels = Array.isArray(data.auditsByPeriod) ? data.auditsByPeriod.map(p => p.fecha) : [];
+  const periodValues = Array.isArray(data.auditsByPeriod) ? data.auditsByPeriod.map(p => p.total_auditorias) : [];
   const periodData = {
     labels: periodLabels,
     datasets: [{
@@ -48,8 +48,8 @@ export default function Charts({ data }){
   };
 
   // Gráfico de distribución de novedades
-  const noveltyLabels = data.noveltyDistribution?.map(n => n.novedad) || [];
-  const noveltyValues = data.noveltyDistribution?.map(n => n.count) || [];
+  const noveltyLabels = Array.isArray(data.noveltyDistribution) ? data.noveltyDistribution.map(n => n.novedad) : [];
+  const noveltyValues = Array.isArray(data.noveltyDistribution) ? data.noveltyDistribution.map(n => n.count) : [];
   const noveltyData = {
     labels: noveltyLabels,
     datasets: [{
@@ -60,6 +60,9 @@ export default function Charts({ data }){
 
   const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } };
 
+  const hasStatusData = statusValues.length > 0 && statusValues.some(v => v > 0);
+  const hasNoveltyData = noveltyValues.length > 0 && noveltyValues.some(v => v > 0);
+
   return (
     <>
       <div className="row mb-4">
@@ -68,7 +71,7 @@ export default function Charts({ data }){
             <div className="card-body">
               <h5 className="card-title">Auditorías por Estado</h5>
               <div style={{height:250}}>
-                <Pie data={statusData} options={opts} />
+                {hasStatusData ? <Pie data={statusData} options={opts} /> : <p className="text-muted text-center mt-5">Sin datos</p>}
               </div>
             </div>
           </div>
@@ -78,7 +81,7 @@ export default function Charts({ data }){
             <div className="card-body">
               <h5 className="card-title">Cumplimiento por Auditor</h5>
               <div style={{height:250}}>
-                <Bar data={auditorData} options={opts} />
+                {auditorLabels.length > 0 ? <Bar data={auditorData} options={opts} /> : <p className="text-muted text-center mt-5">Sin datos</p>}
               </div>
             </div>
           </div>
@@ -91,7 +94,7 @@ export default function Charts({ data }){
             <div className="card-body">
               <h5 className="card-title">Auditorías por Período</h5>
               <div style={{height:250}}>
-                <Line data={periodData} options={opts} />
+                {periodLabels.length > 0 ? <Line data={periodData} options={opts} /> : <p className="text-muted text-center mt-5">Sin datos para el período</p>}
               </div>
             </div>
           </div>
@@ -104,7 +107,7 @@ export default function Charts({ data }){
             <div className="card-body">
               <h5 className="card-title">Distribución de Novedades</h5>
               <div style={{height:250}}>
-                <Pie data={noveltyData} options={opts} />
+                {hasNoveltyData ? <Pie data={noveltyData} options={opts} /> : <p className="text-muted text-center mt-5">Sin novedades</p>}
               </div>
             </div>
           </div>

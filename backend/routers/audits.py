@@ -495,6 +495,9 @@ async def get_report_details(
     Sin filtros: 7 más recientes del día actual.
     Con filtros: todas las que cumplan los criterios.
     """
+    import logging
+    logger = logging.getLogger("uvicorn")
+    
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
 
@@ -520,22 +523,10 @@ async def get_report_details(
     
     # Límite temporal inteligente: Si NO hay fechas especificadas, limitar a últimos 30 días
     if not (start_date and start_date.strip()) and not (end_date and end_date.strip()):
-        if not has_filters:
-            # Sin filtros: solo día actual
-            bogota_today = datetime.now(bogota_tz).date()
-            start_local = datetime.combine(bogota_today, datetime.min.time()).replace(tzinfo=bogota_tz)
-            end_local = datetime.combine(bogota_today, datetime.max.time()).replace(tzinfo=bogota_tz)
-            start_utc = start_local.astimezone(timezone.utc)
-            end_utc = end_local.astimezone(timezone.utc)
-            query = query.filter(
-                models.Audit.creada_en >= start_utc,
-                models.Audit.creada_en <= end_utc
-            )
-        else:
-            # Con filtros pero sin fechas: últimos 30 días
-            default_start = datetime.now(bogota_tz) - timedelta(days=30)
-            start_utc = default_start.astimezone(timezone.utc)
-            query = query.filter(models.Audit.creada_en >= start_utc)
+        # Sin fechas: últimos 30 días por defecto (consistente con estadísticas)
+        default_start = datetime.now(bogota_tz) - timedelta(days=30)
+        start_utc = default_start.astimezone(timezone.utc)
+        query = query.filter(models.Audit.creada_en >= start_utc)
     
     # Aplicar filtros si existen
     db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
@@ -568,21 +559,15 @@ async def get_report_details(
     # Ordenar por fecha descendente
     query = query.order_by(models.Audit.creada_en.desc())
     
-    # Límite de seguridad: máximo 500 auditorías para prevenir queries masivas
+    # Límite de seguridad
     MAX_AUDITS = 500
-    if not has_filters:
-        query = query.limit(7)  # Sin filtros: solo 7 más recientes del día
-    else:
-        query = query.limit(MAX_AUDITS)  # Con filtros: máximo 500
+    query = query.limit(MAX_AUDITS)
     
     audits = query.all()
     
     # Log si se alcanzó el límite
     if len(audits) >= MAX_AUDITS:
         logger.info(f"⚠️ Query alcanzó límite de {MAX_AUDITS} auditorías. Considerar filtros más específicos.")
-    
-    import logging
-    logger = logging.getLogger("uvicorn")
     logger.info(f"📊 Auditorías encontradas: {len(audits)}")
     if audits:
         logger.info(f"📦 Primera auditoría ID: {audits[0].id}, Productos: {len(audits[0].productos)}")

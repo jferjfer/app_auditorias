@@ -89,6 +89,7 @@ class Audit(Base):
         Index('idx_auditorias_auditor', 'auditor_id'),
         Index('idx_auditorias_fecha', 'creada_en'),
         Index('idx_auditorias_estado', 'estado'),
+        Index('idx_auditorias_compuesto', 'creada_en', 'estado', 'auditor_id', 'ubicacion_origen_id'),
     )
 
 # La tabla "productos_auditados" del script SQL
