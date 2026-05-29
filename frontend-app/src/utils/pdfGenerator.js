@@ -185,10 +185,14 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
   const tableBody = products.map((p, index) => {
     let novedadesTexto = '';
     let cantidadNovedadTexto = '';
+    const noAuditado = p.cantidad_fisica === null || p.cantidad_fisica === undefined;
     const novedadesArray = [];
     const cantidadesArray = [];
     
-    if (p.novelties && p.novelties.length > 0) {
+    if (noAuditado) {
+      novedadesTexto = 'no auditado';
+      cantidadNovedadTexto = 'N/A';
+    } else if (p.novelties && p.novelties.length > 0) {
       const agrupadas = {};
       p.novelties.forEach(nov => {
         const tipo = nov.novedad_tipo || nov.tipo;
@@ -208,8 +212,8 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
       cantidadesArray.push(diff);
     }
     
-    novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
-    cantidadNovedadTexto = cantidadesArray.length > 0 ? cantidadesArray.join(', ') : '0';
+    novedadesTexto = noAuditado ? novedadesTexto : (novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad');
+    cantidadNovedadTexto = noAuditado ? cantidadNovedadTexto : (cantidadesArray.length > 0 ? cantidadesArray.join(', ') : '0');
     
     return [
       index + 1,
@@ -219,8 +223,8 @@ export async function generatePdfReport(reportData, reportType, filters, userNam
       novedadesTexto,
       cantidadNovedadTexto,
       p.cantidad_documento,
-      p.cantidad_fisica || 0,
-      (p.cantidad_fisica || 0) - (p.cantidad_documento || 0)
+      p.cantidad_fisica !== null && p.cantidad_fisica !== undefined ? p.cantidad_fisica : 'N/A',
+      p.cantidad_fisica !== null && p.cantidad_fisica !== undefined ? (p.cantidad_fisica - (p.cantidad_documento || 0)) : 'N/A'
     ];
   });
 
@@ -253,7 +257,9 @@ export function prepareReportData(audits) {
         });
         
         totalUnidadesOts += product.cantidad_documento || 0;
-        totalAuditados += product.cantidad_fisica || 0;
+        if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined) {
+          totalAuditados += product.cantidad_fisica;
+        }
         
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {

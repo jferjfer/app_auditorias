@@ -89,6 +89,8 @@ export function generateExcelReport(reportData, reportType, filters) {
       novedadesTexto = novedadesArray.length > 0 ? novedadesArray.join(', ') : 'sin_novedad';
       const cantidadNovedadFinal = cantidadesArray.length === 1 ? cantidadesArray[0] : (cantidadesArray.length > 1 ? cantidadesArray.join(', ') : 0);
       
+      const noAuditado = p.cantidad_fisica === null || p.cantidad_fisica === undefined;
+      
       return [
         index + 1,
         p.audit_id || 'N/A',
@@ -100,13 +102,13 @@ export function generateExcelReport(reportData, reportType, filters) {
         p.nombre_articulo,
         p.ubicacion_origen || 'N/A',
         p.ubicacion_destino || 'N/A',
-        novedadesTexto,
-        cantidadNovedadFinal,
-        fechaNovedadTexto,
+        noAuditado ? 'no auditado' : novedadesTexto,
+        noAuditado ? 'N/A' : cantidadNovedadFinal,
+        noAuditado ? 'N/A' : fechaNovedadTexto,
         p.cantidad_documento,
-        p.cantidad_fisica || 0,
-        (p.cantidad_fisica || 0) - (p.cantidad_documento || 0),
-        p.observaciones || ''
+        noAuditado ? 'N/A' : p.cantidad_fisica,
+        noAuditado ? 'N/A' : (p.cantidad_fisica - (p.cantidad_documento || 0)),
+        noAuditado ? 'no auditado' : (p.observaciones || '')
       ];
     })
   ];
@@ -159,7 +161,9 @@ export function prepareReportData(audits) {
         });
         
         totalUnidadesOts += product.cantidad_documento || 0;
-        totalAuditados += product.cantidad_fisica || 0;
+        if (product.cantidad_fisica !== null && product.cantidad_fisica !== undefined) {
+          totalAuditados += product.cantidad_fisica;
+        }
         
         if (product.novelties && product.novelties.length > 0) {
           product.novelties.forEach(nov => {
