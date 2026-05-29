@@ -17,7 +17,7 @@ export default function ToastContainer() {
     showToastFn = (msg, type) => {
       const id = ++toastId;
       setToasts(prev => [...prev, { id, msg, type }]);
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), type === 'info' ? 15000 : 4000);
     };
   }, []);
 

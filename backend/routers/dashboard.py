@@ -128,7 +128,7 @@ async def get_dashboard_data(
     ])
 
     # Intentar caché si no hay filtros
-    cache_key = f"dashboard_no_filters_page{page}"
+    cache_key = f"dashboard_no_filters_p{page}_ps{page_size}"
     if not has_filters:
         cached = _get_cached(cache_key)
         if cached:

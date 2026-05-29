@@ -317,37 +317,29 @@ def get_novelties_by_audit(db: Session, audit_id: int):
 
 def recalculate_and_update_audit_percentage(db: Session, audit_id: int) -> Optional[models.Audit]:
     """
-    Calcula el porcentaje de SKUs únicos auditados.
-    Un SKU está auditado si al menos UNA de sus líneas tiene cantidad_fisica registrada (no NULL).
+    Calcula el porcentaje de cumplimiento basado en unidades:
+    sum(min(cantidad_fisica, cantidad_documento)) / sum(cantidad_documento) * 100
+    Misma fórmula que usa el frontend para consistencia.
     """
     db_audit = get_audit_by_id(db, audit_id)
     if not db_audit:
         return None
 
     products = get_products_by_audit(db, audit_id=audit_id)
-    
-    print(f"📊 Recalculando cumplimiento para auditoría {audit_id}")
-    print(f"   Total productos (líneas): {len(products)}")
-    
+
     if len(products) == 0:
         cumplimiento = 100
-        print(f"   ✅ Sin productos, cumplimiento: 100%")
     else:
-        # Obtener SKUs únicos
-        skus_unicos = set(p.sku for p in products)
-        
-        # Obtener SKUs que tienen al menos una línea auditada
-        skus_auditados = set(p.sku for p in products if p.cantidad_fisica is not None)
-        
-        total_skus = len(skus_unicos)
-        skus_con_auditoria = len(skus_auditados)
-        
-        # Calcular porcentaje exacto sin redondeos
-        cumplimiento = int((skus_con_auditoria / total_skus) * 100)
-        
-        print(f"   📦 SKUs únicos: {total_skus}")
-        print(f"   ✅ SKUs auditados: {skus_con_auditoria}")
-        print(f"   ✅ Cumplimiento: {cumplimiento}%")
+        total_documento = sum(p.cantidad_documento or 0 for p in products)
+        if total_documento == 0:
+            cumplimiento = 100
+        else:
+            cumplidas = sum(
+                min(p.cantidad_fisica, p.cantidad_documento or 0)
+                for p in products
+                if p.cantidad_fisica is not None
+            )
+            cumplimiento = round((cumplidas / total_documento) * 100)
 
     db_audit.porcentaje_cumplimiento = cumplimiento
     db.commit()

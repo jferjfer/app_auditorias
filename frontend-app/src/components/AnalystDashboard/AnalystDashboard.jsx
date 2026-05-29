@@ -120,7 +120,11 @@ function AnalystDashboardContent(){
 
   const handleDownloadPDF = async (type) => {
     try {
-      toast.info('Cargando datos para el reporte...')
+      if (Object.keys(filters).length === 0) {
+        toast.warning('Aplica al menos un filtro antes de descargar el reporte')
+        return
+      }
+      toast.info('⏳ Generando reporte, esto puede tomar unos segundos...')
       const { generatePdfReport, prepareReportData } = await import('../../utils/pdfGenerator')
       const { getCurrentUser } = await import('../../services/auth')
       const user = getCurrentUser()
@@ -157,12 +161,17 @@ function AnalystDashboardContent(){
       toast.success('Reporte PDF generado exitosamente')
     } catch (err) {
       toast.error('Error generando PDF: ' + err.message)
+      console.error('PDF error completo:', err)
     }
   }
 
   const handleDownloadExcel = async (type) => {
     try {
-      toast.info('Cargando datos para el reporte...')
+      if (Object.keys(filters).length === 0) {
+        toast.warning('Aplica al menos un filtro antes de descargar el reporte')
+        return
+      }
+      toast.info('⏳ Generando reporte, esto puede tomar unos segundos...')
       const { generateExcelReport, prepareReportData } = await import('../../utils/excelGenerator')
       
       // Cargar datos completos con productos solo para el reporte
@@ -191,6 +200,7 @@ function AnalystDashboardContent(){
       toast.success('Reporte Excel generado exitosamente')
     } catch (err) {
       toast.error('Error generando Excel: ' + err.message)
+      console.error('Excel error completo:', err)
     }
   }
 

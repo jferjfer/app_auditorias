@@ -15,8 +15,9 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
   useEffect(() => {
     if (show && product) {
       setCantidadFisica(product.cantidad_fisica || product.cantidad_documento || '');
-      setObservaciones(product.observaciones || '');
-      // Reset novelties
+      // Limpiar observaciones si el valor previo era 'sin novedad' (dato inconsistente)
+      const obs = product.observaciones || '';
+      setObservaciones(obs === 'sin novedad' ? '' : obs);
       setNovelties({
         faltante: 0,
         sobrante: 0,
@@ -70,7 +71,16 @@ export default function NovedadModal({ show, product, onSave, onClose }) {
   
   const handleNoveltyChange = (tipo, valor) => {
     const num = parseInt(valor) || 0;
-    setNovelties(prev => ({ ...prev, [tipo]: num }));
+    const updated = { ...novelties, [tipo]: num };
+    setNovelties(updated);
+
+    // Auto-generar observaciones basadas en las novedades ingresadas
+    const partes = Object.entries(updated)
+      .filter(([_, cantidad]) => cantidad > 0)
+      .map(([tipo, cantidad]) => `${tipo}: ${cantidad}`);
+    if (partes.length > 0) {
+      setObservaciones(partes.join(', '));
+    }
   };
 
   const handleKeyDown = (e) => {

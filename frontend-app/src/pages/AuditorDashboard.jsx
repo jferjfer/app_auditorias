@@ -215,7 +215,7 @@ export default function AuditorDashboard() {
         const changes = {
           cantidad_fisica: lastProduct.cantidad_documento,
           novedad: 'sin_novedad',
-          observaciones: 'sin novedad',
+          observaciones: '',
           novelties: []
         };
         
@@ -837,7 +837,7 @@ export default function AuditorDashboard() {
           const changes = {
             cantidad_fisica: lastProduct.cantidad_documento,
             novedad: 'sin_novedad',
-            observaciones: 'sin novedad',
+            observaciones: '',
             novelties: []
           };
           setProducts(prev => prev.map(p => 
@@ -1062,7 +1062,7 @@ export default function AuditorDashboard() {
     const confirmed = await confirm('¿Finalizar auditoría?');
     if (!confirmed) return;
     try {
-      await finishAudit(currentAudit.id);
+      await finishAudit(currentAudit.id, cumplimientoActual);
       toast.success('Auditoría finalizada');
       setCurrentAudit(null);
       setProducts([]);
@@ -1366,7 +1366,7 @@ export default function AuditorDashboard() {
         const changes = {
           cantidad_fisica: lastProduct.cantidad_documento,
           novedad: 'sin_novedad',
-          observaciones: 'sin novedad',
+          observaciones: '',
           novelties: []
         };
         setProducts(prev => prev.map(p => 

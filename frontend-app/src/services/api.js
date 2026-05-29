@@ -198,8 +198,9 @@ export async function iniciarAuditoria(auditId, modo = 'normal') {
     return fetchApi(`/api/audits/${auditId}/iniciar?modo=${modo}`, buildOptions('PUT'));
 }
 
-export async function finishAudit(auditId) {
-    return fetchApi(`/api/audits/${auditId}/finish`, buildOptions('PUT'));
+export async function finishAudit(auditId, porcentajeFinal = null) {
+    const params = porcentajeFinal !== null ? `?porcentaje_final=${porcentajeFinal}` : '';
+    return fetchApi(`/api/audits/${auditId}/finish${params}`, buildOptions('PUT'));
 }
 
 export async function updateProduct(auditId, productId, updateData) {

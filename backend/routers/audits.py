@@ -402,15 +402,23 @@ async def bulk_update_products_endpoint(
     return {"message": f"{updated_products_count} productos actualizados exitosamente."}
 
 @router.put("/{audit_id}/finish", response_model=schemas.Audit)
-async def finish_audit(audit_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+async def finish_audit(
+    audit_id: int,
+    porcentaje_final: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     db_audit = crud.get_audit_by_id(db, audit_id=audit_id)
     if not db_audit or (db_audit.auditor_id != current_user.id and current_user.rol != "administrador"):
         raise HTTPException(status_code=404, detail="Auditoría no encontrada o sin acceso.")
 
-    # Recalcular porcentaje antes de finalizar para asegurar consistencia
-    crud.recalculate_and_update_audit_percentage(db, audit_id)
+    # Si el frontend envía el porcentaje calculado, usarlo directamente
+    # Si no, recalcular desde la BD como fallback
+    if porcentaje_final is not None and 0 <= porcentaje_final <= 100:
+        db_audit.porcentaje_cumplimiento = porcentaje_final
+    else:
+        crud.recalculate_and_update_audit_percentage(db, audit_id)
     
-    # Marcar como finalizada
     db_audit.estado = "finalizada"
     db_audit.finalizada_en = datetime.utcnow()
     db.commit()
@@ -490,138 +498,160 @@ async def get_report_details(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """
-    Obtiene auditorías según filtros.
-    Sin filtros: 7 más recientes del día actual.
-    Con filtros: todas las que cumplan los criterios.
-    """
     import logging
     logger = logging.getLogger("uvicorn")
-    
+
     if current_user.rol not in ["analista", "administrador"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para acceder a estos datos")
 
-    # Detectar si hay filtros aplicados
-    has_filters = any([
-        audit_status and audit_status != 'Todos',
-        auditor_id,
-        ubicacion_origen_id,
-        start_date and start_date.strip(),
-        end_date and end_date.strip()
-    ])
-    
     bogota_tz = ZoneInfo("America/Bogota")
-    query = db.query(models.Audit).options(
-        joinedload(models.Audit.auditor),
-        selectinload(models.Audit.productos).selectinload(models.Product.novelties),
-        selectinload(models.Audit.productos).joinedload(models.Product.last_modified_by),
-        joinedload(models.Audit.ubicacion_origen),
-        joinedload(models.Audit.ubicacion_destino)
-    ).filter(
-        models.Audit.auditor_id.isnot(None)
-    )
-    
-    # Límite temporal inteligente: Si NO hay fechas especificadas, limitar a últimos 30 días
+
+    # --- 1. Query liviana: solo IDs y campos básicos de auditorías ---
+    audit_query = db.query(
+        models.Audit.id,
+        models.Audit.auditor_id,
+        models.Audit.ubicacion_origen_id,
+        models.Audit.ubicacion_destino_id,
+        models.Audit.estado,
+        models.Audit.porcentaje_cumplimiento,
+        models.Audit.creada_en
+    ).filter(models.Audit.auditor_id.isnot(None))
+
     if not (start_date and start_date.strip()) and not (end_date and end_date.strip()):
-        # Sin fechas: últimos 30 días por defecto (consistente con estadísticas)
         default_start = datetime.now(bogota_tz) - timedelta(days=30)
-        start_utc = default_start.astimezone(timezone.utc)
-        query = query.filter(models.Audit.creada_en >= start_utc)
-    
-    # Aplicar filtros si existen
-    db_status = audit_status.lower().replace(' ', '_') if audit_status and audit_status != 'Todos' else None
-    if db_status:
-        query = query.filter(models.Audit.estado == db_status)
-    if auditor_id:
-        query = query.filter(models.Audit.auditor_id == auditor_id)
-    if ubicacion_origen_id:
-        query = query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
-    
-    # Aplicar filtros de fecha si existen
+        audit_query = audit_query.filter(models.Audit.creada_en >= default_start.astimezone(timezone.utc))
+
     if start_date and start_date.strip():
         try:
             sd = datetime.strptime(start_date, "%Y-%m-%d").date()
-            start_local = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz)
-            start_utc = start_local.astimezone(timezone.utc)
-            query = query.filter(models.Audit.creada_en >= start_utc)
+            start_utc = datetime.combine(sd, time.min).replace(tzinfo=bogota_tz).astimezone(timezone.utc)
+            audit_query = audit_query.filter(models.Audit.creada_en >= start_utc)
         except ValueError:
             pass
-    
+
     if end_date and end_date.strip():
         try:
             ed = datetime.strptime(end_date, "%Y-%m-%d").date()
-            end_local = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz)
-            end_utc = end_local.astimezone(timezone.utc)
-            query = query.filter(models.Audit.creada_en <= end_utc)
+            end_utc = datetime.combine(ed, time.max).replace(tzinfo=bogota_tz).astimezone(timezone.utc)
+            audit_query = audit_query.filter(models.Audit.creada_en <= end_utc)
         except ValueError:
             pass
-    
-    # Ordenar por fecha descendente
-    query = query.order_by(models.Audit.creada_en.desc())
-    
-    # Límite de seguridad
-    MAX_AUDITS = 500
-    query = query.limit(MAX_AUDITS)
-    
-    audits = query.all()
-    
-    # Log si se alcanzó el límite
-    if len(audits) >= MAX_AUDITS:
-        logger.info(f"⚠️ Query alcanzó límite de {MAX_AUDITS} auditorías. Considerar filtros más específicos.")
-    logger.info(f"📊 Auditorías encontradas: {len(audits)}")
-    if audits:
-        logger.info(f"📦 Primera auditoría ID: {audits[0].id}, Productos: {len(audits[0].productos)}")
-    
-    # Retornar datos con productos
-    result = []
-    for a in audits:
-        productos_serializados = []
-        for p in a.productos:
-            # Leer novedades solo de product_novelties
-            novedades_list = []
-            if hasattr(p, 'novelties') and p.novelties:
-                for nov in p.novelties:
-                    tipo = nov.novedad_tipo.value if hasattr(nov.novedad_tipo, 'value') else str(nov.novedad_tipo)
-                    if tipo != 'sin_novedad':
-                        novedades_list.append(tipo)
-            
-            novedad_combinada = ', '.join(novedades_list) if novedades_list else 'sin_novedad'
-            
-            # Determinar quién auditó este producto
-            auditado_por = None
-            if p.last_modified_by_id and p.last_modified_by:
-                auditado_por = p.last_modified_by.nombre
-            elif a.auditor:
-                auditado_por = a.auditor.nombre
-            
-            productos_serializados.append({
-                "id": p.id,
-                "sku": p.sku,
-                "nombre_articulo": p.nombre_articulo,
-                "cantidad_documento": p.cantidad_documento,
-                "cantidad_fisica": p.cantidad_fisica,
-                "novedad": novedad_combinada,
-                "novelties": [{"novedad_tipo": n.novedad_tipo.value if hasattr(n.novedad_tipo, 'value') else str(n.novedad_tipo), "cantidad": n.cantidad, "observaciones": n.observaciones, "created_at": (n.created_at.isoformat() + 'Z') if n.created_at else None} for n in (p.novelties if hasattr(p, 'novelties') and p.novelties else [])],
-                "observaciones": p.observaciones,
-                "orden_traslado_original": p.orden_traslado_original,
-                "auditado_por": auditado_por
-            })
-        
-        audit_dict = {
-            "id": a.id,
-            "ubicacion_origen": a.ubicacion_origen,
-            "ubicacion_destino": a.ubicacion_destino,
-            "estado": a.estado,
-            "porcentaje_cumplimiento": a.porcentaje_cumplimiento,
-            "creada_en": (a.creada_en.isoformat() + 'Z') if a.creada_en else None,
-            "auditor": {"id": a.auditor.id, "nombre": a.auditor.nombre} if a.auditor else None,
-            "productos": productos_serializados
-        }
-        logger.info(f"✅ Auditoría {a.id}: {len(audit_dict['productos'])} productos serializados")
-        result.append(audit_dict)
-    
-    return result
 
+    if audit_status and audit_status != 'Todos':
+        audit_query = audit_query.filter(models.Audit.estado == audit_status.lower().replace(' ', '_'))
+    if auditor_id:
+        audit_query = audit_query.filter(models.Audit.auditor_id == auditor_id)
+    if ubicacion_origen_id:
+        audit_query = audit_query.filter(models.Audit.ubicacion_origen_id == ubicacion_origen_id)
+
+    audit_rows = audit_query.order_by(models.Audit.creada_en.desc()).limit(500).all()
+    audit_ids = [r.id for r in audit_rows]
+
+    if not audit_ids:
+        return []
+
+    # --- 2. Una sola query SQL con JOINs para minimizar round-trips a BD remota ---
+    from sqlalchemy import text, and_, outerjoin
+    from collections import defaultdict
+
+    # Query única: auditorías + productos + novelties en un solo viaje a la BD
+    rows = db.execute(text("""
+        SELECT 
+            a.id as audit_id,
+            a.auditor_id,
+            a.ubicacion_origen_id,
+            a.ubicacion_destino_id,
+            a.estado,
+            a.porcentaje_cumplimiento,
+            a.creada_en,
+            u_aud.nombre as auditor_nombre,
+            u_orig.nombre as origen_nombre,
+            u_dest.nombre as destino_nombre,
+            p.id as product_id,
+            p.sku,
+            p.nombre_articulo,
+            p.cantidad_documento,
+            p.cantidad_fisica,
+            p.novedad,
+            p.observaciones,
+            p.orden_traslado_original,
+            p.last_modified_by_id,
+            u_mod.nombre as modificado_por,
+            pn.id as novelty_id,
+            pn.novedad_tipo,
+            pn.cantidad as novelty_cantidad,
+            pn.observaciones as novelty_obs,
+            pn.created_at as novelty_fecha
+        FROM auditorias a
+        LEFT JOIN usuarios u_aud ON a.auditor_id = u_aud.id
+        LEFT JOIN ubicaciones u_orig ON a.ubicacion_origen_id = u_orig.id
+        LEFT JOIN ubicaciones u_dest ON a.ubicacion_destino_id = u_dest.id
+        LEFT JOIN productos_auditados p ON p.auditoria_id = a.id
+        LEFT JOIN usuarios u_mod ON p.last_modified_by_id = u_mod.id
+        LEFT JOIN product_novelties pn ON pn.product_id = p.id
+        WHERE a.id = ANY(:audit_ids)
+        ORDER BY a.creada_en DESC, p.id, pn.id
+    """), {"audit_ids": audit_ids}).fetchall()
+
+    # Agrupar en memoria
+    audits_map = {}
+    products_map = {}
+
+    for row in rows:
+        aid = row.audit_id
+        if aid not in audits_map:
+            audits_map[aid] = {
+                "id": aid,
+                "ubicacion_origen": {"nombre": row.origen_nombre} if row.origen_nombre else None,
+                "ubicacion_destino": {"nombre": row.destino_nombre} if row.destino_nombre else None,
+                "auditor": {"nombre": row.auditor_nombre} if row.auditor_nombre else None,
+                "estado": row.estado,
+                "porcentaje_cumplimiento": row.porcentaje_cumplimiento,
+                "creada_en": (row.creada_en.isoformat() + 'Z') if row.creada_en else None,
+                "productos": []
+            }
+
+        if row.product_id is None:
+            continue
+
+        pid = row.product_id
+        if pid not in products_map:
+            products_map[pid] = {
+                "_audit_id": aid,
+                "id": pid,
+                "sku": row.sku,
+                "nombre_articulo": row.nombre_articulo,
+                "cantidad_documento": row.cantidad_documento,
+                "cantidad_fisica": row.cantidad_fisica,
+                "novedad": "sin_novedad",
+                "novelties": [],
+                "observaciones": row.observaciones,
+                "orden_traslado_original": row.orden_traslado_original,
+                "auditado_por": row.modificado_por or row.auditor_nombre
+            }
+            audits_map[aid]["productos"].append(products_map[pid])
+
+        if row.novelty_id is not None:
+            tipo = str(row.novedad_tipo.value) if hasattr(row.novedad_tipo, 'value') else str(row.novedad_tipo)
+            if tipo != 'sin_novedad':
+                products_map[pid]["novelties"].append({
+                    "novedad_tipo": tipo,
+                    "cantidad": row.novelty_cantidad,
+                    "observaciones": row.novelty_obs,
+                    "created_at": (row.novelty_fecha.isoformat() + 'Z') if row.novelty_fecha else None
+                })
+
+    # Actualizar campo novedad combinado
+    for p in products_map.values():
+        if p["novelties"]:
+            p["novedad"] = ', '.join(n["novedad_tipo"] for n in p["novelties"])
+        del p["_audit_id"]
+
+    # Mantener orden original
+    result = [audits_map[aid] for aid in audit_ids if aid in audits_map]
+
+    logger.info(f"📊 report/details: {len(result)} auditorías")
+    return result
 
 
 @router.get("/statistics/status", response_model=List[schemas.AuditStatusStatistic])
