@@ -172,7 +172,7 @@ def create_file(db: Session, audit_id: int, file_name: str, file_path: str):
     return db_file 
 
 def get_audits_by_auditor(db: Session, auditor_id: int):
-    """Obtiene las últimas 6 auditorías donde el usuario es propietario O colaborador."""
+    """Obtiene las últimas 50 auditorías donde el usuario es propietario O colaborador."""
     return db.query(models.Audit).options(
         joinedload(models.Audit.auditor),
         joinedload(models.Audit.ubicacion_origen),
@@ -183,7 +183,7 @@ def get_audits_by_auditor(db: Session, auditor_id: int):
             (models.Audit.auditor_id == auditor_id) |
             (models.Audit.collaborators.any(models.User.id == auditor_id))
         )
-    ).order_by(models.Audit.creada_en.desc()).limit(6).all()
+    ).order_by(models.Audit.creada_en.desc()).limit(50).all()
 
 def get_products_by_audit(db: Session, audit_id: int):
     """Obtiene todos los productos de una auditoría."""

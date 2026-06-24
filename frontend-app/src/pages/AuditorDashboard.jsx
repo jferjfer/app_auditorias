@@ -125,6 +125,8 @@ export default function AuditorDashboard() {
   const [creatingProducts, setCreatingProducts] = useState(new Set());
   const [showAuditConfirmModal, setShowAuditConfirmModal] = useState(false);
   const [pendingAuditData, setPendingAuditData] = useState(null);
+  const [auditTablePage, setAuditTablePage] = useState(0);
+  const AUDITS_PER_PAGE = 10;
   const [skuMappingsCache, setSkuMappingsCache] = useState({}); // Cache de mapeos
   const wsRef = useRef(null);
   const wsThrottleRef = useRef(null);
@@ -320,6 +322,7 @@ export default function AuditorDashboard() {
     try {
       const data = await fetchAudits();
       setAudits(data);
+      setAuditTablePage(0);
     } catch (err) {
       console.error('Error cargando auditorías:', err);
     }
@@ -358,6 +361,7 @@ export default function AuditorDashboard() {
         estado: auditData.estado,
         porcentaje_cumplimiento: auditData.porcentaje_cumplimiento
       }]);
+      setAuditTablePage(0);
       
       toast.success(`Auditoría encontrada con ${auditData.productos.length} producto(s) de OT ${otSearch}`);
     } catch (err) {
@@ -1664,7 +1668,7 @@ export default function AuditorDashboard() {
           <div className="card">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="card-title mb-0">Mis Auditorías (Últimas 6)</h5>
+                <h5 className="card-title mb-0">Mis Auditorías (Últimas 50)</h5>
                 <form onSubmit={handleOtSearch} className="d-flex gap-2">
                   <input
                     type="text"
@@ -1704,7 +1708,7 @@ export default function AuditorDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {audits.map(audit => (
+                    {audits.slice(auditTablePage * AUDITS_PER_PAGE, (auditTablePage + 1) * AUDITS_PER_PAGE).map(audit => (
                       <tr key={audit.id}>
                         <td style={{textAlign: 'center'}}>{audit.id}</td>
                         <td style={{textAlign: 'left'}}>{audit.ubicacion_origen?.nombre || 'N/A'}</td>
@@ -1757,6 +1761,27 @@ export default function AuditorDashboard() {
                   </tbody>
                 </table>
               </div>
+              {audits.length > AUDITS_PER_PAGE && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <button
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => setAuditTablePage(p => Math.max(0, p - 1))}
+                    disabled={auditTablePage === 0}
+                  >
+                    <i className="bi bi-chevron-left"></i> Anterior
+                  </button>
+                  <span className="text-muted">
+                    Página {auditTablePage + 1} de {Math.ceil(audits.length / AUDITS_PER_PAGE)}
+                  </span>
+                  <button
+                    className="btn btn-sm btn-outline-primary"
+                    onClick={() => setAuditTablePage(p => Math.min(Math.ceil(audits.length / AUDITS_PER_PAGE) - 1, p + 1))}
+                    disabled={auditTablePage >= Math.ceil(audits.length / AUDITS_PER_PAGE) - 1}
+                  >
+                    Siguiente <i className="bi bi-chevron-right"></i>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
